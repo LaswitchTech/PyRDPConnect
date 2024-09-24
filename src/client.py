@@ -736,7 +736,7 @@ class Client(QMainWindow):
         folders = self.config["Folders"]["Folders"]
 
         # Construct the freerdp3 command
-        command = ["xfreerdp"]
+        command = ["xfreerdp /cert-ignore"]
 
         # Add server address and port
         if port:
