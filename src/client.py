@@ -736,7 +736,7 @@ class Client(QMainWindow):
         folders = self.config["Folders"]["Folders"]
 
         # Construct the freerdp3 command
-        command = ["xfreerdp /cert-ignore"]
+        command = ["xfreerdp"]
 
         # Add server address and port
         if port:
@@ -785,9 +785,12 @@ class Client(QMainWindow):
         #     command.append("/drive:shared")
 
         # Add folder redirection
-        if folder_redirect and folders:
-            for folder in folders:
-                command.append(f"/drive:{folder},{folder}")
+        # if folder_redirect and folders:
+        #     for folder in folders:
+        #         command.append(f"/drive:{folder},{folder}")
+
+        # Ignore Certificate
+        command.append("/cert-ignore")
 
         # Debugging: Print the final command
         print("Generated freerdp3 command:")
