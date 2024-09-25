@@ -20,9 +20,6 @@ detect_os() {
     esac
 }
 
-# Set the name of the application
-NAME="PyRDPConnect"
-
 # Determine the operating system
 OS=$(detect_os)
 
@@ -52,15 +49,15 @@ pip install pyinstaller sip importlib PySide6-Addons
 pip install pyqt5 --config-settings --confirm-license=
 
 # Check if the .spec file exists
-SPEC_FILE="client.spec"
+SPEC_FILE="PyRDPConnect.spec"
 ICON_FILE="src/icons/icon.icns"
 
 if [ ! -f "$SPEC_FILE" ]; then
     log ".spec file not found. Generating a new one with PyInstaller..."
     if [ "$OS" == "macos" ]; then
-        pyinstaller --windowed --name "$NAME" src/client.py
+        pyinstaller --windowed --name PyRDPConnect src/PyRDPConnect.py
     elif [ "$OS" == "linux" ]; then
-        pyinstaller --onefile --name "$NAME" src/client.py
+        pyinstaller --onefile --name PyRDPConnect src/PyRDPConnect.py
     fi
 
     # Ensure the spec file now exists
@@ -90,9 +87,9 @@ fi
 log "Building the project with PyInstaller..."
 pyinstaller --noconfirm $SPEC_FILE
 
-# Copy necessary directories into the app bundle or executable directory
+# Copy resources into the appropriate location
 if [ "$OS" == "macos" ]; then
-    APP_BUNDLE="dist/client.app/Contents/Resources"
+    APP_BUNDLE="dist/PyRDPConnect.app/Contents/Resources"
 
     log "Copying resources into the app bundle..."
     mkdir -p "$APP_BUNDLE/styles"
@@ -102,41 +99,15 @@ if [ "$OS" == "macos" ]; then
     cp -R src/styles/* "$APP_BUNDLE/styles/"
     cp -R src/img/* "$APP_BUNDLE/img/"
     cp -R src/icons/* "$APP_BUNDLE/icons/"
-else
-    EXEC_DIR="dist/client"
 
-    log "Copying resources into the executable directory..."
-    mkdir -p "$EXEC_DIR/styles"
-    mkdir -p "$EXEC_DIR/img"
-    mkdir -p "$EXEC_DIR/icons"
-
-    cp -R src/styles/* "$EXEC_DIR/styles/"
-    cp -R src/img/* "$EXEC_DIR/img/"
-    cp -R src/icons/* "$EXEC_DIR/icons/"
-fi
-
-# Copy the appropriate FreeRDP binary based on the OS
-log "Copying FreeRDP binary for $OS..."
-mkdir -p "src/freerdp/$OS"
-FREERDP_PATH=$(whereis xfreerdp | awk '{ print $2 }')
-
-if [ ! -f "src/freerdp/$OS/xfreerdp" ]; then
-    if [ -f "$FREERDP_PATH" ]; then
-        cp "$FREERDP_PATH" "src/freerdp/$OS/xfreerdp"
-    else
-        log "Unable to find the FreeRDP binary at $FREERDP_PATH. Exiting."
-        exit 1
-    fi
-fi
-
-if [ "$OS" == "macos" ]; then
     log "Copying FreeRDP binary into the app bundle..."
     mkdir -p "$APP_BUNDLE/freerdp"
     cp "src/freerdp/$OS/xfreerdp" "$APP_BUNDLE/freerdp/"
+
 else
-    log "Copying FreeRDP binary into the executable directory..."
-    mkdir -p "$EXEC_DIR/freerdp"
-    cp "src/freerdp/$OS/xfreerdp" "$EXEC_DIR/freerdp/"
+    log "Linux build does not require copying resources to a separate directory, as it is a single-file executable."
+
+    # Note: If you need to bundle resources within the executable, adjust the PyInstaller options to include those resources
 fi
 
 log "Build completed successfully."

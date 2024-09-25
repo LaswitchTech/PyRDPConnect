@@ -1,0 +1,219 @@
+/* Style for the client window */
+#clientWindow {
+    /* background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #0186bb, stop:1 #002733); */
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #265162, stop:1 #002136);
+}
+
+/* Style for the input fields */
+#clientWindow QLineEdit {
+    padding: 10px;
+    height: 20px;
+    width: 300px;
+    margin: 0px; /* Remove margins */
+    border: 1px solid #76797C;
+    border-bottom: 0; /* Remove border bottom */
+    border-radius: 0px; /* Rounded corners */
+}
+
+/* Style for the first input fields */
+#clientWindow QLineEdit#firstLineEdit {
+    border-top-right-radius: 5px;
+    border-top-left-radius: 5px;
+}
+
+/* Style for the last input fields */
+#clientWindow QLineEdit#lastLineEdit {
+    border-bottom-right-radius: 5px;
+    border-bottom-left-radius: 5px;
+    border-bottom: 1px solid #76797C; /* Add a border bottom */
+}
+
+/* Style for the buttons */
+#clientWindow QPushButton {
+    padding: 10px;
+    height: 20px;
+    margin: 0px;
+    margin-top: 10px;
+    border: 1px solid #76797C;
+    border-radius: 5px;
+}
+
+#clientWindow QPushButton:hover {
+    background-color: rgba(255, 255, 255, 50);
+    border-color: rgba(255, 255, 255, 50);
+}
+
+#clientWindow QPushButton:pressed {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+}
+
+/* Style for the buttons */
+#clientWindow QPushButton#CancelBTN {
+    padding: 5px;
+    height: 20px;
+    margin: 0px;
+    margin-top: 5px;
+    border: 1px solid #76797C;
+    border-radius: 5px;
+}
+
+#clientWindow QPushButton#CancelBTN:hover {
+    background-color: rgba(255, 255, 255, 50);
+    border-color: rgba(255, 255, 255, 50);
+}
+
+#clientWindow QPushButton#CancelBTN:pressed {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+}
+
+/* Apply margin and padding to the main window container */
+#promptWindow,
+#promptWidget {
+    margin: 0;
+    padding: 0;
+}
+
+/* Style for the buttons */
+#promptWindow QPushButton {
+    padding: 5px;
+    border-radius: 5px;
+    border: 1px solid #76797C;
+    width: 100%;
+    text-align: center;
+}
+
+/* Style for the hovering button */
+#promptWindow QPushButton:hover {
+    background-color: rgba(255, 255, 255, 50);
+    border-color: rgba(255, 255, 255, 50);
+}
+
+/* Style for the selected button */
+#promptWindow QPushButton:pressed {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+}
+
+/* Style for the input fields */
+#promptWindow QLineEdit {
+    padding: 10px;
+    height: 20px;
+    width: 300px;
+    margin: 0px; /* Remove margins */
+    border: 1px solid #76797C;
+    border-radius: 5px; /* Rounded corners */
+}
+/* Apply margin and padding to the main window container */
+#configurationsWindow,
+#configurationsWidget {
+    margin: 0;
+    padding: 0;
+}
+
+/* Style for the input fields */
+#configurationsWindow QComboBox,
+#configurationsWindow QSpinBox,
+#configurationsWindow QLineEdit {
+    padding: 10px;
+    height: 20px;
+    width: 300px;
+    margin: 0px; /* Remove margins */
+    border: 1px solid #76797C;
+    border-radius: 5px; /* Rounded corners */
+}
+
+/* Adjust the QTabWidget's internal layout */
+#configurationsWindow QTabWidget::pane {
+    /* border: 0; */
+    position: absolute;
+    top: -1px;
+}
+
+/* Remove the border and margin from QTabBar */
+#configurationsWindow QTabBar::tab {
+    border: 1px solid #76797C;
+    margin: 0;
+    padding: 5px;
+    border-radius: 0;
+    border-right: 0;
+    margin-bottom:10px;
+}
+
+/* Style the first tab from QTabBar */
+#configurationsWindow QTabBar::tab:first {
+    border-top-left-radius: 5px;
+    border-bottom-left-radius: 5px;
+}
+
+/* Style the last tab from QTabBar */
+#configurationsWindow QTabBar::tab:last {
+    border-top-right-radius: 5px;
+    border-bottom-right-radius: 5px;
+    border-right: 1px solid #76797C;
+}
+
+/* Style the selected tab */
+#configurationsWindow QTabBar::tab:selected {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+}
+
+/* Style the selected tab while hovering */
+#configurationsWindow QTabBar::tab:selected:hover {
+    background-color: #3485fd;
+    border-color: #3485fd;
+}
+
+/* Style the hovering tabs */
+#configurationsWindow QTabBar::tab:hover {
+    background-color: rgba(255, 255, 255, 50);
+    border-color: rgba(255, 255, 255, 50);
+}
+
+#configurationsWindow QTabBar::tab:pressed {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+}
+
+/* Style for the individual tabs */
+#configurationsWindow QGroupBox {
+    margin-top: 0; /* Use a negative value if needed */
+}
+
+/* Style for the buttons */
+#configurationsWindow QPushButton {
+    padding: 5px;
+    border-radius: 5px;
+    border: 1px solid #76797C;
+    width: 100%;
+    text-align: center;
+}
+
+#configurationsWindow QPushButton:hover {
+    background-color: rgba(255, 255, 255, 50);
+    border-color: rgba(255, 255, 255, 50);
+}
+
+#configurationsWindow QPushButton:pressed {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+}
+
+#configurationsWindow QPushButton#unsavedChanges {
+    padding: 5px;
+    border-radius: 5px;
+    border: 1px solid #198754;
+    background-color: #198754;
+}
+
+#configurationsWindow QPushButton#unsavedChanges:hover {
+    background-color: #1fa869;
+    border-color: #1fa869;
+}
+
+#configurationsWindow QPushButton#unsavedChanges:pressed {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+}
