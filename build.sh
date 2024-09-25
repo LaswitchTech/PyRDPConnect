@@ -55,34 +55,47 @@ pip install pyqt5 --config-settings --confirm-license=
 SPEC_FILE="$NAME.spec"
 ICON_FILE="src/icons/icon.icns"
 
-if [ ! -f "$SPEC_FILE" ]; then
-    log ".spec file not found. Generating a new one with PyInstaller..."
-    if [ "$OS" == "macos" ]; then
-        pyinstaller --windowed --name "$NAME" src/PyRDPConnect.py
-    elif [ "$OS" == "linux" ]; then
-        pyinstaller --onefile --name "$NAME" src/PyRDPConnect.py
-    fi
-
-    # Ensure the spec file now exists
-    if [ ! -f "$SPEC_FILE" ]; then
-        log "Failed to create .spec file. Exiting."
-        exit 1
-    fi
-
-    log "Generated .spec file: $SPEC_FILE"
+# Cleanup: Remove the leftover dist/$NAME directory on macOS
+log "Cleaning up..."
+if [ -d "dist/$NAME" ]; then
+    rm -rf "dist/$NAME"
+fi
+if [ -f "$SPEC_FILE" ]; then
+    rm -f "$SPEC_FILE"
 fi
 
-# Update the .spec file to include the custom icon and data files
-log "Updating the .spec file to include the custom icon and data files..."
+log ".spec file not found. Generating a new one with PyInstaller..."
+if [ "$OS" == "macos" ]; then
+    pyinstaller --windowed --name "$NAME" src/PyRDPConnect.py
+elif [ "$OS" == "linux" ]; then
+    pyinstaller --onefile --name "$NAME" src/PyRDPConnect.py
+fi
+
+# Ensure the spec file now exists
+if [ ! -f "$SPEC_FILE" ]; then
+    log "Failed to create .spec file. Exiting."
+    exit 1
+fi
+
+log "Generated .spec file: $SPEC_FILE"
+
+# Update the .spec file to include the custom icon, data files, and hidden imports
+log "Updating the .spec file to include the custom icon, data files, and hidden imports..."
 if [ "$OS" == "macos" ]; then
     sed -i '' "s|icon=None|icon='$ICON_FILE'|g" $SPEC_FILE
     sed -i '' "/a.datas +=/a \\
         datas=[('src/styles', 'styles'), ('src/icons', 'icons'), ('src/img', 'img'), ('src/freerdp/$OS/xfreerdp', 'xfreerdp')],
     " $SPEC_FILE
+    # sed -i '' "/hiddenimports=/a \\
+    #     hiddenimports=['PyQt5.QtSvg'],
+    # " $SPEC_FILE
 elif [ "$OS" == "linux" ]; then
     sed -i "s|icon=None|icon='$ICON_FILE'|g" $SPEC_FILE
     sed -i "/a.datas +=/a \\
         datas=[('src/styles', 'styles'), ('src/icons', 'icons'), ('src/img', 'img'), ('src/freerdp/$OS/xfreerdp', 'xfreerdp')],
+    " $SPEC_FILE
+    sed -i "/hiddenimports=/a \\
+        hiddenimports=['PyQt5.QtSvg'],
     " $SPEC_FILE
 fi
 
@@ -121,7 +134,6 @@ fi
 mkdir -p "$FINAL_DIR"
 
 # Move the built application or executable to the appropriate directory
-log "Moving the application or executable to the appropriate directory..."
 if [ "$OS" == "macos" ]; then
     log "Moving the .app bundle to the $FINAL_DIR directory..."
     mv "dist/$NAME.app" "$FINAL_DIR/"
@@ -131,8 +143,7 @@ else
 fi
 
 # Cleanup: Remove the leftover dist/$NAME directory on macOS
-log "Cleaning up..."
-if [ "$OS" == "macos" ]; then
+if [ -d "dist/$NAME" ]; then
     log "Cleaning up the dist directory..."
     rm -rf "dist/$NAME"
 fi
