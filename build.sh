@@ -102,7 +102,7 @@ mkdir -p "$APP_BUNDLE/freerdp"
 if [ -f "src/freerdp/$OS/xfreerdp" ]; then
     cp "src/freerdp/$OS/xfreerdp" "$APP_BUNDLE/freerdp/"
 else
-    log "Unable to copy FreeRDP binary into the app bundle"
+    log "Could not locate the FreeRDP binary"
     exit 1
 fi
 
