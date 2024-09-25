@@ -62,16 +62,26 @@ cp -R src/styles/* "$APP_BUNDLE/styles/"
 cp -R src/img/* "$APP_BUNDLE/img/"
 cp -R src/icons/* "$APP_BUNDLE/icons/"
 
+if [ ! -f "src/freerdp/xfreerdp" ]; then
+    log "Copying FreeRDP into the source..."
+    mkdir -p "src/freerdp"
+    if [ -f "/opt/homebrew/bin/xfreerdp" ]; then
+        cp /opt/homebrew/bin/xfreerdp "src/freerdp/"
+    else
+        if [ -f "/opt/homebrew/bin/xfreerdp" ]; then
+            cp /usr/local/bin/xfreerdp "src/freerdp/"
+        else
+            log "Unable to find the FreeRDP binary"
+        fi
+    fi
+fi
+
 log "Copying FreeRDP binary into the app bundle..."
 mkdir -p "$APP_BUNDLE/freerdp"
-if [ -f "/opt/homebrew/bin/xfreerdp" ]; then
-    cp /opt/homebrew/bin/xfreerdp "$APP_BUNDLE/freerdp/"
+if [ -f "src/freerdp/xfreerdp" ]; then
+    cp src/freerdp/xfreerdp "$APP_BUNDLE/freerdp/"
 else
-    if [ -f "/opt/homebrew/bin/xfreerdp" ]; then
-        cp /usr/local/bin/xfreerdp "$APP_BUNDLE/freerdp/"
-    else
-        log "Unable to copy FreeRDP binary into the app bundle"
-    fi
+    log "Unable to copy FreeRDP binary into the app bundle"
 fi
 
 log "Build completed successfully."
