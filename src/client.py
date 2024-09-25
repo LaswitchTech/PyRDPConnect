@@ -135,7 +135,8 @@ class Client(QMainWindow):
                 "Logo File": self.get_path(os.path.join('icons', 'icon.png')),
                 "Hide Exit": False,
                 "Hide Restart": True,
-                "Hide Shutdown": True
+                "Hide Shutdown": True,
+                "Fullscreen": False
             }
         }
 
@@ -245,7 +246,8 @@ class Client(QMainWindow):
                 "Logo File": logoFileLineEdit,
                 "Hide Exit": QCheckBox(),
                 "Hide Restart": QCheckBox(),
-                "Hide Shutdown": QCheckBox()
+                "Hide Shutdown": QCheckBox(),
+                "Fullscreen": QCheckBox()
             }
         }
 
@@ -292,8 +294,9 @@ class Client(QMainWindow):
         self.setObjectName("clientWindow")  # Set the object name for the stylesheet
 
         # Make the window fullscreen and borderless
-        self.showFullScreen()
-        self.setWindowFlags(Qt.FramelessWindowHint)
+        if self.config['Appearance']['Fullscreen']:
+            self.showFullScreen()
+            self.setWindowFlags(Qt.FramelessWindowHint)
 
     def init_ui(self):
 
@@ -738,7 +741,33 @@ class Client(QMainWindow):
         # hide the dialog
         self.configurations_dialog.hide()
 
+    def get_freerdp_version(self, freerdp_path):
+        try:
+            result = subprocess.run([freerdp_path, '+version'], capture_output=True, text=True)
+            version_line = result.stdout.splitlines()[0].strip()  # Get the first line of the output
+            version_parts = version_line.split()  # Split the line into words
+            if len(version_parts) > 4:  # Check if the version string is present
+                return version_parts[4]  # The version is the fourth element in the split output
+            else:
+                return None
+        except Exception as e:
+            print(f"Error retrieving FreeRDP version: {e}")
+            return None
+
     def gen_command(self):
+
+        # Get the path to the bundled xfreerdp
+        freerdp_path = self.get_path('freerdp/xfreerdp')
+
+        # Get FreeRDP version
+        freerdp_version = self.get_freerdp_version(freerdp_path)
+        print(f"Freerdp Version: {freerdp_version}")
+
+        # Determine major version number (e.g., 2.x or 3.x)
+        major_version = int(freerdp_version.split('.')[0]) if freerdp_version else None
+
+        # Construct the command using the bundled xfreerdp
+        command = [freerdp_path]
 
         # Gather the configuration values, retrieving from widgets if necessary
         server_address = self.config["General"]["Server Address"] or self.server_edit.text()
@@ -758,9 +787,6 @@ class Client(QMainWindow):
         redirect_drives = self.config["Redirect"]["Drives"]
         folder_redirect = self.config["Folders"]["Redirect"]
         folders = self.config["Folders"]["Folders"]
-
-        # Construct the freerdp3 command
-        command = ["xfreerdp"]
 
         # Add server address and port
         if port:
@@ -788,36 +814,54 @@ class Client(QMainWindow):
         if fit_window:
             command.append("/smart-sizing")
 
-        # Add sound settings
-        # if play_sound == "Never":
-        #     command.append("/sound:off")
-        # elif play_sound == "On this computer":
-        #     command.append("/sound:local")
-        # elif play_sound == "On the remote computer":
-        #     command.append("/sound:remote")
+        # # Add sound settings
+        # if major_version and major_version < 3:
+        #     if play_sound == "Never":
+        #         command.append("/sound:off")
+        #     elif play_sound == "On this computer":
+        #         command.append("/sound:sys:alsa")
+        #     elif play_sound == "On the remote computer":
+        #         command.append("/sound:sys:rdpsnd")
+        # else:
+        #     # Adjust the sound options for FreeRDP 3.x
+        #     if play_sound == "Never":
+        #         command.append("/audio-mode:off")
+        #     elif play_sound == "On this computer":
+        #         command.append("/audio-mode:local")
+        #     elif play_sound == "On the remote computer":
+        #         command.append("/audio-mode:remote")
 
         # Add redirection settings
-        # if redirect_printers:
-        #     command.append("/printer")
-        if redirect_clipboard:
-            command.append("+clipboard")
-        # if redirect_smart_cards:
-        #     command.append("/smartcard")
-        # if redirect_ports:
-        #     command.append(f"/serial:{redirect_ports}")
-        # if redirect_drives:
-        #     command.append("/drive:shared")
-
-        # Add folder redirection
-        # if folder_redirect and folders:
-        #     for folder in folders:
-        #         command.append(f"/drive:{folder},{folder}")
+        # if redirect_clipboard:
+        #     command.append("+clipboard")
+        # if major_version and major_version < 3:
+        #     if redirect_printers:
+        #         command.append("/printer")
+        #     if redirect_smart_cards:
+        #         command.append("/smartcard")
+        #     if redirect_ports:
+        #         command.append(f"/serial:{redirect_ports}")
+        #     if redirect_drives:
+        #         command.append("/drive:shared")
+        # else:
+        #     # Adjust the redirection options for FreeRDP 3.x
+        #     if redirect_printers:
+        #         command.append("/printer:off")
+        #     if redirect_smart_cards:
+        #         command.append("/smartcard:off")
+        #     if redirect_ports:
+        #         command.append("/serial:off")
+        #     if redirect_drives:
+        #         command.append("/drive:off")
 
         # Ignore Certificate
-        command.append("/cert-ignore")
+        if major_version and major_version < 3:
+            command.append("/cert-ignore")
+        else:
+            command.append("/cert:ignore")
 
         # Debugging: Print the final command
-        print("Generated freerdp3 command:")
+        print(f"Generated freerdp({freerdp_version}) command:")
         print(" ".join(command))
 
         return command

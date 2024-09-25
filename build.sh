@@ -41,9 +41,9 @@ fi
 log "Updating the .spec file to include the custom icon and data files..."
 sed -i '' "s|icon=None|icon='$ICON_FILE'|g" $SPEC_FILE
 
-# Ensure that styles, icons, and img folders are included in the app bundle
+# Ensure that styles, icons, img, and FreeRDP binary are included in the app bundle
 sed -i '' "/a.datas +=/a \\
-    datas=[('src/styles', 'styles'), ('src/icons', 'icons'), ('src/img', 'img')],
+    datas=[('src/styles', 'styles'), ('src/icons', 'icons'), ('src/img', 'img'), ('/usr/local/bin/xfreerdp', 'xfreerdp')],
 " $SPEC_FILE
 
 # Build the project with PyInstaller using the updated .spec file
@@ -61,6 +61,18 @@ mkdir -p "$APP_BUNDLE/icons"
 cp -R src/styles/* "$APP_BUNDLE/styles/"
 cp -R src/img/* "$APP_BUNDLE/img/"
 cp -R src/icons/* "$APP_BUNDLE/icons/"
+
+log "Copying FreeRDP binary into the app bundle..."
+mkdir -p "$APP_BUNDLE/freerdp"
+if [ -f "/opt/homebrew/bin/xfreerdp" ]; then
+    cp /opt/homebrew/bin/xfreerdp "$APP_BUNDLE/freerdp/"
+else
+    if [ -f "/opt/homebrew/bin/xfreerdp" ]; then
+        cp /usr/local/bin/xfreerdp "$APP_BUNDLE/freerdp/"
+    else
+        log "Unable to copy FreeRDP binary into the app bundle"
+    fi
+fi
 
 log "Build completed successfully."
 
