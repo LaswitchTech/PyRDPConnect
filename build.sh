@@ -67,12 +67,17 @@ fi
 
 # Update the .spec file to include the custom icon and data files
 log "Updating the .spec file to include the custom icon and data files..."
-sed -i '' "s|icon=None|icon='$ICON_FILE'|g" $SPEC_FILE
-
-# Ensure that styles, icons, img, and FreeRDP binary are included in the app bundle
-sed -i '' "/a.datas +=/a \\
-    datas=[('src/styles', 'styles'), ('src/icons', 'icons'), ('src/img', 'img'), ('src/freerdp/$OS/xfreerdp', 'xfreerdp')],
-" $SPEC_FILE
+if [ "$OS" == "macos" ]; then
+    sed -i '' "s|icon=None|icon='$ICON_FILE'|g" $SPEC_FILE
+    sed -i '' "/a.datas +=/a \\
+        datas=[('src/styles', 'styles'), ('src/icons', 'icons'), ('src/img', 'img'), ('src/freerdp/$OS/xfreerdp', 'xfreerdp')],
+    " $SPEC_FILE
+elif [ "$OS" == "linux" ]; then
+    sed -i "s|icon=None|icon='$ICON_FILE'|g" $SPEC_FILE
+    sed -i "/a.datas +=/a \\
+        datas=[('src/styles', 'styles'), ('src/icons', 'icons'), ('src/img', 'img'), ('src/freerdp/$OS/xfreerdp', 'xfreerdp')],
+    " $SPEC_FILE
+fi
 
 # Build the project with PyInstaller using the updated .spec file
 log "Building the project with PyInstaller..."
