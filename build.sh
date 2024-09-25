@@ -83,19 +83,15 @@ log "Generated .spec file: $SPEC_FILE"
 log "Updating the .spec file to include the custom icon, data files, and hidden imports..."
 if [ "$OS" == "macos" ]; then
     sed -i '' "s|icon=None|icon='$ICON_FILE'|g" $SPEC_FILE
+    sed -i '' "/Analysis/s/(.*)/\0, hiddenimports=['PyQt5.QtSvg']/" $SPEC_FILE
     sed -i '' "/a.datas +=/a \\
         datas=[('src/styles', 'styles'), ('src/icons', 'icons'), ('src/img', 'img'), ('src/freerdp/$OS/xfreerdp', 'xfreerdp')],
     " $SPEC_FILE
-    # sed -i '' "/hiddenimports=/a \\
-    #     hiddenimports=['PyQt5.QtSvg'],
-    # " $SPEC_FILE
 elif [ "$OS" == "linux" ]; then
     sed -i "s|icon=None|icon='$ICON_FILE'|g" $SPEC_FILE
+    sed -i "/Analysis/s/(.*)/\0, hiddenimports=['PyQt5.QtSvg']/" $SPEC_FILE
     sed -i "/a.datas +=/a \\
         datas=[('src/styles', 'styles'), ('src/icons', 'icons'), ('src/img', 'img'), ('src/freerdp/$OS/xfreerdp', 'xfreerdp')],
-    " $SPEC_FILE
-    sed -i "/hiddenimports=/a \\
-        hiddenimports=['PyQt5.QtSvg'],
     " $SPEC_FILE
 fi
 
