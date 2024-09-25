@@ -74,14 +74,26 @@ class Client(QMainWindow):
 
     def get_path(self,path):
 
-        # Load Path
-        if os.path.exists(os.path.join(self.root_dir, 'src', path)):
-            return os.path.join(self.root_dir, 'src', path)
-        if os.path.exists(os.path.join(self.root_dir, 'Resources', path)):
-            return os.path.join(self.root_dir, 'Resources', path)
+        """
+        Returns the full path to a file if it exists in either the 'src' or 'Resources' directory.
+        Prints a debug message if the file is not found.
 
-        # Debugging
+        :param path: Relative path to the file
+        :return: Full path to the file if found, None otherwise
+        """
+        # Check the 'src' directory
+        src_path = os.path.join(self.root_dir, 'src', path)
+        if os.path.exists(src_path):
+            return src_path
+
+        # Check the 'Resources' directory
+        resources_path = os.path.join(self.root_dir, 'Resources', path)
+        if os.path.exists(resources_path):
+            return resources_path
+
+        # Debugging message if file is not found
         print(f"Could not find: [{self.root_dir}] {path}")
+        return None
 
     def load_config(self):
 
@@ -120,7 +132,7 @@ class Client(QMainWindow):
             "Appearance": {
                 "Login Position": "center-center",
                 "Logo Position": "top-center",
-                "Logo File": self.get_path(os.path.join('img', 'logo.png')),
+                "Logo File": self.get_path(os.path.join('icons', 'icon.png')),
                 "Hide Exit": False,
                 "Hide Restart": True,
                 "Hide Shutdown": True

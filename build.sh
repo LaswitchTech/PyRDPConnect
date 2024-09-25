@@ -20,9 +20,35 @@ source env/bin/activate
 log "Installing required packages..."
 pip install pyinstaller sip importlib pyqt5 PySide6-Addons
 
-# Build the project with PyInstaller
+# Check if the .spec file exists
+SPEC_FILE="client.spec"
+ICON_FILE="src/icons/icon.icns"
+
+if [ ! -f "$SPEC_FILE" ]; then
+    log ".spec file not found. Generating a new one with PyInstaller..."
+    pyinstaller --onefile --windowed --name client src/client.py
+
+    # Ensure the spec file now exists
+    if [ ! -f "$SPEC_FILE" ]; then
+        log "Failed to create .spec file. Exiting."
+        exit 1
+    fi
+
+    log "Generated .spec file: $SPEC_FILE"
+fi
+
+# Update the .spec file to include the custom icon and data files
+log "Updating the .spec file to include the custom icon and data files..."
+sed -i '' "s|icon=None|icon='$ICON_FILE'|g" $SPEC_FILE
+
+# Ensure that styles, icons, and img folders are included in the app bundle
+sed -i '' "/a.datas +=/a \\
+    datas=[('src/styles', 'styles'), ('src/icons', 'icons'), ('src/img', 'img')],
+" $SPEC_FILE
+
+# Build the project with PyInstaller using the updated .spec file
 log "Building the project with PyInstaller..."
-pyinstaller --noconfirm --onefile --windowed src/client.py
+pyinstaller --noconfirm $SPEC_FILE
 
 # Copy necessary directories into the app bundle
 APP_BUNDLE="dist/client.app/Contents/Resources"

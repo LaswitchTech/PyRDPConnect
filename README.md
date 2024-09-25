@@ -1,4 +1,4 @@
-<p align="center"><img src="src/img/logo.png" /></p>
+<p align="center"><img src="src/icons/icon.png" /></p>
 
 # PyRDPConnect
 ![License](https://img.shields.io/github/license/LaswitchTech/PyRDPConnect?style=for-the-badge)
