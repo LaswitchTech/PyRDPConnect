@@ -18,6 +18,10 @@
 ## License
 This software is distributed under the [MIT](LICENSE) license.
 
+### Third-Party Licenses
+
+This project uses FreeRDP, which is licensed under the Apache License 2.0. The full text of the license can be found in the [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES) file.
+
 ## Requirements
 * Python >= 3.0
 
