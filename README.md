@@ -27,9 +27,15 @@ Please disclose any vulnerabilities found responsibly – report security issues
 ## Installation
 
 ### Requirements
+
 ```sh
 sudo apt-get update
 sudo apt-get install -y git python python3 pip python3-pyqt5 python3-pyqt5.* freerdp2-x11
+```
+
+### Requirements - Development
+```sh
+sudo apt-get install -y build-essential libssl-dev libffi-dev python3-dev qt5-default qtbase5-dev qtchooser qt5-qmake qtbase5-dev-tools qttools5-dev-tools
 ```
 
 ### Clone
@@ -39,14 +45,11 @@ git clone https://github.com/LaswitchTech/PyRDPConnect.git
 
 ### Execute from source
 ```sh
-./PyRDPConnect/src/client.py
+./src/client.py
 ```
 
 ### Build
 ```sh
-sudo apt-get install -y build-essential libssl-dev libffi-dev python3-dev qt5-default qtbase5-dev qtchooser qt5-qmake qtbase5-dev-tools qttools5-dev-tools
-sudo apt --fix-broken install
-cd PyRDPConnect
 ./build.sh
 ```
 
