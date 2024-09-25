@@ -39,9 +39,14 @@ fi
 # Activate the environment
 source env/bin/activate
 
+# Ensure that pip is updated
+log "Updating pip..."
+python -m pip install --upgrade pip
+
 # Ensure the necessary packages are installed
 log "Installing required packages..."
-pip install pyinstaller sip importlib pyqt5 PySide6-Addons
+pip install pyinstaller sip importlib PySide6-Addons
+pip install pyqt5 --config-settings --confirm-license=
 
 # Check if the .spec file exists
 SPEC_FILE="client.spec"
