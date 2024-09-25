@@ -95,11 +95,13 @@ log "Copying FreeRDP binary for $OS..."
 mkdir -p "src/freerdp/$OS"
 FREERDP_PATH=$(whereis xfreerdp | awk '{ print $2 }')
 
-if [ -f "$FREERDP_PATH" ] && [ ! -f "src/freerdp/$OS/xfreerdp" ]; then
-    cp "$FREERDP_PATH" "src/freerdp/$OS/xfreerdp"
-else
-    log "Unable to find the FreeRDP binary at $FREERDP_PATH. Exiting."
-    exit 1
+if [ ! -f "src/freerdp/$OS/xfreerdp" ]; then
+    if [ -f "$FREERDP_PATH" ]; then
+        cp "$FREERDP_PATH" "src/freerdp/$OS/xfreerdp"
+    else
+        log "Unable to find the FreeRDP binary at $FREERDP_PATH. Exiting."
+        exit 1
+    fi
 fi
 
 log "Copying FreeRDP binary into the app bundle..."
