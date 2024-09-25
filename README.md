@@ -23,8 +23,7 @@ PyRDPConnect is a cross-platform Python application designed to provide a sleek,
 This software is distributed under the [MIT](LICENSE) license.
 
 ### Third-Party Licenses
-
-This project uses FreeRDP, which is licensed under the Apache License 2.0. The full text of the license can be found in the [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES) file.
+This project uses FreeRDP, which is licensed under the [Apache License 2.0](THIRD_PARTY_LICENSES) license.
 
 ## Security
 Please disclose any vulnerabilities found responsibly – report security issues to the maintainers privately. See [SECURITY.md](SECURITY.md) for more information.
