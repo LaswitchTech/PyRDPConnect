@@ -7,6 +7,7 @@ import json
 import os
 import sys
 import subprocess
+import platform
 
 class ConnectionThread(QThread):
     connection_success = pyqtSignal()
@@ -94,6 +95,17 @@ class Client(QMainWindow):
         # Debugging message if file is not found
         print(f"Could not find: [{self.root_dir}] {path}")
         return None
+
+    def get_os(self):
+        os_name = platform.system()
+        if os_name == "Darwin":
+            return "macos"
+        elif os_name == "Linux":
+            return "linux"
+        elif os_name == "Windows":
+            return "windows"
+        else:
+            return "unknown"
 
     def load_config(self):
 
@@ -750,7 +762,7 @@ class Client(QMainWindow):
             if len(version_parts) > 4:  # Check if the version string is present
                 return version_parts[4]  # The version is the fifth element in the split output
             elif len(version_parts) > 3:  # Check if the version string is present
-                return version_parts[4]  # The version is the fourth element in the split output
+                return version_parts[3]  # The version is the fourth element in the split output
             else:
                 return None
         except Exception as e:
@@ -760,7 +772,7 @@ class Client(QMainWindow):
     def gen_command(self):
 
         # Get the path to the bundled xfreerdp
-        freerdp_path = self.get_path('freerdp/xfreerdp')
+        freerdp_path = self.get_path('freerdp/'+self.get_os()+'/xfreerdp')
 
         # Get FreeRDP version
         freerdp_version = self.get_freerdp_version(freerdp_path)

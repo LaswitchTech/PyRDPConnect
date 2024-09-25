@@ -5,6 +5,29 @@ log() {
     echo "$(date +'%Y-%m-%d %H:%M:%S') - $1"
 }
 
+# Function to detect the operating system
+detect_os() {
+    case "$(uname -s)" in
+        Darwin)
+            echo "macos"
+            ;;
+        Linux)
+            echo "linux"
+            ;;
+        *)
+            echo "unsupported"
+            ;;
+    esac
+}
+
+# Determine the operating system
+OS=$(detect_os)
+
+if [ "$OS" == "unsupported" ]; then
+    log "Unsupported operating system. Exiting."
+    exit 1
+fi
+
 # Check if the Python virtual environment is already set up
 if [ ! -f "env/bin/python" ] || [ ! -f "env/bin/python3" ] || [ ! -f "env/bin/pip" ]; then
     log "Python virtual environment not found. Creating a new one..."
@@ -43,7 +66,7 @@ sed -i '' "s|icon=None|icon='$ICON_FILE'|g" $SPEC_FILE
 
 # Ensure that styles, icons, img, and FreeRDP binary are included in the app bundle
 sed -i '' "/a.datas +=/a \\
-    datas=[('src/styles', 'styles'), ('src/icons', 'icons'), ('src/img', 'img'), ('/usr/local/bin/xfreerdp', 'xfreerdp')],
+    datas=[('src/styles', 'styles'), ('src/icons', 'icons'), ('src/img', 'img'), ('src/freerdp/$OS/xfreerdp', 'xfreerdp')],
 " $SPEC_FILE
 
 # Build the project with PyInstaller using the updated .spec file
@@ -62,26 +85,29 @@ cp -R src/styles/* "$APP_BUNDLE/styles/"
 cp -R src/img/* "$APP_BUNDLE/img/"
 cp -R src/icons/* "$APP_BUNDLE/icons/"
 
-if [ ! -f "src/freerdp/xfreerdp" ]; then
-    log "Copying FreeRDP into the source..."
-    mkdir -p "src/freerdp"
-    if [ -f "/opt/homebrew/bin/xfreerdp" ]; then
-        cp /opt/homebrew/bin/xfreerdp "src/freerdp/"
-    else
-        if [ -f "/opt/homebrew/bin/xfreerdp" ]; then
-            cp /usr/local/bin/xfreerdp "src/freerdp/"
-        else
-            log "Unable to find the FreeRDP binary"
-        fi
-    fi
+# Copy the appropriate FreeRDP binary based on the OS
+log "Copying FreeRDP binary for $OS..."
+mkdir -p "src/freerdp/$OS"
+if [ "$OS" == "macos" ]; then
+    FREERDP_PATH="/opt/homebrew/bin/xfreerdp"
+elif [ "$OS" == "linux" ]; then
+    FREERDP_PATH="/usr/local/bin/xfreerdp"
+fi
+
+if [ -f "$FREERDP_PATH" ]; then
+    cp "$FREERDP_PATH" "src/freerdp/$OS/xfreerdp"
+else
+    log "Unable to find the FreeRDP binary at $FREERDP_PATH. Exiting."
+    exit 1
 fi
 
 log "Copying FreeRDP binary into the app bundle..."
 mkdir -p "$APP_BUNDLE/freerdp"
-if [ -f "src/freerdp/xfreerdp" ]; then
-    cp src/freerdp/xfreerdp "$APP_BUNDLE/freerdp/"
+if [ -f "src/freerdp/$OS/xfreerdp" ]; then
+    cp "src/freerdp/$OS/xfreerdp" "$APP_BUNDLE/freerdp/"
 else
     log "Unable to copy FreeRDP binary into the app bundle"
+    exit 1
 fi
 
 log "Build completed successfully."
