@@ -747,6 +747,8 @@ class Client(QMainWindow):
             version_line = result.stdout.splitlines()[0].strip()  # Get the first line of the output
             version_parts = version_line.split()  # Split the line into words
             if len(version_parts) > 4:  # Check if the version string is present
+                return version_parts[4]  # The version is the fifth element in the split output
+            elif len(version_parts) > 3:  # Check if the version string is present
                 return version_parts[4]  # The version is the fourth element in the split output
             else:
                 return None
