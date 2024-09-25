@@ -20,6 +20,9 @@ detect_os() {
     esac
 }
 
+# Set the name of the application
+NAME="PyRDPConnect"
+
 # Determine the operating system
 OS=$(detect_os)
 
@@ -54,7 +57,11 @@ ICON_FILE="src/icons/icon.icns"
 
 if [ ! -f "$SPEC_FILE" ]; then
     log ".spec file not found. Generating a new one with PyInstaller..."
-    pyinstaller --onefile --windowed --name client src/client.py
+    if [ "$OS" == "macos" ]; then
+        pyinstaller --windowed --name "$NAME" src/client.py
+    elif [ "$OS" == "linux" ]; then
+        pyinstaller --onefile --name "$NAME" src/client.py
+    fi
 
     # Ensure the spec file now exists
     if [ ! -f "$SPEC_FILE" ]; then
@@ -83,17 +90,30 @@ fi
 log "Building the project with PyInstaller..."
 pyinstaller --noconfirm $SPEC_FILE
 
-# Copy necessary directories into the app bundle
-APP_BUNDLE="dist/client.app/Contents/Resources"
+# Copy necessary directories into the app bundle or executable directory
+if [ "$OS" == "macos" ]; then
+    APP_BUNDLE="dist/client.app/Contents/Resources"
 
-log "Copying resources into the app bundle..."
-mkdir -p "$APP_BUNDLE/styles"
-mkdir -p "$APP_BUNDLE/img"
-mkdir -p "$APP_BUNDLE/icons"
+    log "Copying resources into the app bundle..."
+    mkdir -p "$APP_BUNDLE/styles"
+    mkdir -p "$APP_BUNDLE/img"
+    mkdir -p "$APP_BUNDLE/icons"
 
-cp -R src/styles/* "$APP_BUNDLE/styles/"
-cp -R src/img/* "$APP_BUNDLE/img/"
-cp -R src/icons/* "$APP_BUNDLE/icons/"
+    cp -R src/styles/* "$APP_BUNDLE/styles/"
+    cp -R src/img/* "$APP_BUNDLE/img/"
+    cp -R src/icons/* "$APP_BUNDLE/icons/"
+else
+    EXEC_DIR="dist/client"
+
+    log "Copying resources into the executable directory..."
+    mkdir -p "$EXEC_DIR/styles"
+    mkdir -p "$EXEC_DIR/img"
+    mkdir -p "$EXEC_DIR/icons"
+
+    cp -R src/styles/* "$EXEC_DIR/styles/"
+    cp -R src/img/* "$EXEC_DIR/img/"
+    cp -R src/icons/* "$EXEC_DIR/icons/"
+fi
 
 # Copy the appropriate FreeRDP binary based on the OS
 log "Copying FreeRDP binary for $OS..."
@@ -109,13 +129,14 @@ if [ ! -f "src/freerdp/$OS/xfreerdp" ]; then
     fi
 fi
 
-log "Copying FreeRDP binary into the app bundle..."
-mkdir -p "$APP_BUNDLE/freerdp"
-if [ -f "src/freerdp/$OS/xfreerdp" ]; then
+if [ "$OS" == "macos" ]; then
+    log "Copying FreeRDP binary into the app bundle..."
+    mkdir -p "$APP_BUNDLE/freerdp"
     cp "src/freerdp/$OS/xfreerdp" "$APP_BUNDLE/freerdp/"
 else
-    log "Could not locate the FreeRDP binary"
-    exit 1
+    log "Copying FreeRDP binary into the executable directory..."
+    mkdir -p "$EXEC_DIR/freerdp"
+    cp "src/freerdp/$OS/xfreerdp" "$EXEC_DIR/freerdp/"
 fi
 
 log "Build completed successfully."
