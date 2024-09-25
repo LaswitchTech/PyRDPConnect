@@ -88,13 +88,9 @@ cp -R src/icons/* "$APP_BUNDLE/icons/"
 # Copy the appropriate FreeRDP binary based on the OS
 log "Copying FreeRDP binary for $OS..."
 mkdir -p "src/freerdp/$OS"
-if [ "$OS" == "macos" ]; then
-    FREERDP_PATH="/opt/homebrew/bin/xfreerdp"
-elif [ "$OS" == "linux" ]; then
-    FREERDP_PATH="/usr/bin/xfreerdp"
-fi
+FREERDP_PATH=$(whereis xfreerdp | awk '{ print $2 }')
 
-if [ -f "$FREERDP_PATH" ]; then
+if [ -f "$FREERDP_PATH" ] && [ ! -f "src/freerdp/$OS/xfreerdp" ]; then
     cp "$FREERDP_PATH" "src/freerdp/$OS/xfreerdp"
 else
     log "Unable to find the FreeRDP binary at $FREERDP_PATH. Exiting."
