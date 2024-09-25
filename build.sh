@@ -91,7 +91,7 @@ mkdir -p "src/freerdp/$OS"
 if [ "$OS" == "macos" ]; then
     FREERDP_PATH="/opt/homebrew/bin/xfreerdp"
 elif [ "$OS" == "linux" ]; then
-    FREERDP_PATH="/usr/local/bin/xfreerdp"
+    FREERDP_PATH="/usr/bin/xfreerdp"
 fi
 
 if [ -f "$FREERDP_PATH" ]; then
