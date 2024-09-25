@@ -24,34 +24,5 @@ This software is distributed under the [MIT](LICENSE) license.
 ## Security
 Please disclose any vulnerabilities found responsibly – report security issues to the maintainers privately. See [SECURITY.md](SECURITY.md) for more information.
 
-## Installation
-
-### Requirements
-
-```sh
-sudo apt-get update
-sudo apt-get install -y git python python3 pip python3-pyqt5 python3-pyqt5.* freerdp2-x11
-```
-
-### Requirements - Development
-```sh
-sudo apt-get install -y build-essential libssl-dev libffi-dev python3-dev qt5-default qtbase5-dev qtchooser qt5-qmake qtbase5-dev-tools qttools5-dev-tools
-```
-
-### Clone
-```sh
-git clone https://github.com/LaswitchTech/PyRDPConnect.git
-```
-
-### Execute from source
-```sh
-./src/client.py
-```
-
-### Build
-```sh
-./build.sh
-```
-
 ## How do I use it?
 Review the [Documentation](docs/).
