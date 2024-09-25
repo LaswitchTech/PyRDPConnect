@@ -53,6 +53,7 @@ class ConnectionThread(QThread):
             self.freerdp_process.terminate()  # Terminate the subprocess if running
 
 class Client(QMainWindow):
+
     def __init__(self):
         super().__init__()
 
@@ -71,35 +72,46 @@ class Client(QMainWindow):
         # Initialize UI
         self.init_ui()
 
+    def get_path(self,path):
+
+        # Load Path
+        if os.path.exists(os.path.join(self.root_dir, 'src', path)):
+            return os.path.join(self.root_dir, 'src', path)
+        if os.path.exists(os.path.join(self.root_dir, 'Resources', path)):
+            return os.path.join(self.root_dir, 'Resources', path)
+
+        # Debugging
+        print(f"Could not find: [{self.root_dir}] {path}")
+
     def load_config(self):
 
         # Initialize config dictionary
         self.config = {
             "General": {
                 "Server Address": "",
-                "Port": "",
+                "Port": 3389,
                 "Username": "",
                 "Password": "",
                 "Domain": ""
             },
             "Display": {
                 "Resolution": "",
-                "Use all monitors": "",
-                "Start session in fullscreen": "",
-                "Fit session to window": ""
+                "Use all monitors": False,
+                "Start session in fullscreen": False,
+                "Fit session to window": False
             },
             "Devices": {
                 "Play sound": ""
             },
             "Redirect": {
-                "Printers": "",
-                "Clipboard": "",
-                "Smart Cards": "",
-                "Ports": "",
-                "Drives": ""
+                "Printers": False,
+                "Clipboard": False,
+                "Smart Cards": False,
+                "Ports": False,
+                "Drives": False
             },
             "Folders": {
-                "Redirect": "",
+                "Redirect": False,
                 "Folders": [],
             },
             "Administration": {
@@ -108,7 +120,7 @@ class Client(QMainWindow):
             "Appearance": {
                 "Login Position": "center-center",
                 "Logo Position": "top-center",
-                "Logo File": os.path.join(self.root_dir, 'img', 'logo.png'),
+                "Logo File": self.get_path(os.path.join('img', 'logo.png')),
                 "Hide Exit": False,
                 "Hide Restart": True,
                 "Hide Shutdown": True
@@ -252,7 +264,7 @@ class Client(QMainWindow):
         self.root_dir = os.path.dirname(self.script_dir)
 
         # Get the icon directory for the window
-        self.icon_path = os.path.join(self.root_dir, 'icons', "play-fill.ico")
+        self.icon_path = self.get_path(os.path.join('icons', "play-fill.ico"))
 
     def init_window(self):
 
@@ -260,8 +272,8 @@ class Client(QMainWindow):
         self.setWindowTitle("Client")
         self.setWindowIcon(QIcon(self.icon_path))
 
-        # Load Style Sheet
-        with open(os.path.join(self.root_dir, 'styles', 'style.css'), 'r') as f:
+        # Load Style Sheets
+        with open(self.get_path(os.path.join('styles/style.css')), 'r') as f:
             self.setStyleSheet(f.read())
 
         # Set the object name for the stylesheet
@@ -393,14 +405,14 @@ class Client(QMainWindow):
         # Create buttons
         self.connect_button = QPushButton(" Connect", central_widget)
         self.connect_button.setObjectName("ConnectBTN")
-        self.set_svg_icon(self.connect_button, os.path.join(self.root_dir, "icons/box-arrow-in-right.svg"))
+        self.set_svg_icon(self.connect_button, self.get_path(os.path.join("icons/box-arrow-in-right.svg")))
         self.connect_button.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
         self.connect_button.clicked.connect(self.connect_to_server)
         button_layout.addWidget(self.connect_button)
 
         self.config_button = QPushButton("", central_widget)
         self.config_button.setObjectName("ConfigurationsBTN")
-        self.set_svg_icon(self.config_button, os.path.join(self.root_dir, "icons/gear-fill.svg"))
+        self.set_svg_icon(self.config_button, self.get_path(os.path.join("icons/gear-fill.svg")))
         self.config_button.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
         self.config_button.clicked.connect(self.launch_prompt)
         buttons_layout.addWidget(self.config_button)
@@ -408,7 +420,7 @@ class Client(QMainWindow):
         if not self.config['Appearance']['Hide Exit']:
             self.exit_button = QPushButton("", central_widget)
             self.exit_button.setObjectName("ExitBTN")
-            self.set_svg_icon(self.exit_button, os.path.join(self.root_dir, "icons/x-octagon.svg"))
+            self.set_svg_icon(self.exit_button, self.get_path(os.path.join("icons/x-octagon.svg")))
             self.exit_button.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
             self.exit_button.clicked.connect(self.close)
             buttons_layout.addWidget(self.exit_button)
@@ -416,7 +428,7 @@ class Client(QMainWindow):
         if not self.config['Appearance']['Hide Restart']:
             self.restart_button = QPushButton("", central_widget)
             self.restart_button.setObjectName("RestartBTN")
-            self.set_svg_icon(self.restart_button, os.path.join(self.root_dir, "icons/arrow-repeat.svg"))
+            self.set_svg_icon(self.restart_button, self.get_path(os.path.join("icons/arrow-repeat.svg")))
             self.restart_button.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
             self.restart_button.clicked.connect(self.restart_system)
             buttons_layout.addWidget(self.restart_button)
@@ -424,7 +436,7 @@ class Client(QMainWindow):
         if not self.config['Appearance']['Hide Shutdown']:
             self.shutdown_button = QPushButton("", central_widget)
             self.shutdown_button.setObjectName("ShutdownBTN")
-            self.set_svg_icon(self.shutdown_button, os.path.join(self.root_dir, "icons/power.svg"))
+            self.set_svg_icon(self.shutdown_button, self.get_path(os.path.join("icons/power.svg")))
             self.shutdown_button.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
             self.shutdown_button.clicked.connect(self.shutdown_system)
             buttons_layout.addWidget(self.shutdown_button)

@@ -1,4 +1,4 @@
-<p align="center"><img src="dist/img/logo.png" /></p>
+<p align="center"><img src="src/img/logo.png" /></p>
 
 # PyRDPConnect
 ![License](https://img.shields.io/github/license/LaswitchTech/PyRDPConnect?style=for-the-badge)
@@ -47,11 +47,7 @@ git clone https://github.com/LaswitchTech/PyRDPConnect.git
 sudo apt-get install -y build-essential libssl-dev libffi-dev python3-dev qt5-default qtbase5-dev qtchooser qt5-qmake qtbase5-dev-tools qttools5-dev-tools
 sudo apt --fix-broken install
 cd PyRDPConnect
-python3 -m venv env
-source env/bin/activate
-pip install pyinstaller
-pip install pyqt5
-pyinstaller --onefile --windowed src/client.py
+./build.sh
 ```
 
 ## How do I use it?
