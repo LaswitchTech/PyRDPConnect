@@ -1,5 +1,5 @@
 # Installation
-## Requirements
+## Prerequisites
 ```sh
 sudo apt-get update
 sudo apt-get install -y git python python3 pip python3-pyqt5 python3-pyqt5.* freerdp2-x11
