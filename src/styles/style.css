@@ -1,6 +1,7 @@
 /* Style for the client window */
 #clientWindow {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #0186bb, stop:1 #002733);
+    /* background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #0186bb, stop:1 #002733); */
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #265162, stop:1 #002136);
 }
 
 /* Style for the input fields */
