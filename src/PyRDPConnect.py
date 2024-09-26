@@ -3,11 +3,12 @@ from PyQt5.QtWidgets import QApplication, QProgressDialog, QMessageBox, QDialog,
 from PyQt5.QtGui import QIcon, QColor, QPalette, QPixmap, QPainter
 from PyQt5.QtSvg import QSvgRenderer
 from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal
-import json
-import os
-import sys
 import subprocess
 import platform
+import json
+import sys
+import os
+import re
 
 class ConnectionThread(QThread):
     connection_success = pyqtSignal()
@@ -769,6 +770,71 @@ class Client(QMainWindow):
             print(f"Error retrieving FreeRDP version: {e}")
             return None
 
+    def get_printers(self):
+
+        if self.get_os() == "macos":
+
+            # Run the lpstat -p command to get the list of printers
+            try:
+                result = subprocess.run(['lpstat', '-p'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+                # Check if the command executed successfully
+                if result.returncode != 0:
+                    print("Failed to run lpstat command. Error:", result.stderr)
+                    return []
+
+                # Initialize a list to store printer and driver pairs
+                printers = []
+
+                # Path to CUPS PPD directory
+                ppd_dir = '/etc/cups/ppd'
+
+                # Parse the output to find printer names and look for their corresponding PPD files
+                for line in result.stdout.splitlines():
+                    match = re.match(r'printer\s+(\S+)', line)
+                    if match:
+                        printer_name = match.group(1)
+                        ppd_file = os.path.join(ppd_dir, f'{printer_name}.ppd')
+
+                        # Check if the PPD file exists for this printer
+                        if os.path.exists(ppd_file):
+                            # Extract driver information from the PPD file
+                            driver = self.get_driver(ppd_file)
+                            printers.append((printer_name, driver))
+                        else:
+                            printers.append((printer_name, None))  # No PPD file found, driver is None
+
+                # Debugging: Print the list of printers found
+                print("Printers found:", printers)
+
+                return printers
+
+            except Exception as e:
+                print(f"An error occurred: {e}")
+                return []
+        # elif self.get_os() == "linux":
+        else:
+            return []
+
+    def get_driver(self, ppd_file):
+
+        if self.get_os() == "macos":
+
+            # Read the PPD file and extract the driver name
+            try:
+                with open(ppd_file, 'r') as f:
+                    for line in f:
+                        # Find the line that starts with *NickName or *DriverName, which contains the driver info
+                        if line.startswith('*NickName:') or line.startswith('*DriverName:'):
+                            # Extract the driver name from the line
+                            driver_name = line.split(':', 1)[1].strip().strip('"')
+                            return driver_name
+            except Exception as e:
+                print(f"Error reading PPD file {ppd_file}: {e}")
+                return None
+        else:
+            return None
+
     def gen_command(self):
 
         # Get the path to the bundled xfreerdp
@@ -830,44 +896,46 @@ class Client(QMainWindow):
             command.append("/smart-sizing")
 
         # Add sound settings
-        if major_version and major_version < 3:
-            if play_sound == "Never":
-                command.append("/sound:off")
-            elif play_sound == "On this computer":
-                command.append("/sound:sys:alsa")
-            elif play_sound == "On the remote computer":
-                command.append("/sound:sys:rdpsnd")
-        else:
-            # Adjust the sound options for FreeRDP 3.x
-            if play_sound == "Never":
-                command.append("/audio-mode:2")
-            elif play_sound == "On this computer":
-                command.append("/audio-mode:0")
-            elif play_sound == "On the remote computer":
-                command.append("/audio-mode:1")
+        # if major_version and major_version < 3:
+        #     if play_sound == "Never":
+        #         command.append("/sound:off")
+        #     elif play_sound == "On this computer":
+        #         command.append("/sound:sys:alsa")
+        #     elif play_sound == "On the remote computer":
+        #         command.append("/sound:sys:rdpsnd")
+        # else:
+        #     # Adjust the sound options for FreeRDP 3.x
+        #     if play_sound == "Never":
+        #         command.append("/audio-mode:2")
+        #     elif play_sound == "On this computer":
+        #         command.append("/audio-mode:0")
+        #     elif play_sound == "On the remote computer":
+        #         command.append("/audio-mode:1")
 
         # Add redirection settings
         if redirect_clipboard:
             command.append("+clipboard")
-        if major_version and major_version < 3:
-            if redirect_printers:
-                command.append("/printer")
-            if redirect_smart_cards:
-                command.append("/smartcard")
-            if redirect_ports:
-                command.append(f"/serial:{redirect_ports}")
-            if redirect_drives:
-                command.append("/drive:shared")
-        else:
-            # Adjust the redirection options for FreeRDP 3.x
-            if redirect_printers:
-                command.append("/printer:off")
-            if redirect_smart_cards:
-                command.append("/smartcard:off")
-            if redirect_ports:
-                command.append("/serial:off")
-            if redirect_drives:
-                command.append("/drive:off")
+        # if major_version and major_version < 3:
+        #     if redirect_printers:
+        #         command.append("/printer")
+        #     if redirect_smart_cards:
+        #         command.append("/smartcard")
+        #     if redirect_ports:
+        #         command.append(f"/serial:{redirect_ports}")
+        #     if redirect_drives:
+        #         command.append("/drive:shared")
+        # else:
+        #     # Adjust the redirection options for FreeRDP 3.x
+        #     if redirect_printers:
+        #         for printer, driver in self.get_printers():
+        #             if driver != "None":
+        #                 command.append(f"/printer:{printer},'{driver}'")
+        #     if redirect_smart_cards:
+        #         command.append("/smartcard:off")
+        #     if redirect_ports:
+        #         command.append("/serial:off")
+        #     if redirect_drives:
+        #         command.append("/drive:off")
 
         # Ignore Certificate
         if major_version and major_version < 3:
