@@ -26,7 +26,7 @@ mkdir -p ~/.config/openbox
 # Set the gradient background using hsetroot
 cat <<EOL > ~/.config/openbox/autostart
 # Autostart PyRDPConnect in full-screen mode
-hsetroot -gradient 45 -colors "#265162" "#002136" &
+hsetroot -gradient 45 -add "#265162" -add "#002136" &
 ~/PyRDPConnect/dist/linux/PyRDPConnect &
 EOL
 
