@@ -42,4 +42,4 @@ Contributions to PyRDPConnect are welcome! If you have ideas for new features or
   - **PyInstaller**: For simplifying the process of packaging Python applications for distribution.
 
 ## Wait, where is the documentation?
-Review the [Documentation](docs/).
+Review the [Documentation](docs/usage.md).
