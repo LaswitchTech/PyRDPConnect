@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=PyRDPConnect
+Description=A forked breeze plymouth theme with PyRDPConnect logo
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/pyrdpconnect
+ScriptFile=/usr/share/plymouth/themes/pyrdpconnect/pyrdpconnect.script

@@ -112,27 +112,27 @@ fi
 echo "Disabling rainbow splash screen..."
 sudo bash -c 'echo "disable_splash=1" >> /boot/firmware/config.txt'
 
-# Create a custom Plymouth theme
-echo "Creating custom Plymouth theme with your logo and gradient background..."
-sudo mkdir -p /usr/share/plymouth/themes/custom
+# Create a PyRDPConnect Plymouth theme
+echo "Creating PyRDPConnect Plymouth theme with your logo and gradient background..."
+sudo mkdir -p /usr/share/plymouth/themes/PyRDPConnect
 
 # Assuming your logo is stored in ~/PyRDPConnect/src/icons/icon.png
-sudo cp ~/PyRDPConnect/src/icons/icon.png /usr/share/plymouth/themes/custom/icon.png
+sudo cp ~/PyRDPConnect/src/icons/icon.png /usr/share/plymouth/themes/PyRDPConnect/icon.png
 
-# Create the Plymouth script for the custom theme
-sudo bash -c 'cat <<EOL > /usr/share/plymouth/themes/custom/custom.plymouth
+# Create the Plymouth script for the PyRDPConnect theme
+sudo bash -c 'cat <<EOL > /usr/share/plymouth/themes/PyRDPConnect/PyRDPConnect.plymouth
 [Plymouth Theme]
 Name=Custom
 Description=Custom theme with logo and gradient background
 ModuleName=script
 
 [script]
-ImageDir=/usr/share/plymouth/themes/custom
-ScriptFile=/usr/share/plymouth/themes/custom/custom.script
+ImageDir=/usr/share/plymouth/themes/PyRDPConnect
+ScriptFile=/usr/share/plymouth/themes/PyRDPConnect/PyRDPConnect.script
 EOL'
 
 # Create the script file for the theme
-sudo bash -c 'cat <<EOL > /usr/share/plymouth/themes/custom/custom.script
+sudo bash -c 'cat <<EOL > /usr/share/plymouth/themes/PyRDPConnect/PyRDPConnect.script
 wallpaper_image = Image("icon.png");
 wallpaper_image.SetPosition("center", 0, 0);
 wallpaper_image.SetScale(1.0, 1.0);
@@ -142,8 +142,8 @@ window.SetBackgroundTopColor(0.149, 0.318, 0.384);    # RGB for #265162
 window.SetBackgroundBottomColor(0.0, 0.129, 0.212);   # RGB for #002136
 EOL'
 
-# Set the custom theme as the default and update the initramfs
-sudo plymouth-set-default-theme -R custom
+# Set the PyRDPConnect theme as the default and update the initramfs
+sudo plymouth-set-default-theme -R PyRDPConnect
 sudo update-initramfs -u
 
 # Step 10: Set Up Raspberry Pi to Boot into the Desktop Environment
