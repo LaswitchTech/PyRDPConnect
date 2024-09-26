@@ -12,6 +12,9 @@
 2. Download and install the latest version of XQuartz.
 3. (Optional) Restart your computer to ensure all necessary components are initialized.
 
+**Why XQuartz?**
+XQuartz provides the necessary X11 environment that FreeRDP relies on for graphical rendering on macOS. Without it, the application may not display the RDP session correctly.
+
 #### Step 2: Install Python and Required Packages
 
 ```sh
@@ -40,7 +43,7 @@ Update your package list and install the necessary packages:
 
 ```sh
 sudo apt-get update
-sudo apt-get install -y git python3 python3-pip python3-pyqt5 python3-pyqt5.* freerdp2-x11
+sudo apt-get install -y git python3 python3-pip python3-pyqt5 python3-pyqt5.qtquick python3-pyqt5.sip freerdp2-x11
 ```
 
 #### Step 2: Clone the Repository and Run from Source
@@ -97,6 +100,15 @@ sudo apt-get install -y freerdp2-x11
     ```sh
     ./dist/linux/PyRDPConnect
     ```
+
+## Troubleshooting Common Issues
+
+**Permission Denied Error**: If you encounter a "Permission denied" error, ensure that the script has executable permissions:
+```sh
+chmod +x <script_name>.sh
+```
+
+**XQuartz Issues**: If XQuartz does not start automatically, you can manually start it from `/Applications/Utilities/XQuartz.app`.
 
 ## Additional Information
 
