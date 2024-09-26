@@ -12,8 +12,12 @@ sudo apt-get install -y lightdm openbox git xterm firefox-esr plymouth plymouth-
 
 # Step 3: Clone the PyRDPConnect Repository
 echo "Cloning the PyRDPConnect repository..."
-cd ~
-git clone https://github.com/LaswitchTech/PyRDPConnect.git
+if [ ! -d "~/PyRDPConnect" ]; then
+  cd ~
+  git clone https://github.com/LaswitchTech/PyRDPConnect.git
+else
+  echo "PyRDPConnect directory already exists. Skipping clone step."
+fi
 
 # Step 4: Configure Openbox to Start Without Panels and Customize the Menu
 echo "Configuring Openbox to start without panels and customizing the menu..."
@@ -99,6 +103,11 @@ EOL'
 echo "Configuring boot process to disable verbose boot and enable splash screen with custom logo and gradient background..."
 sudo sed -i 's/console=tty1/console=tty3 splash quiet plymouth.ignore-serial-consoles/' /boot/cmdline.txt
 
+# Verify that the 'splash' and 'quiet' options are added
+if ! grep -q "splash quiet" /boot/cmdline.txt; then
+  echo "splash quiet" | sudo tee -a /boot/cmdline.txt
+fi
+
 # Create a custom Plymouth theme
 echo "Creating custom Plymouth theme with your logo and gradient background..."
 sudo mkdir -p /usr/share/plymouth/themes/custom
@@ -129,8 +138,9 @@ window.SetBackgroundTopColor(0.149, 0.318, 0.384);    # RGB for #265162
 window.SetBackgroundBottomColor(0.0, 0.129, 0.212);   # RGB for #002136
 EOL'
 
-# Set the custom theme as the default
+# Set the custom theme as the default and update the initramfs
 sudo plymouth-set-default-theme -R custom
+sudo update-initramfs -u
 
 # Step 10: Set Up Raspberry Pi to Boot into the Desktop Environment
 echo "Configuring Raspberry Pi to boot into the desktop environment..."
