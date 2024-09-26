@@ -99,8 +99,8 @@ Action=org.freedesktop.login1.reboot;org.freedesktop.login1.power-off
 ResultActive=yes
 EOL'
 
-# Step 9: Disable Verbose Boot and Enable Splash Screen with Custom Logo and Gradient Background
-echo "Configuring boot process to disable verbose boot and enable splash screen with custom logo and gradient background..."
+# Step 9: Disable Verbose Boot and Enable Plymouth Theme
+echo "Configuring boot process to disable verbose boot..."
 sudo sed -i 's/console=tty1/console=tty3 splash quiet plymouth.ignore-serial-consoles/' /boot/firmware/cmdline.txt
 
 # Verify that the 'splash' and 'quiet' options are added
@@ -112,41 +112,15 @@ fi
 echo "Disabling rainbow splash screen..."
 sudo bash -c 'echo "disable_splash=1" >> /boot/firmware/config.txt'
 
-# Create a PyRDPConnect Plymouth theme
-echo "Creating PyRDPConnect Plymouth theme with your logo and gradient background..."
-sudo mkdir -p /usr/share/plymouth/themes/PyRDPConnect
+# Step 10: Copy the Plymouth theme from the project and set it as default
+echo "Copying custom Plymouth theme and setting it as default..."
+sudo cp -r ~/PyRDPConnect/src/plymouth /usr/share/plymouth/themes/pyrdpconnect
 
-# Assuming your logo is stored in ~/PyRDPConnect/src/icons/icon.png
-sudo cp ~/PyRDPConnect/src/icons/icon.png /usr/share/plymouth/themes/PyRDPConnect/icon.png
-
-# Create the Plymouth script for the PyRDPConnect theme
-sudo bash -c 'cat <<EOL > /usr/share/plymouth/themes/PyRDPConnect/PyRDPConnect.plymouth
-[Plymouth Theme]
-Name=Custom
-Description=Custom theme with logo and gradient background
-ModuleName=script
-
-[script]
-ImageDir=/usr/share/plymouth/themes/PyRDPConnect
-ScriptFile=/usr/share/plymouth/themes/PyRDPConnect/PyRDPConnect.script
-EOL'
-
-# Create the script file for the theme
-sudo bash -c 'cat <<EOL > /usr/share/plymouth/themes/PyRDPConnect/PyRDPConnect.script
-wallpaper_image = Image("icon.png");
-wallpaper_image.SetPosition("center", 0, 0);
-wallpaper_image.SetScale(1.0, 1.0);
-
-# Gradient background
-window.SetBackgroundTopColor(0.149, 0.318, 0.384);    # RGB for #265162
-window.SetBackgroundBottomColor(0.0, 0.129, 0.212);   # RGB for #002136
-EOL'
-
-# Set the PyRDPConnect theme as the default and update the initramfs
-sudo plymouth-set-default-theme -R PyRDPConnect
+# Set the custom theme as the default and update the initramfs
+sudo plymouth-set-default-theme -R pyrdpconnect
 sudo update-initramfs -u
 
-# Step 10: Set Up Raspberry Pi to Boot into the Desktop Environment
+# Step 11: Set Up Raspberry Pi to Boot into the Desktop Environment
 echo "Configuring Raspberry Pi to boot into the desktop environment..."
 sudo raspi-config nonint do_boot_behaviour B4 # Automatically boot to desktop and login as 'pi'
 
