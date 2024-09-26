@@ -121,6 +121,9 @@ sudo bash -c 'echo "disable_splash=1" >> /boot/firmware/config.txt'
 
 # Step 11: Copy the Plymouth theme from the project and set it as default
 echo "Copying custom Plymouth theme and setting it as default..."
+if [ -d "/usr/share/plymouth/themes/pyrdpconnect" ]; then
+    sudo rm -rf /usr/share/plymouth/themes/pyrdpconnect
+fi
 sudo cp -r ~/PyRDPConnect/src/plymouth /usr/share/plymouth/themes/pyrdpconnect
 
 # Set the custom theme as the default and update the initramfs
