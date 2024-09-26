@@ -6,9 +6,9 @@ sudo apt-get update
 sudo apt-get upgrade -y
 sudo apt-get dist-upgrade -y
 
-# Step 2: Install a Minimal Desktop Environment and Firefox
-echo "Installing Openbox, Git, and Firefox..."
-sudo apt-get install -y lightdm openbox git xterm firefox-esr plymouth plymouth-themes
+# Step 2: Install a Minimal Desktop Environment, Firefox, and hsetroot
+echo "Installing Openbox, Git, Firefox, and hsetroot..."
+sudo apt-get install -y lightdm openbox git xterm firefox-esr plymouth plymouth-themes hsetroot
 
 # Step 3: Clone the PyRDPConnect Repository
 echo "Cloning the PyRDPConnect repository..."
@@ -19,9 +19,16 @@ else
   echo "PyRDPConnect directory already exists. Skipping clone step."
 fi
 
-# Step 4: Configure Openbox to Start Without Panels and Customize the Menu
-echo "Configuring Openbox to start without panels and customizing the menu..."
+# Step 4: Configure Openbox to Start Without Panels, Set Gradient Background, and Customize the Menu
+echo "Configuring Openbox to start without panels, setting gradient background, and customizing the menu..."
 mkdir -p ~/.config/openbox
+
+# Set the gradient background using hsetroot
+cat <<EOL > ~/.config/openbox/autostart
+# Autostart PyRDPConnect in full-screen mode
+hsetroot -gradient 45 -colors "#265162" "#002136" &
+~/PyRDPConnect/dist/linux/PyRDPConnect &
+EOL
 
 # Custom Openbox menu
 cat <<EOL > ~/.config/openbox/menu.xml
@@ -59,12 +66,6 @@ cat <<EOL > ~/.config/openbox/menu.xml
         </item>
     </menu>
 </openbox_menu>
-EOL
-
-# Set up autostart for PyRDPConnect
-cat <<EOL > ~/.config/openbox/autostart
-# Autostart PyRDPConnect in full-screen mode
-~/PyRDPConnect/dist/linux/PyRDPConnect &
 EOL
 
 # Step 5: Set Openbox to Start Automatically
