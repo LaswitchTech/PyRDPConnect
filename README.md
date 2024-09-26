@@ -1,6 +1,6 @@
 <p align="center"><img src="src/icons/icon.png" /></p>
 
-# PyRDPConnect
+# PyRDPConnect (DEV)(Not ready for production)
 ![License](https://img.shields.io/github/license/LaswitchTech/PyRDPConnect?style=for-the-badge)
 ![GitHub repo size](https://img.shields.io/github/repo-size/LaswitchTech/PyRDPConnect?style=for-the-badge&logo=github)
 ![GitHub top language](https://img.shields.io/github/languages/top/LaswitchTech/PyRDPConnect?style=for-the-badge)
