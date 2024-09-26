@@ -19,7 +19,7 @@ if (Window.GetBitsPerPixel() == 4) {
 
     assets.spinner_base  = "images/16bit/spinner";
 } else {
-    assets.logo          = "images/neon.logo.png";
+    assets.logo          = "images/logo.png";
     assets.text_input    = "images/text-input.png";
 
     assets.spinner_base  = "images/spinner";
