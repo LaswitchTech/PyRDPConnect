@@ -120,5 +120,17 @@ EOL'
 
 # Create the script file for the theme
 sudo bash -c 'cat <<EOL > /usr/share/plymouth/themes/custom/custom.script
-wallpaper_image = Image("icon.png");
-wallpaper
+wallpaper_image = Image("logo.png");
+wallpaper_image.SetPosition("center", 0, 0);
+wallpaper_image.SetScale(1.0, 1.0);
+EOL'
+
+# Set the custom theme as the default
+sudo plymouth-set-default-theme -R custom
+
+# Step 10: Set Up Raspberry Pi to Boot into the Desktop Environment
+echo "Configuring Raspberry Pi to boot into the desktop environment..."
+sudo raspi-config nonint do_boot_behaviour B4 # Automatically boot to desktop and login as 'pi'
+
+# Instructions for further manual steps
+echo "Setup completed. Please reboot the Raspberry Pi to apply the changes."
