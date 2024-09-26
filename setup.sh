@@ -108,6 +108,10 @@ if ! grep -q "splash quiet" /boot/firmware/cmdline.txt; then
   echo "splash quiet" | sudo tee -a /boot/firmware/cmdline.txt
 fi
 
+# Disable rainbow splash screen
+echo "Disabling rainbow splash screen..."
+sudo bash -c 'echo "disable_splash=1" >> /boot/firmware/config.txt'
+
 # Create a custom Plymouth theme
 echo "Creating custom Plymouth theme with your logo and gradient background..."
 sudo mkdir -p /usr/share/plymouth/themes/custom
