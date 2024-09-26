@@ -6,9 +6,9 @@ sudo apt-get update
 sudo apt-get upgrade -y
 sudo apt-get dist-upgrade -y
 
-# Step 2: Install a Minimal Desktop Environment, Firefox, and hsetroot
-echo "Installing Openbox, Git, Firefox, and hsetroot..."
-sudo apt-get install -y lightdm openbox git xterm firefox-esr plymouth plymouth-themes hsetroot
+# Step 2: Install a Minimal Desktop Environment, Firefox, ImageMagick, and feh
+echo "Installing Openbox, Git, Firefox, ImageMagick, and feh..."
+sudo apt-get install -y lightdm openbox git xterm firefox-esr plymouth plymouth-themes imagemagick feh
 
 # Step 3: Clone the PyRDPConnect Repository
 echo "Cloning the PyRDPConnect repository..."
@@ -19,14 +19,20 @@ else
   echo "PyRDPConnect directory already exists. Skipping clone step."
 fi
 
-# Step 4: Configure Openbox to Start Without Panels, Set Gradient Background, and Customize the Menu
+# Step 4: Create a Gradient Image for the Background
+echo "Creating a gradient background image..."
+mkdir -p ~/backgrounds
+convert -size 1920x1080 gradient:'#265162-#002136' ~/backgrounds/gradient.png
+
+# Step 5: Configure Openbox to Start Without Panels, Set Gradient Background, and Customize the Menu
 echo "Configuring Openbox to start without panels, setting gradient background, and customizing the menu..."
 mkdir -p ~/.config/openbox
 
-# Set the gradient background using hsetroot
+# Set the gradient background using feh
 cat <<EOL > ~/.config/openbox/autostart
+# Set gradient background
+feh --bg-scale ~/backgrounds/gradient.png &
 # Autostart PyRDPConnect in full-screen mode
-hsetroot -gradient 45 -add "#265162" -add "#002136" &
 ~/PyRDPConnect/dist/linux/PyRDPConnect &
 EOL
 
@@ -68,13 +74,13 @@ cat <<EOL > ~/.config/openbox/menu.xml
 </openbox_menu>
 EOL
 
-# Step 5: Set Openbox to Start Automatically
+# Step 6: Set Openbox to Start Automatically
 echo "Setting Openbox to start automatically..."
 cat <<EOL > ~/.xinitrc
 exec openbox-session
 EOL
 
-# Step 6: Set Locale to en_CA.utf-8
+# Step 7: Set Locale to en_CA.utf-8
 echo "Setting locale to en_CA.utf-8..."
 sudo sed -i '/en_GB.UTF-8/s/^/#/' /etc/locale.gen
 sudo sed -i '/en_CA.UTF-8/s/^# //g' /etc/locale.gen
@@ -87,11 +93,11 @@ export LC_ALL=en_CA.UTF-8
 export LANG=en_CA.UTF-8
 export LC_CTYPE="en_CA.UTF-8"
 
-# Step 7: Set Timezone to Montreal, QC, CA
+# Step 8: Set Timezone to Montreal, QC, CA
 echo "Setting timezone to America/Montreal..."
 sudo timedatectl set-timezone America/Toronto
 
-# Step 8: Configure Polkit for Non-Sudo Reboot/Shutdown
+# Step 9: Configure Polkit for Non-Sudo Reboot/Shutdown
 echo "Configuring PolicyKit to allow reboot and shutdown without password..."
 sudo bash -c 'cat <<EOL > /etc/polkit-1/localauthority/50-local.d/10-power-management.pkla
 [Allow Reboot and Shutdown]
@@ -100,7 +106,7 @@ Action=org.freedesktop.login1.reboot;org.freedesktop.login1.power-off
 ResultActive=yes
 EOL'
 
-# Step 9: Disable Verbose Boot and Enable Plymouth Theme
+# Step 10: Disable Verbose Boot and Enable Plymouth Theme
 echo "Configuring boot process to disable verbose boot..."
 sudo sed -i 's/console=tty1/console=tty3 splash quiet plymouth.ignore-serial-consoles/' /boot/firmware/cmdline.txt
 
@@ -113,7 +119,7 @@ fi
 echo "Disabling rainbow splash screen..."
 sudo bash -c 'echo "disable_splash=1" >> /boot/firmware/config.txt'
 
-# Step 10: Copy the Plymouth theme from the project and set it as default
+# Step 11: Copy the Plymouth theme from the project and set it as default
 echo "Copying custom Plymouth theme and setting it as default..."
 sudo cp -r ~/PyRDPConnect/src/plymouth /usr/share/plymouth/themes/pyrdpconnect
 
@@ -121,7 +127,7 @@ sudo cp -r ~/PyRDPConnect/src/plymouth /usr/share/plymouth/themes/pyrdpconnect
 sudo plymouth-set-default-theme -R pyrdpconnect
 sudo update-initramfs -u
 
-# Step 11: Set Up Raspberry Pi to Boot into the Desktop Environment
+# Step 12: Set Up Raspberry Pi to Boot into the Desktop Environment
 echo "Configuring Raspberry Pi to boot into the desktop environment..."
 sudo raspi-config nonint do_boot_behaviour B4 # Automatically boot to desktop and login as 'pi'
 
