@@ -133,6 +133,13 @@ mkdir -p "$FINAL_DIR"
 if [ "$OS" == "macos" ]; then
     log "Moving the .app bundle to the $FINAL_DIR directory..."
     mv "dist/$NAME.app" "$FINAL_DIR/"
+
+    # Create a DMG image
+    log "Creating a DMG image for macOS..."
+    DMG_NAME="$FINAL_DIR/$NAME.dmg"
+    hdiutil create "$DMG_NAME" -volname "$NAME" -srcfolder "$FINAL_DIR/$NAME.app" -ov -format UDZO
+
+    log "DMG image created at $DMG_NAME"
 else
     log "Moving the executable to the $FINAL_DIR directory..."
     mv "dist/$NAME" "$FINAL_DIR/"
