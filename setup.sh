@@ -101,11 +101,11 @@ EOL'
 
 # Step 9: Disable Verbose Boot and Enable Splash Screen with Custom Logo and Gradient Background
 echo "Configuring boot process to disable verbose boot and enable splash screen with custom logo and gradient background..."
-sudo sed -i 's/console=tty1/console=tty3 splash quiet plymouth.ignore-serial-consoles/' /boot/cmdline.txt
+sudo sed -i 's/console=tty1/console=tty3 splash quiet plymouth.ignore-serial-consoles/' /boot/firmware/cmdline.txt
 
 # Verify that the 'splash' and 'quiet' options are added
-if ! grep -q "splash quiet" /boot/cmdline.txt; then
-  echo "splash quiet" | sudo tee -a /boot/cmdline.txt
+if ! grep -q "splash quiet" /boot/firmware/cmdline.txt; then
+  echo "splash quiet" | sudo tee -a /boot/firmware/cmdline.txt
 fi
 
 # Create a custom Plymouth theme
