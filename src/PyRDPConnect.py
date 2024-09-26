@@ -146,8 +146,8 @@ class Client(QMainWindow):
                 "Logo Position": "top-center",
                 "Logo File": self.get_path(os.path.join('icons', 'icon.png')),
                 "Hide Exit": False,
-                "Hide Restart": True,
-                "Hide Shutdown": True,
+                "Hide Restart": False,
+                "Hide Shutdown": False,
                 "Fullscreen": False
             }
         }
@@ -829,45 +829,45 @@ class Client(QMainWindow):
         if fit_window:
             command.append("/smart-sizing")
 
-        # # Add sound settings
-        # if major_version and major_version < 3:
-        #     if play_sound == "Never":
-        #         command.append("/sound:off")
-        #     elif play_sound == "On this computer":
-        #         command.append("/sound:sys:alsa")
-        #     elif play_sound == "On the remote computer":
-        #         command.append("/sound:sys:rdpsnd")
-        # else:
-        #     # Adjust the sound options for FreeRDP 3.x
-        #     if play_sound == "Never":
-        #         command.append("/audio-mode:off")
-        #     elif play_sound == "On this computer":
-        #         command.append("/audio-mode:local")
-        #     elif play_sound == "On the remote computer":
-        #         command.append("/audio-mode:remote")
+        # Add sound settings
+        if major_version and major_version < 3:
+            if play_sound == "Never":
+                command.append("/sound:off")
+            elif play_sound == "On this computer":
+                command.append("/sound:sys:alsa")
+            elif play_sound == "On the remote computer":
+                command.append("/sound:sys:rdpsnd")
+        else:
+            # Adjust the sound options for FreeRDP 3.x
+            if play_sound == "Never":
+                command.append("/audio-mode:2")
+            elif play_sound == "On this computer":
+                command.append("/audio-mode:0")
+            elif play_sound == "On the remote computer":
+                command.append("/audio-mode:1")
 
         # Add redirection settings
-        # if redirect_clipboard:
-        #     command.append("+clipboard")
-        # if major_version and major_version < 3:
-        #     if redirect_printers:
-        #         command.append("/printer")
-        #     if redirect_smart_cards:
-        #         command.append("/smartcard")
-        #     if redirect_ports:
-        #         command.append(f"/serial:{redirect_ports}")
-        #     if redirect_drives:
-        #         command.append("/drive:shared")
-        # else:
-        #     # Adjust the redirection options for FreeRDP 3.x
-        #     if redirect_printers:
-        #         command.append("/printer:off")
-        #     if redirect_smart_cards:
-        #         command.append("/smartcard:off")
-        #     if redirect_ports:
-        #         command.append("/serial:off")
-        #     if redirect_drives:
-        #         command.append("/drive:off")
+        if redirect_clipboard:
+            command.append("+clipboard")
+        if major_version and major_version < 3:
+            if redirect_printers:
+                command.append("/printer")
+            if redirect_smart_cards:
+                command.append("/smartcard")
+            if redirect_ports:
+                command.append(f"/serial:{redirect_ports}")
+            if redirect_drives:
+                command.append("/drive:shared")
+        else:
+            # Adjust the redirection options for FreeRDP 3.x
+            if redirect_printers:
+                command.append("/printer:off")
+            if redirect_smart_cards:
+                command.append("/smartcard:off")
+            if redirect_ports:
+                command.append("/serial:off")
+            if redirect_drives:
+                command.append("/drive:off")
 
         # Ignore Certificate
         if major_version and major_version < 3:
