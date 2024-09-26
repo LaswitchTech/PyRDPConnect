@@ -6,9 +6,9 @@ sudo apt-get update
 sudo apt-get upgrade -y
 sudo apt-get dist-upgrade -y
 
-# Step 2: Install a Minimal Desktop Environment
-echo "Installing Openbox and Git..."
-sudo apt-get install -y lightdm openbox git xterm
+# Step 2: Install a Minimal Desktop Environment and Firefox
+echo "Installing Openbox, Git, and Firefox..."
+sudo apt-get install -y lightdm openbox git xterm firefox-esr
 
 # Step 3: Clone the PyRDPConnect Repository
 echo "Cloning the PyRDPConnect repository..."
@@ -38,19 +38,19 @@ cat <<EOL > ~/.config/openbox/menu.xml
         <!-- Web Browser -->
         <item label="Web Browser">
             <action name="Execute">
-                <command>xdg-open https://www.google.com</command>
+                <command>firefox</command>
             </action>
         </item>
         <!-- Restart -->
         <item label="Restart">
             <action name="Execute">
-                <command>reboot</command>
+                <command>systemctl reboot</command>
             </action>
         </item>
         <!-- Shutdown -->
         <item label="Shutdown">
             <action name="Execute">
-                <command>sudo poweroff</command>
+                <command>systemctl poweroff</command>
             </action>
         </item>
     </menu>
@@ -86,7 +86,16 @@ export LC_CTYPE="en_CA.UTF-8"
 echo "Setting timezone to America/Montreal..."
 sudo timedatectl set-timezone America/Toronto
 
-# Step 8: Set Up Raspberry Pi to Boot into the Desktop Environment
+# Step 8: Configure Polkit for Non-Sudo Reboot/Shutdown
+echo "Configuring PolicyKit to allow reboot and shutdown without password..."
+sudo bash -c 'cat <<EOL > /etc/polkit-1/localauthority/50-local.d/10-power-management.pkla
+[Allow Reboot and Shutdown]
+Identity=unix-user:*
+Action=org.freedesktop.login1.reboot;org.freedesktop.login1.power-off
+ResultActive=yes
+EOL'
+
+# Step 9: Set Up Raspberry Pi to Boot into the Desktop Environment
 echo "Configuring Raspberry Pi to boot into the desktop environment..."
 sudo raspi-config nonint do_boot_behaviour B4 # Automatically boot to desktop and login as 'pi'
 
