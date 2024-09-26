@@ -8,7 +8,7 @@ sudo apt-get dist-upgrade -y
 
 # Step 2: Install a Minimal Desktop Environment and Firefox
 echo "Installing Openbox, Git, and Firefox..."
-sudo apt-get install -y lightdm openbox git xterm firefox-esr
+sudo apt-get install -y lightdm openbox git xterm firefox-esr plymouth plymouth-themes
 
 # Step 3: Clone the PyRDPConnect Repository
 echo "Cloning the PyRDPConnect repository..."
@@ -95,9 +95,30 @@ Action=org.freedesktop.login1.reboot;org.freedesktop.login1.power-off
 ResultActive=yes
 EOL'
 
-# Step 9: Set Up Raspberry Pi to Boot into the Desktop Environment
-echo "Configuring Raspberry Pi to boot into the desktop environment..."
-sudo raspi-config nonint do_boot_behaviour B4 # Automatically boot to desktop and login as 'pi'
+# Step 9: Disable Verbose Boot and Enable Splash Screen with Custom Logo
+echo "Configuring boot process to disable verbose boot and enable splash screen with custom logo..."
+sudo sed -i 's/console=tty1/console=tty3 splash quiet plymouth.ignore-serial-consoles/' /boot/cmdline.txt
 
-# Instructions for further manual steps
-echo "Setup completed. Please reboot the Raspberry Pi to apply the changes."
+# Create a custom Plymouth theme
+echo "Creating custom Plymouth theme with your logo..."
+sudo mkdir -p /usr/share/plymouth/themes/custom
+
+# Assuming your logo is stored in ~/PyRDPConnect/src/icons/icon.png
+sudo cp ~/PyRDPConnect/src/icons/icon.png /usr/share/plymouth/themes/custom/icon.png
+
+# Create the Plymouth script for the custom theme
+sudo bash -c 'cat <<EOL > /usr/share/plymouth/themes/custom/custom.plymouth
+[Plymouth Theme]
+Name=PyRDPConnect
+Description=PyRDPConnect Theme
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/custom
+ScriptFile=/usr/share/plymouth/themes/custom/custom.script
+EOL'
+
+# Create the script file for the theme
+sudo bash -c 'cat <<EOL > /usr/share/plymouth/themes/custom/custom.script
+wallpaper_image = Image("icon.png");
+wallpaper
