@@ -8,7 +8,7 @@ sudo apt-get dist-upgrade -y
 
 # Step 2: Install a Minimal Desktop Environment, Firefox, ImageMagick, and feh
 echo "Installing Openbox, Git, Firefox, ImageMagick, and feh..."
-sudo apt-get install -y lightdm openbox git xterm firefox-esr plymouth plymouth-themes imagemagick feh freerdp2-x11
+sudo apt-get install -y lightdm openbox git xterm firefox-esr plymouth plymouth-themes imagemagick feh freerdp2-x11 python python3 python3-pyqt5 python3-pyqt5.*
 
 # Step 3: Clone the PyRDPConnect Repository
 echo "Cloning the PyRDPConnect repository..."
@@ -43,7 +43,7 @@ cat <<EOL > ~/.config/openbox/menu.xml
         <!-- PyRDPConnect -->
         <item label="PyRDPConnect">
             <action name="Execute">
-                <command>~/PyRDPConnect/dist/linux/PyRDPConnect</command>
+                <command>python ~/PyRDPConnect/src/PyRDPConnect.py</command>
             </action>
         </item>
         <!-- Terminal -->
@@ -85,13 +85,15 @@ echo "Setting locale to en_CA.utf-8..."
 sudo sed -i '/en_GB.UTF-8/s/^/#/' /etc/locale.gen
 sudo sed -i '/en_CA.UTF-8/s/^# //g' /etc/locale.gen
 sudo locale-gen
-sudo update-locale LANG=en_CA.UTF-8
 
 # Export the correct locale settings to avoid errors
 export LANGUAGE=en_CA.UTF-8
 export LC_ALL=en_CA.UTF-8
 export LANG=en_CA.UTF-8
 export LC_CTYPE="en_CA.UTF-8"
+
+# Set locale settings
+sudo update-locale LANG=en_CA.UTF-8
 
 # Step 8: Set Timezone to Montreal, QC, CA
 echo "Setting timezone to America/Montreal..."
