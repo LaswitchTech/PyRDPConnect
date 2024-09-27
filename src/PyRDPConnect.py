@@ -838,7 +838,10 @@ class Client(QMainWindow):
     def gen_command(self):
 
         # Get the path to the bundled xfreerdp
-        freerdp_path = self.get_path('freerdp/'+self.get_os()+'/xfreerdp')
+        if self.get_os() == "macos":
+            freerdp_path = self.get_path('freerdp/'+self.get_os()+'/xfreerdp')
+        else:
+            freerdp_path = "xfreerdp"
 
         # Get FreeRDP version
         freerdp_version = self.get_freerdp_version(freerdp_path)

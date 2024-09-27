@@ -21,7 +21,7 @@ brew install freerdp
 Ensure you have the following packages installed:
 
 ```sh
-sudo apt-get install -y build-essential libssl-dev libffi-dev libqt5svg5 python3-dev qt5-* qtbase5-dev qtchooser qtbase5-dev-tools qttools5-dev-tools
+sudo apt-get install -y build-essential libssl-dev libffi-dev libqt5svg5 python3-dev qt5-* qtbase5-dev qtchooser qtbase5-dev-tools qttools5-dev-tools python3-pyqt5 python3-pyqt5.*
 ```
 
 ### Dependency Overview

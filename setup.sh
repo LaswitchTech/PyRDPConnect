@@ -28,12 +28,12 @@ convert -size 1920x1080 gradient:'#265162-#002136' ~/backgrounds/gradient.png
 echo "Configuring Openbox to start without panels, setting gradient background, and customizing the menu..."
 mkdir -p ~/.config/openbox
 
-# Set the gradient background using feh
+# Set the gradient background using feh # ~/PyRDPConnect/dist/linux/PyRDPConnect &
 cat <<EOL > ~/.config/openbox/autostart
 # Set gradient background
 feh --bg-scale ~/backgrounds/gradient.png &
 # Autostart PyRDPConnect in full-screen mode
-~/PyRDPConnect/dist/linux/PyRDPConnect &
+python ~/PyRDPConnect/src/PyRDPConnect.py &
 EOL
 
 # Custom Openbox menu

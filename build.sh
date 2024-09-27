@@ -34,7 +34,7 @@ fi
 # Check if the Python virtual environment is already set up
 if [ ! -f "env/bin/python" ] || [ ! -f "env/bin/python3" ] || [ ! -f "env/bin/pip" ]; then
     log "Python virtual environment not found. Creating a new one..."
-    python3 -m venv env
+    python3 -m venv env --system-site-packages
 else
     log "Python virtual environment found."
 fi
