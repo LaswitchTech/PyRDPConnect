@@ -3,6 +3,9 @@
 Here is how you can convert a Raspberry Pi into a thin-client using PyRDPConnect.
 
 ```sh
+wget https://raw.githubusercontent.com/LaswitchTech/PyRDPConnect/refs/heads/dev/setup.sh
+chmod +x setup.sh
+./setup.sh
 curl -s https://raw.githubusercontent.com/LaswitchTech/PyRDPConnect/refs/heads/dev/setup.sh | bash
 ```
 

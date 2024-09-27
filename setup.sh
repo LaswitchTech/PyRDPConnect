@@ -8,7 +8,7 @@ sudo apt-get dist-upgrade -y
 
 # Step 2: Install a Minimal Desktop Environment, Firefox, ImageMagick, and feh
 echo "Installing Openbox, Git, Firefox, ImageMagick, and feh..."
-sudo apt-get install -y lightdm openbox git xterm firefox-esr plymouth plymouth-themes imagemagick feh
+sudo apt-get install -y lightdm openbox git xterm firefox-esr plymouth plymouth-themes imagemagick feh freerdp2-x11
 
 # Step 3: Clone the PyRDPConnect Repository
 echo "Cloning the PyRDPConnect repository..."
