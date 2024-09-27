@@ -3,6 +3,7 @@
 # Step 1: Update the system
 echo "Updating the Operating System..."
 sudo apt-get update
+sudo apt-get full-upgrade -y
 sudo apt-get upgrade -y
 sudo apt-get dist-upgrade -y
 
@@ -137,6 +138,25 @@ sudo update-initramfs -u
 # Step 12: Set Up Raspberry Pi to Boot into the Desktop Environment
 echo "Configuring Raspberry Pi to boot into the desktop environment..."
 sudo raspi-config nonint do_boot_behaviour B4 # Automatically boot to desktop and login as 'pi'
+
+# Step 13: Configure Multi-Monitor Support
+echo "Configuring multi-monitor support..."
+sudo bash -c 'cat <<EOL >> /boot/config.txt
+
+# Enable HDMI output for both monitors
+hdmi_force_hotplug=1
+hdmi_force_hotplug:1=1
+
+# Set HDMI group and mode (adjust as necessary)
+hdmi_group=2
+hdmi_mode=82  # 1080p for HDMI 0
+hdmi_group:1=2
+hdmi_mode:1=82  # 1080p for HDMI 1
+
+# Disable overscan
+disable_overscan=1
+
+EOL'
 
 # Instructions for further manual steps
 echo "Setup completed. Please reboot the Raspberry Pi to apply the changes."

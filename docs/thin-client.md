@@ -12,9 +12,7 @@ bash setup.sh
 ## Security Considerations
 Running scripts directly from the internet can be risky. It’s always a good practice to review the script before running it:
 ```sh
-curl -s https://raw.githubusercontent.com/LaswitchTech/PyRDPConnect/refs/heads/dev/setup.sh -o setup.sh
-cat setup.sh
-bash setup.sh
+curl -s https://raw.githubusercontent.com/LaswitchTech/PyRDPConnect/refs/heads/dev/setup.sh | less
 ```
 
 ## What the Script Does
