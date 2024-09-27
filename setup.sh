@@ -12,11 +12,13 @@ sudo apt-get install -y lightdm openbox git xterm firefox-esr plymouth plymouth-
 
 # Step 3: Clone the PyRDPConnect Repository
 echo "Cloning the PyRDPConnect repository..."
-if [ ! -d "~/PyRDPConnect" ]; then
-  cd ~
-  git clone https://github.com/LaswitchTech/PyRDPConnect.git
+if [ -d "~/PyRDPConnect" ]; then
+    cd ~/PyRDPConnect
+    git pull
+    cd ~
 else
-  echo "PyRDPConnect directory already exists. Skipping clone step."
+    cd ~
+    git clone https://github.com/LaswitchTech/PyRDPConnect.git
 fi
 
 # Step 4: Create a Gradient Image for the Background
