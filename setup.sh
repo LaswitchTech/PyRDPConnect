@@ -63,9 +63,13 @@ mkdir -p ~/.config/openbox
 cat <<EOL > ~/.config/openbox/autostart
 # Set gradient background
 feh --bg-scale ~/backgrounds/gradient.png &
+EOL
+if [ "$DISTRO" == "raspbian" ]; then
+  cat <<EOL >> ~/.config/openbox/autostart
 # Autostart PyRDPConnect in full-screen mode
 python ~/PyRDPConnect/src/PyRDPConnect.py &
 EOL
+fi
 
 cat <<EOL > ~/.config/openbox/menu.xml
 <openbox_menu>
@@ -158,6 +162,24 @@ if [ "$DISTRO" == "debian" ]; then
     fi
 fi
 
+# Add PyRDPConnect.desktop to autostart in Debian
+if [ "$DISTRO" == "debian" ]; then
+    log_step 12 "Adding PyRDPConnect to Debian's autostart using a .desktop entry..."
+
+    # Create the autostart directory if it doesn't exist
+    mkdir -p ~/.config/autostart
+
+    # Create the .desktop file for PyRDPConnect
+    cat <<EOL > ~/.config/autostart/PyRDPConnect.desktop
+[Desktop Entry]
+Name=PyRDPConnect
+Exec=python ~/PyRDPConnect/src/PyRDPConnect.py
+Type=Application
+StartupNotify=false
+X-GNOME-Autostart-enabled=true
+EOL
+fi
+
 # Additional Raspberry Pi OS-specific configurations
 if [ "$DISTRO" == "raspbian" ]; then
     log_step 12 "Configuring Raspberry Pi OS for desktop boot and multi-monitor support..."
@@ -179,4 +201,4 @@ EOL'
 fi
 
 # Final instructions
-log_step 12 "Setup completed. Please reboot the system to apply the changes."
+log_step 13 "Setup completed. Please reboot the system to apply the changes."
