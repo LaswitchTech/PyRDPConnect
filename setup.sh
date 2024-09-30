@@ -66,7 +66,6 @@ feh --bg-scale ~/backgrounds/gradient.png &
 # Autostart PyRDPConnect in full-screen mode
 python3 ~/PyRDPConnect/src/PyRDPConnect.py &
 EOL
-fi
 
 cat <<EOL > ~/.config/openbox/menu.xml
 <openbox_menu>
