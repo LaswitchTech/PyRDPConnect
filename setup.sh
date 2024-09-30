@@ -63,11 +63,8 @@ mkdir -p ~/.config/openbox
 cat <<EOL > ~/.config/openbox/autostart
 # Set gradient background
 feh --bg-scale ~/backgrounds/gradient.png &
-EOL
-if [ "$DISTRO" == "raspbian" ]; then
-  cat <<EOL >> ~/.config/openbox/autostart
 # Autostart PyRDPConnect in full-screen mode
-python ~/PyRDPConnect/src/PyRDPConnect.py &
+python3 ~/PyRDPConnect/src/PyRDPConnect.py &
 EOL
 fi
 
@@ -76,7 +73,7 @@ cat <<EOL > ~/.config/openbox/menu.xml
     <menu id="root-menu" label="Openbox Menu">
         <item label="PyRDPConnect">
             <action name="Execute">
-                <command>python ~/PyRDPConnect/src/PyRDPConnect.py</command>
+                <command>python3 ~/PyRDPConnect/src/PyRDPConnect.py</command>
             </action>
         </item>
         <item label="Terminal">
@@ -160,24 +157,6 @@ if [ "$DISTRO" == "debian" ]; then
     else
         echo "autologin-user-timeout=0" | sudo tee -a /etc/lightdm/lightdm.conf
     fi
-fi
-
-# Add PyRDPConnect.desktop to autostart in Debian
-if [ "$DISTRO" == "debian" ]; then
-    log_step 12 "Adding PyRDPConnect to Debian's autostart using a .desktop entry..."
-
-    # Create the autostart directory if it doesn't exist
-    mkdir -p ~/.config/autostart
-
-    # Create the .desktop file for PyRDPConnect
-    cat <<EOL > ~/.config/autostart/PyRDPConnect.desktop
-[Desktop Entry]
-Name=PyRDPConnect
-Exec=python ~/PyRDPConnect/src/PyRDPConnect.py
-Type=Application
-StartupNotify=false
-X-GNOME-Autostart-enabled=true
-EOL
 fi
 
 # Additional Raspberry Pi OS-specific configurations
