@@ -1,6 +1,6 @@
 # Setup as a Thin-Client
 
-Here is how you can convert a Raspberry Pi into a thin-client using PyRDPConnect.
+Here is how you can convert a Raspberry Pi or Debian into a thin-client using PyRDPConnect.
 
 ```sh
 curl -s https://raw.githubusercontent.com/LaswitchTech/PyRDPConnect/refs/heads/dev/setup.sh -o setup.sh
