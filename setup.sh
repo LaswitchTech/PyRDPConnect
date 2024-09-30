@@ -33,7 +33,7 @@ fi
 # Install necessary packages based on the distribution
 log_step 2 "Installing a Minimal Desktop Environment, Git, Firefox, ImageMagick, and feh..."
 if [ "$DISTRO" == "raspbian" ] || [ "$DISTRO" == "debian" ]; then
-    sudo apt-get install -y lightdm openbox git xterm firefox-esr plymouth plymouth-themes imagemagick feh freerdp2-x11 python3 python3-pyqt5
+    sudo apt-get install -y lightdm openbox git xterm firefox-esr plymouth plymouth-themes imagemagick feh freerdp2-x11 python3 python3-pyqt5 python3-pyqt5.*
 else
     echo "Unsupported distribution: $DISTRO"
     exit 1
