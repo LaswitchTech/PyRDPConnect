@@ -33,9 +33,6 @@ fi
 # Install necessary packages based on the distribution
 log_step 2 "Installing a Minimal Desktop Environment, Git, Firefox, ImageMagick, and feh..."
 if [ "$DISTRO" == "raspbian" ] || [ "$DISTRO" == "debian" ]; then
-    if [ "$DISTRO" == "debian" ]; then
-        sudo apt-get install -y python
-    fi
     sudo apt-get install -y lightdm openbox git xterm firefox-esr plymouth plymouth-themes imagemagick feh freerdp2-x11 python3 python3-pyqt5
 else
     echo "Unsupported distribution: $DISTRO"
@@ -127,11 +124,14 @@ EOL'
 
 # Disable verbose boot and enable Plymouth theme
 log_step 9 "Disabling verbose boot and enabling Plymouth theme..."
-sudo sed -i 's/console=tty1/console=tty3 splash quiet plymouth.ignore-serial-consoles/' /boot/firmware/cmdline.txt
-if ! grep -q "splash quiet" /boot/firmware/cmdline.txt; then
-  echo "splash quiet" | sudo tee -a /boot/firmware/cmdline.txt
+if [ -f "/boot/firmware/cmdline.txt" ]; then
+    FILE=/boot/firmware/cmdline.txt
+    sudo sed -i 's/console=tty1/console=tty3 splash quiet plymouth.ignore-serial-consoles/' $FILE
+    if ! grep -q "splash quiet" $FILE; then
+      echo "splash quiet" | sudo tee -a $FILE
+    fi
+    sudo bash -c "echo "disable_splash=1" >> $FILE"
 fi
-sudo bash -c 'echo "disable_splash=1" >> /boot/firmware/config.txt'
 
 # Copy and set custom Plymouth theme
 log_step 10 "Setting the custom Plymouth theme..."
