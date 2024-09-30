@@ -1,18 +1,46 @@
 #!/bin/bash
 
-# Step 1: Update the system
-echo "Updating the Operating System..."
-sudo apt-get update
-sudo apt-get full-upgrade -y
-sudo apt-get upgrade -y
-sudo apt-get dist-upgrade -y
+# Function to detect the operating system distribution
+get_distribution() {
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        echo "$ID"
+    else
+        echo "unknown"
+    fi
+}
 
-# Step 2: Install a Minimal Desktop Environment, Firefox, ImageMagick, and feh
-echo "Installing Openbox, Git, Firefox, ImageMagick, and feh..."
-sudo apt-get install -y lightdm openbox git xterm firefox-esr plymouth plymouth-themes imagemagick feh freerdp2-x11 python3 python3-pyqt5 python3-pyqt5.*
+# Get the distribution
+DISTRO=$(get_distribution)
 
-# Step 3: Clone the PyRDPConnect Repository
-echo "Cloning the PyRDPConnect repository..."
+# Function to print the current step
+log_step() {
+    echo "Step $1: $2"
+}
+
+# Update the system
+log_step 1 "Updating the Operating System..."
+if [ "$DISTRO" == "raspbian" ] || [ "$DISTRO" == "debian" ]; then
+    sudo apt-get update
+    sudo apt-get full-upgrade -y
+    sudo apt-get upgrade -y
+    sudo apt-get dist-upgrade -y
+else
+    echo "Unsupported distribution: $DISTRO"
+    exit 1
+fi
+
+# Install necessary packages based on the distribution
+log_step 2 "Installing a Minimal Desktop Environment, Git, Firefox, ImageMagick, and feh..."
+if [ "$DISTRO" == "raspbian" ] || [ "$DISTRO" == "debian" ]; then
+    sudo apt-get install -y lightdm openbox git xterm firefox-esr plymouth plymouth-themes imagemagick feh freerdp2-x11 python3 python3-pyqt5
+else
+    echo "Unsupported distribution: $DISTRO"
+    exit 1
+fi
+
+# Clone or update the PyRDPConnect repository
+log_step 3 "Cloning or updating the PyRDPConnect repository..."
 if [ -d "~/PyRDPConnect" ]; then
     cd ~/PyRDPConnect
     git pull
@@ -22,16 +50,16 @@ else
     git clone https://github.com/LaswitchTech/PyRDPConnect.git
 fi
 
-# Step 4: Create a Gradient Image for the Background
-echo "Creating a gradient background image..."
+# Create a gradient background image
+log_step 4 "Creating a gradient background image..."
 mkdir -p ~/backgrounds
 convert -size 1920x1080 gradient:'#265162-#002136' ~/backgrounds/gradient.png
 
-# Step 5: Configure Openbox to Start Without Panels, Set Gradient Background, and Customize the Menu
-echo "Configuring Openbox to start without panels, setting gradient background, and customizing the menu..."
+# Configure Openbox
+log_step 5 "Configuring Openbox to start without panels, set the gradient background, and customize the menu..."
 mkdir -p ~/.config/openbox
 
-# Set the gradient background using feh # ~/PyRDPConnect/dist/linux/PyRDPConnect &
+# Autostart and menu configurations
 cat <<EOL > ~/.config/openbox/autostart
 # Set gradient background
 feh --bg-scale ~/backgrounds/gradient.png &
@@ -39,35 +67,29 @@ feh --bg-scale ~/backgrounds/gradient.png &
 python ~/PyRDPConnect/src/PyRDPConnect.py &
 EOL
 
-# Custom Openbox menu
 cat <<EOL > ~/.config/openbox/menu.xml
 <openbox_menu>
     <menu id="root-menu" label="Openbox Menu">
-        <!-- PyRDPConnect -->
         <item label="PyRDPConnect">
             <action name="Execute">
                 <command>python ~/PyRDPConnect/src/PyRDPConnect.py</command>
             </action>
         </item>
-        <!-- Terminal -->
         <item label="Terminal">
             <action name="Execute">
                 <command>xterm</command>
             </action>
         </item>
-        <!-- Web Browser -->
         <item label="Web Browser">
             <action name="Execute">
                 <command>firefox</command>
             </action>
         </item>
-        <!-- Restart -->
         <item label="Restart">
             <action name="Execute">
                 <command>systemctl reboot</command>
             </action>
         </item>
-        <!-- Shutdown -->
         <item label="Shutdown">
             <action name="Execute">
                 <command>systemctl poweroff</command>
@@ -77,33 +99,22 @@ cat <<EOL > ~/.config/openbox/menu.xml
 </openbox_menu>
 EOL
 
-# Step 6: Set Openbox to Start Automatically
-echo "Setting Openbox to start automatically..."
+# Set Openbox to start automatically
+log_step 6 "Setting Openbox to start automatically..."
 cat <<EOL > ~/.xinitrc
 exec openbox-session
 EOL
 
-# Step 7: Set Locale to en_CA.utf-8
-echo "Setting locale to en_CA.utf-8..."
+# Set locale and timezone
+log_step 7 "Setting locale and timezone..."
 sudo sed -i '/en_GB.UTF-8/s/^/#/' /etc/locale.gen
 sudo sed -i '/en_CA.UTF-8/s/^# //g' /etc/locale.gen
 sudo locale-gen
-
-# Export the correct locale settings to avoid errors
-export LANGUAGE=en_CA.UTF-8
-export LC_ALL=en_CA.UTF-8
-export LANG=en_CA.UTF-8
-export LC_CTYPE="en_CA.UTF-8"
-
-# Set locale settings
 sudo update-locale LANG=en_CA.UTF-8
-
-# Step 8: Set Timezone to Montreal, QC, CA
-echo "Setting timezone to America/Montreal..."
 sudo timedatectl set-timezone America/Toronto
 
-# Step 9: Configure Polkit for Non-Sudo Reboot/Shutdown
-echo "Configuring PolicyKit to allow reboot and shutdown without password..."
+# Configure PolicyKit for non-sudo reboot and shutdown
+log_step 8 "Configuring PolicyKit for non-sudo reboot/shutdown..."
 sudo bash -c 'cat <<EOL > /etc/polkit-1/localauthority/50-local.d/10-power-management.pkla
 [Allow Reboot and Shutdown]
 Identity=unix-user:*
@@ -111,52 +122,42 @@ Action=org.freedesktop.login1.reboot;org.freedesktop.login1.power-off
 ResultActive=yes
 EOL'
 
-# Step 10: Disable Verbose Boot and Enable Plymouth Theme
-echo "Configuring boot process to disable verbose boot..."
+# Disable verbose boot and enable Plymouth theme
+log_step 9 "Disabling verbose boot and enabling Plymouth theme..."
 sudo sed -i 's/console=tty1/console=tty3 splash quiet plymouth.ignore-serial-consoles/' /boot/firmware/cmdline.txt
-
-# Verify that the 'splash' and 'quiet' options are added
 if ! grep -q "splash quiet" /boot/firmware/cmdline.txt; then
   echo "splash quiet" | sudo tee -a /boot/firmware/cmdline.txt
 fi
-
-# Disable rainbow splash screen
-echo "Disabling rainbow splash screen..."
 sudo bash -c 'echo "disable_splash=1" >> /boot/firmware/config.txt'
 
-# Step 11: Copy the Plymouth theme from the project and set it as default
-echo "Copying custom Plymouth theme and setting it as default..."
+# Copy and set custom Plymouth theme
+log_step 10 "Setting the custom Plymouth theme..."
 if [ -d "/usr/share/plymouth/themes/pyrdpconnect" ]; then
     sudo rm -rf /usr/share/plymouth/themes/pyrdpconnect
 fi
 sudo cp -r ~/PyRDPConnect/src/plymouth /usr/share/plymouth/themes/pyrdpconnect
-
-# Set the custom theme as the default and update the initramfs
 sudo plymouth-set-default-theme -R pyrdpconnect
 sudo update-initramfs -u
 
-# Step 12: Set Up Raspberry Pi to Boot into the Desktop Environment
-echo "Configuring Raspberry Pi to boot into the desktop environment..."
-sudo raspi-config nonint do_boot_behaviour B4 # Automatically boot to desktop and login as 'pi'
+# Additional Raspberry Pi OS-specific configurations
+if [ "$DISTRO" == "raspbian" ]; then
+    log_step 11 "Configuring Raspberry Pi OS for desktop boot and multi-monitor support..."
 
-# Step 13: Configure Multi-Monitor Support
-echo "Configuring multi-monitor support..."
-sudo bash -c 'cat <<EOL >> /boot/config.txt
+    # Set up Raspberry Pi to boot into the desktop environment
+    sudo raspi-config nonint do_boot_behaviour B4
 
+    # Enable HDMI output for both monitors
+    sudo bash -c 'cat <<EOL >> /boot/config.txt
 # Enable HDMI output for both monitors
 hdmi_force_hotplug=1
 hdmi_force_hotplug:1=1
-
-# Set HDMI group and mode (adjust as necessary)
 hdmi_group=2
-hdmi_mode=82  # 1080p for HDMI 0
+hdmi_mode=82
 hdmi_group:1=2
-hdmi_mode:1=82  # 1080p for HDMI 1
-
-# Disable overscan
+hdmi_mode:1=82
 disable_overscan=1
-
 EOL'
+fi
 
-# Instructions for further manual steps
-echo "Setup completed. Please reboot the Raspberry Pi to apply the changes."
+# Final instructions
+log_step 12 "Setup completed. Please reboot the system to apply the changes."
