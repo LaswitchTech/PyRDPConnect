@@ -33,6 +33,9 @@ fi
 # Install necessary packages based on the distribution
 log_step 2 "Installing a Minimal Desktop Environment, Git, Firefox, ImageMagick, and feh..."
 if [ "$DISTRO" == "raspbian" ] || [ "$DISTRO" == "debian" ]; then
+    if [ "$DISTRO" == "debian" ]; then
+        sudo apt-get install -y python
+    fi
     sudo apt-get install -y lightdm openbox git xterm firefox-esr plymouth plymouth-themes imagemagick feh freerdp2-x11 python3 python3-pyqt5
 else
     echo "Unsupported distribution: $DISTRO"
@@ -139,9 +142,25 @@ sudo cp -r ~/PyRDPConnect/src/plymouth /usr/share/plymouth/themes/pyrdpconnect
 sudo plymouth-set-default-theme -R pyrdpconnect
 sudo update-initramfs -u
 
+# Enable auto-login for Debian
+if [ "$DISTRO" == "debian" ]; then
+    log_step 11 "Enabling auto-login for Debian..."
+    if grep -q "^#autologin-user=" /etc/lightdm/lightdm.conf; then
+        sudo sed -i "s/^#autologin-user=.*/autologin-user=$USER/" /etc/lightdm/lightdm.conf
+    else
+        echo "autologin-user=$USER" | sudo tee -a /etc/lightdm/lightdm.conf
+    fi
+
+    if grep -q "^#autologin-user-timeout=" /etc/lightdm/lightdm.conf; then
+        sudo sed -i "s/^#autologin-user-timeout=.*/autologin-user-timeout=0/" /etc/lightdm/lightdm.conf
+    else
+        echo "autologin-user-timeout=0" | sudo tee -a /etc/lightdm/lightdm.conf
+    fi
+fi
+
 # Additional Raspberry Pi OS-specific configurations
 if [ "$DISTRO" == "raspbian" ]; then
-    log_step 11 "Configuring Raspberry Pi OS for desktop boot and multi-monitor support..."
+    log_step 12 "Configuring Raspberry Pi OS for desktop boot and multi-monitor support..."
 
     # Set up Raspberry Pi to boot into the desktop environment
     sudo raspi-config nonint do_boot_behaviour B4
