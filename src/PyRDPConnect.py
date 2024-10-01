@@ -965,12 +965,6 @@ class Client(QMainWindow):
 
     def import_settings(self):
         try:
-
-            # Ensure the configuration directory exists
-            config_dir = os.path.join(self.root_dir, 'config')
-            if not os.path.exists(config_dir):
-                os.makedirs(config_dir)
-
             # Open a file dialog to select the import file
             file_dialog = QFileDialog(self)
             file_dialog.setAcceptMode(QFileDialog.AcceptOpen)
@@ -983,36 +977,36 @@ class Client(QMainWindow):
                 with open(import_file, "r") as f:
                     imported_data = json.load(f)
 
-                # Update the current config with the imported data
+                # Fill the fields with imported data, but don't save yet
                 for category, settings in imported_data.items():
                     if category in self.config:
                         for name, value in settings.items():
-                            if name in self.config[category]:
-                                if name != "Logo File":
-                                    self.config[category][name] = value
+                            widget = self.get_widget_from_config(category, name)
+                            if widget:
+                                self.set_widget_value(widget, value)
+                            else:
+                                # Update config dictionary for non-UI items like logo, folders, etc.
+                                self.config[category][name] = value
 
                 # Handle the imported logo if it exists (base64 encoded)
                 logo_data = self.config["Appearance"].get("Logo File", None)
                 if isinstance(logo_data, dict) and "content" in logo_data and "filename" in logo_data:
                     logo_content = base64.b64decode(logo_data["content"])
-                    logo_filename = logo_data["filename"]
-                    logo_path = os.path.join(self.root_dir, "config", logo_filename)
-                    print("PATH:",logo_path)
+                    logo_path = os.path.join(self.root_dir, "config", "import.png")
 
-                    # Save the decoded logo to the config directory
+                    # Save the decoded logo to the config directory as import.png
                     with open(logo_path, "wb") as logo_file:
                         logo_file.write(logo_content)
 
-                    # Update the path to the new logo file
+                    # Update the path to the newly imported logo
                     self.config["Appearance"]["Logo File"] = logo_path
 
-                # Save the imported settings
-                self.save_config()
+                # Update the button to reflect the imported logo preview
+                self.gen_logo_button(logo_path)
+                self.on_configuration_changed()  # Mark as configuration changed
 
-                # Update the UI to reflect the imported settings
-                self.reset_ui()
-
-                QMessageBox.information(self, "Import Complete", "Settings successfully imported.")
+                # Notify the user to save the changes
+                QMessageBox.information(self, "Import Complete", "Settings successfully imported. Press 'Save' to apply changes.")
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to import settings: {e}")
