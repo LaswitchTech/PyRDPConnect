@@ -236,9 +236,8 @@ class Client(QMainWindow):
         logoPositionComboBox.setCurrentText(self.config["Appearance"]["Logo Position"])
 
         # Replace logo file text field with a button for file selection and preview
-        self.logo_file_button = QPushButton("Select Logo File")
-        self.update_logo_button(self.config["Appearance"]["Logo File"])
-        self.logo_file_button.clicked.connect(self.select_logo_file)
+        logo_file = self.config["Appearance"]["Logo File"] or self.get_path(os.path.join('img', 'logo.png'))
+        self.gen_logo_button(logo_file)
 
         # Initialize folder redirection
         self.folder_add_button = QPushButton("Add Folder")
@@ -280,7 +279,7 @@ class Client(QMainWindow):
             "Appearance": {
                 "Login Position": loginPositionComboBox,
                 "Logo Position": logoPositionComboBox,
-                "Logo File": self.logo_file_button,  # Use button for logo file selection
+                "Logo File": self.logo_file_button,
                 "Hide Exit": QCheckBox(),
                 "Hide Restart": QCheckBox(),
                 "Hide Shutdown": QCheckBox(),
@@ -299,14 +298,6 @@ class Client(QMainWindow):
                         widget = self.get_widget_from_config(category, name)
                         if widget:
                             self.set_widget_value(widget, value)
-
-        # Replace logo file text field with a button for file selection and preview
-        self.logo_file_button = QPushButton("Select Logo File")
-        # Show default logo if not set or empty
-        logo_file = self.config["Appearance"]["Logo File"] or self.get_path(os.path.join('img', 'logo.png'))
-        self.config["Appearance"]["Logo File"] = logo_file
-        self.update_logo_button(logo_file)
-        self.logo_file_button.clicked.connect(self.select_logo_file)
 
     def init_properties(self):
 
@@ -741,18 +732,39 @@ class Client(QMainWindow):
         # Call on_configuration_changed to highlight the Save button
         self.on_configuration_changed()
 
+    def gen_logo_button(self, logo_file):
+
+        # Create the widget
+        self.logo_file_button = QPushButton("Select Logo File")
+        self.config["Appearance"]["Logo File"] = logo_file
+        self.update_logo_button(logo_file)
+        self.logo_file_button.clicked.connect(self.select_logo_file)
+
+        return self.logo_file_button
+
     def update_logo_button(self, logo_file):
         """
         Update the logo file button with the current logo path and a small 72px preview.
         """
+        print(f"Updating logo button with file: {logo_file}")  # Debugging line
+
         if os.path.isfile(logo_file):
             pixmap = QPixmap(logo_file)
-            scaled_pixmap = pixmap.scaled(72, 72, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            self.logo_file_button.setIcon(QIcon(scaled_pixmap))
-            self.logo_file_button.setIconSize(scaled_pixmap.size())
-            self.logo_file_button.setText("")  # Clear text, only show image
+            if not pixmap.isNull():  # Check if the pixmap is valid
+                scaled_pixmap = pixmap.scaled(72, 72, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                self.logo_file_button.setIcon(QIcon(scaled_pixmap))
+                self.logo_file_button.setIconSize(scaled_pixmap.size())
+                self.logo_file_button.setText("")  # Clear text, only show image
+            else:
+                print(f"Failed to load logo: {logo_file}")
+                self.logo_file_button.setText("Invalid Logo File")
         else:
+            print(f"File not found: {logo_file}")
             self.logo_file_button.setText("Select Logo File")  # Fallback if no valid file
+
+        # Force repaint
+        self.logo_file_button.update()
+        self.logo_file_button.repaint()
 
     def select_logo_file(self):
         """
@@ -766,7 +778,7 @@ class Client(QMainWindow):
             selected_file = file_dialog.selectedFiles()[0]
             if os.path.isfile(selected_file):
                 # Store the selected logo file path but don't save it yet
-                self.selected_logo_file = selected_file
+                self.selected_logo_file = os.path.join(selected_file)
                 # Update the button to reflect the new logo preview
                 self.update_logo_button(self.selected_logo_file)
                 self.on_configuration_changed()  # Mark as configuration changed
@@ -883,9 +895,9 @@ class Client(QMainWindow):
 
             # Ensure the default logo is saved if no file is selected
             if category == "Appearance" and "Logo File" in category_config:
-                if not os.path.isfile(self.selected_logo_file):
-                    shutil.copyfile(self.selected_logo_file, self.get_path(os.path.join('config', 'logo.png')))
-                    category_config["Logo File"] = self.get_path(os.path.join('config', 'logo.png'))
+                if os.path.isfile(self.selected_logo_file):
+                    shutil.copyfile(self.selected_logo_file, os.path.join('config', 'logo.png'))
+                    category_config["Logo File"] = os.path.join('config', 'logo.png')
 
             config_path = os.path.join(config_dir, f'{category.lower()}.cfg')
             with open(config_path, 'w') as f:
