@@ -777,7 +777,6 @@ class Client(QMainWindow):
         """
         Update the logo file button with the current logo path and a small 72px preview.
         """
-        print(f"Updating logo button with file: {logo_file}")  # Debugging line
 
         if os.path.isfile(logo_file):
             pixmap = QPixmap(logo_file)
@@ -953,7 +952,6 @@ class Client(QMainWindow):
         try:
             result = subprocess.run([freerdp_path, '+version'], capture_output=True, text=True)
             version_line = result.stdout.splitlines()[0].strip()  # Get the first line of the output
-            print(f"{version_line}")
             version_parts = version_line.split()  # Split the line into words
             if len(version_parts) > 4:  # Check if the version string is present
                 return version_parts[4]  # The version is the fifth element in the split output
@@ -1040,7 +1038,6 @@ class Client(QMainWindow):
 
         # Get FreeRDP version
         freerdp_version = self.get_freerdp_version(freerdp_path)
-        print(f"Freerdp Version: {freerdp_version}")
 
         # Determine major version number (e.g., 2.x or 3.x)
         major_version = int(freerdp_version.split('.')[0]) if freerdp_version else None
