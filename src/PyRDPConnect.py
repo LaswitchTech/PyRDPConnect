@@ -506,7 +506,8 @@ class Client(QMainWindow):
 
         # Set the tab order for the buttons
         self.setTabOrder(self.connect_button, self.config_button)
-        self.setTabOrder(self.config_button, self.exit_button)
+        if not self.config['Appearance']['Hide Exit']:
+            self.setTabOrder(self.config_button, self.exit_button)
 
         # Add the form layout to the grid layout
         form_widget.setLayout(form_layout)
