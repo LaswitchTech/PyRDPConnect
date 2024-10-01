@@ -150,7 +150,7 @@ class Client(QMainWindow):
             "Appearance": {
                 "Login Position": "center-center",
                 "Logo Position": "top-center",
-                "Logo File": self.get_path(os.path.join('icons', 'icon.png')),
+                "Logo File": "",
                 "Hide Exit": False,
                 "Hide Restart": False,
                 "Hide Shutdown": False,
@@ -178,7 +178,19 @@ class Client(QMainWindow):
                             else:
                                 self.config[category][name] = value
 
+        # Check if the custom logo exists in the 'config/' directory
+        logo_path = os.path.join(self.root_dir, 'config', 'logo.png')
+        if os.path.exists(logo_path):
+            self.config["Appearance"]["Logo File"] = logo_path
+        else:
+            # Fallback to default logo in 'src/img/logo.png'
+            self.config["Appearance"]["Logo File"] = self.get_path(os.path.join('src', 'img', 'logo.png'))
+
     def load_widgets(self):
+
+        """
+        Load all the widgets including logo selection and preview.
+        """
 
         # Initialize QLineEdit for password with echo mode set to Password
         passwordLineEdit = QLineEdit()
@@ -222,9 +234,9 @@ class Client(QMainWindow):
         logoPositionComboBox.addItems(positionsOptions)
         logoPositionComboBox.setCurrentText(self.config["Appearance"]["Logo Position"])
 
-        # Replace logo file text field with a button for file selection
+        # Replace logo file text field with a button for file selection and preview
         self.logo_file_button = QPushButton("Select Logo File")
-        self.logo_file_button.setText(self.config["Appearance"]["Logo File"])
+        self.update_logo_button(self.config["Appearance"]["Logo File"])
         self.logo_file_button.clicked.connect(self.select_logo_file)
 
         # Initialize folder redirection
@@ -574,20 +586,22 @@ class Client(QMainWindow):
         return position_map.get(position_string, (1, 1))  # Default to center-center if not found
 
     def reset_ui(self):
+        """
+        Reset the UI by reloading configurations and resetting the widgets.
+        """
         # Reload configuration settings
         self.load_config()
-
         # Reload widgets
         self.load_widgets()
-
         # Clear existing UI components
         self.clear_ui()
-
         # Reinitialize the UI with updated configurations
         self.init_ui()
 
     def clear_ui(self):
-        # Function to clear the existing UI components
+        """
+        Clear existing UI components.
+        """
         central_widget = self.centralWidget()
         if central_widget is not None:
             # Delete the central widget and its children
@@ -741,17 +755,22 @@ class Client(QMainWindow):
 
     def select_logo_file(self):
         """
-        File selection dialog for choosing a logo file. Updates the button and configuration.
+        File selection dialog for choosing a PNG logo file. Updates the button and saves it in config/logo.png.
         """
         file_dialog = QFileDialog(self)
         file_dialog.setFileMode(QFileDialog.ExistingFile)
-        file_dialog.setNameFilters(["Image Files (*.png *.jpg *.jpeg *.ico *.bmp)"])
+        file_dialog.setNameFilters(["PNG Files (*.png)"])  # Only allow PNG files
 
         if file_dialog.exec_():
             selected_file = file_dialog.selectedFiles()[0]
             if os.path.isfile(selected_file):
-                self.config["Appearance"]["Logo File"] = selected_file
-                self.update_logo_button(selected_file)  # Update the button with the new logo preview
+                # Copy the selected file to 'config/logo.png'
+                target_logo_path = os.path.join(self.root_dir, 'config', 'logo.png')
+                shutil.copyfile(selected_file, target_logo_path)
+
+                # Update the config to point to the new logo
+                self.config["Appearance"]["Logo File"] = target_logo_path
+                self.update_logo_button(target_logo_path)  # Update the button with the new logo preview
                 self.on_configuration_changed()  # Mark as configuration changed
 
     def update_application(self):
@@ -841,7 +860,11 @@ class Client(QMainWindow):
         self.save_button.update()  # Update the button's appearance
 
     def save_config(self):
-        
+
+        """
+        Save the current configuration, including the logo file path.
+        """
+
         # Ensure the configuration directory exists
         config_dir = os.path.join(self.root_dir, 'config')
         if not os.path.exists(config_dir):
