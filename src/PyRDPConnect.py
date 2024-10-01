@@ -732,13 +732,44 @@ class Client(QMainWindow):
         # Call on_configuration_changed to highlight the Save button
         self.on_configuration_changed()
 
+    def find_widget_index(layout, widget):
+        for row in range(layout.rowCount()):
+            if layout.itemAt(row, QFormLayout.FieldRole).widget() == widget:
+                return row
+        return None
+
     def gen_logo_button(self, logo_file):
 
-        # Create the widget
+        """
+        Recreate the logo file button with the current logo path and a small 72px preview.
+        """
+
+        # Remove the current widget from the layout, without deleting the layout
+        if hasattr(self, 'logo_file_button'):
+             # Retrieve the current index before removing the row
+            if hasattr(self, 'logo_layout'):
+                # Get the index of the current row
+                current_row_index = self.logo_layout.getWidgetPosition(self.logo_file_button)[0]
+            # Remove the existing button
+            self.logo_file_button.deleteLater()
+
         self.logo_file_button = QPushButton("Select Logo File")
         self.config["Appearance"]["Logo File"] = logo_file
-        self.update_logo_button(logo_file)
+        self.update_logo_button(logo_file)  # Update with the new logo
         self.logo_file_button.clicked.connect(self.select_logo_file)
+
+        # Apply custom styling to the button
+        self.logo_file_button.setFixedSize(88, 96)  # Set button size (72px image + 4px padding on each side)
+        self.logo_file_button.setStyleSheet("padding: 4px;")  # Apply 4px padding to the button
+
+        # Check if logo_layout and logo_row exist and reset the row
+        if hasattr(self, 'logo_layout') and hasattr(self, 'logo_row'):
+
+            # Reset the existing row by adding the updated widget
+            self.logo_layout.removeRow(current_row_index)  # Remove the previous row
+
+            # Re-insert the updated widget at the same index
+            self.logo_row = self.logo_layout.insertRow(current_row_index, QLabel("Logo File"), self.logo_file_button)
 
         return self.logo_file_button
 
@@ -780,7 +811,7 @@ class Client(QMainWindow):
                 # Store the selected logo file path but don't save it yet
                 self.selected_logo_file = os.path.join(selected_file)
                 # Update the button to reflect the new logo preview
-                self.update_logo_button(self.selected_logo_file)
+                self.gen_logo_button(self.selected_logo_file)
                 self.on_configuration_changed()  # Mark as configuration changed
 
     def update_application(self):
@@ -815,7 +846,10 @@ class Client(QMainWindow):
             tab.setLayout(layout)
 
             for name, widget in settings.items():
-                if isinstance(widget, dict):
+                if category == "Appearance" and name == "Logo File":
+                    self.logo_layout = layout
+                    self.logo_row = layout.addRow(QLabel(name), widget)
+                elif isinstance(widget, dict):
                     # For nested settings like in "Redirect" under "Devices"
                     for sub_name, sub_widget in widget.items():
                         layout.addRow(QLabel(f"{sub_name}"), sub_widget)
