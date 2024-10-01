@@ -965,6 +965,12 @@ class Client(QMainWindow):
 
     def import_settings(self):
         try:
+
+            # Ensure the configuration directory exists
+            config_dir = os.path.join(self.root_dir, 'config')
+            if not os.path.exists(config_dir):
+                os.makedirs(config_dir)
+
             # Open a file dialog to select the import file
             file_dialog = QFileDialog(self)
             file_dialog.setAcceptMode(QFileDialog.AcceptOpen)
@@ -988,6 +994,7 @@ class Client(QMainWindow):
                     logo_content = base64.b64decode(logo_data["content"])
                     logo_filename = logo_data["filename"]
                     logo_path = os.path.join(self.root_dir, "config", logo_filename)
+                    print("PATH:",logo_path)
 
                     # Save the decoded logo to the config directory
                     with open(logo_path, "wb") as logo_file:
