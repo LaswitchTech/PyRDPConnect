@@ -985,9 +985,11 @@ class Client(QMainWindow):
 
                 # Update the current config with the imported data
                 for category, settings in imported_data.items():
-                    for name, value in settings.items():
-                        if name != "Logo File":
-                            self.config[name] = value
+                    if category in self.config:
+                        for name, value in settings.items():
+                            if name in self.config[category]:
+                                if name != "Logo File":
+                                    self.config[category][name] = value
 
                 # Handle the imported logo if it exists (base64 encoded)
                 logo_data = self.config["Appearance"].get("Logo File", None)
