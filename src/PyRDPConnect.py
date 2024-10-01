@@ -287,6 +287,14 @@ class Client(QMainWindow):
                         if widget:
                             self.set_widget_value(widget, value)
 
+        # Replace logo file text field with a button for file selection and preview
+        self.logo_file_button = QPushButton("Select Logo File")
+        # Show default logo if not set or empty
+        logo_file = self.config["Appearance"]["Logo File"] or self.get_path(os.path.join('src', 'img', 'logo.png'))
+        self.config["Appearance"]["Logo File"] = logo_file
+        self.update_logo_button(logo_file)
+        self.logo_file_button.clicked.connect(self.select_logo_file)
+
     def init_properties(self):
 
         # Set class properties
@@ -718,15 +726,33 @@ class Client(QMainWindow):
         # Call on_configuration_changed to highlight the Save button
         self.on_configuration_changed()
 
+    def update_logo_button(self, logo_file):
+        """
+        Update the logo file button with the current logo path and a small 72px preview.
+        """
+        if os.path.isfile(logo_file):
+            pixmap = QPixmap(logo_file)
+            scaled_pixmap = pixmap.scaled(72, 72, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            self.logo_file_button.setIcon(QIcon(scaled_pixmap))
+            self.logo_file_button.setIconSize(scaled_pixmap.size())
+            self.logo_file_button.setText("")  # Clear text, only show image
+        else:
+            self.logo_file_button.setText("Select Logo File")  # Fallback if no valid file
+
     def select_logo_file(self):
+        """
+        File selection dialog for choosing a logo file. Updates the button and configuration.
+        """
         file_dialog = QFileDialog(self)
         file_dialog.setFileMode(QFileDialog.ExistingFile)
         file_dialog.setNameFilters(["Image Files (*.png *.jpg *.jpeg *.ico *.bmp)"])
 
         if file_dialog.exec_():
             selected_file = file_dialog.selectedFiles()[0]
-            self.config["Appearance"]["Logo File"] = selected_file
-            self.logo_file_button.setText(selected_file)
+            if os.path.isfile(selected_file):
+                self.config["Appearance"]["Logo File"] = selected_file
+                self.update_logo_button(selected_file)  # Update the button with the new logo preview
+                self.on_configuration_changed()  # Mark as configuration changed
 
     def update_application(self):
         try:
@@ -815,7 +841,7 @@ class Client(QMainWindow):
         self.save_button.update()  # Update the button's appearance
 
     def save_config(self):
-
+        
         # Ensure the configuration directory exists
         config_dir = os.path.join(self.root_dir, 'config')
         if not os.path.exists(config_dir):
@@ -833,6 +859,11 @@ class Client(QMainWindow):
                     category_config[name] = {sub_name: self.get_widget_value(sub_widget) for sub_name, sub_widget in value.items()}
                 else:
                     category_config[name] = self.get_widget_value(value)
+
+            # Ensure the default logo is saved if no file is selected
+            if category == "Appearance" and "Logo File" in category_config:
+                if not os.path.isfile(category_config["Logo File"]):
+                    category_config["Logo File"] = self.get_path(os.path.join('src', 'img', 'logo.png'))
 
             config_path = os.path.join(config_dir, f'{category.lower()}.cfg')
             with open(config_path, 'w') as f:
