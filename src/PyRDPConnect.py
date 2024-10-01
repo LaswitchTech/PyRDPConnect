@@ -184,7 +184,7 @@ class Client(QMainWindow):
             self.config["Appearance"]["Logo File"] = logo_path
         else:
             # Fallback to default logo in 'src/img/logo.png'
-            self.config["Appearance"]["Logo File"] = self.get_path(os.path.join('src', 'img', 'logo.png'))
+            self.config["Appearance"]["Logo File"] = self.get_path(os.path.join('img', 'logo.png'))
 
     def load_widgets(self):
 
@@ -302,7 +302,7 @@ class Client(QMainWindow):
         # Replace logo file text field with a button for file selection and preview
         self.logo_file_button = QPushButton("Select Logo File")
         # Show default logo if not set or empty
-        logo_file = self.config["Appearance"]["Logo File"] or self.get_path(os.path.join('src', 'img', 'logo.png'))
+        logo_file = self.config["Appearance"]["Logo File"] or self.get_path(os.path.join('img', 'logo.png'))
         self.config["Appearance"]["Logo File"] = logo_file
         self.update_logo_button(logo_file)
         self.logo_file_button.clicked.connect(self.select_logo_file)
@@ -886,7 +886,7 @@ class Client(QMainWindow):
             # Ensure the default logo is saved if no file is selected
             if category == "Appearance" and "Logo File" in category_config:
                 if not os.path.isfile(category_config["Logo File"]):
-                    category_config["Logo File"] = self.get_path(os.path.join('src', 'img', 'logo.png'))
+                    category_config["Logo File"] = self.get_path(os.path.join('img', 'logo.png'))
 
             config_path = os.path.join(config_dir, f'{category.lower()}.cfg')
             with open(config_path, 'w') as f:
