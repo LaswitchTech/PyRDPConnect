@@ -928,9 +928,10 @@ class Client(QMainWindow):
 
             # Ensure the default logo is saved if no file is selected
             if category == "Appearance" and "Logo File" in category_config:
-                if os.path.isfile(self.selected_logo_file):
-                    shutil.copyfile(self.selected_logo_file, os.path.join(config_dir, 'logo.png'))
-                    category_config["Logo File"] = os.path.join(config_dir, 'logo.png')
+                if hasattr(self, 'selected_logo_file'):
+                    if os.path.isfile(self.selected_logo_file):
+                        shutil.copyfile(self.selected_logo_file, os.path.join(config_dir, 'logo.png'))
+                        category_config["Logo File"] = os.path.join(config_dir, 'logo.png')
 
             config_path = os.path.join(config_dir, f'{category.lower()}.cfg')
             with open(config_path, 'w') as f:
