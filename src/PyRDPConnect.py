@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
-from PyQt5.QtWidgets import QApplication, QProgressDialog, QMessageBox, QDialog, QMainWindow, QDesktopWidget, QWidget, QTabWidget, QCheckBox, QFrame, QSizePolicy, QHBoxLayout, QVBoxLayout, QPushButton, QLabel, QLineEdit, QFormLayout, QGroupBox, QGridLayout, QComboBox, QSpinBox
-from PyQt5.QtGui import QIcon, QColor, QPalette, QPixmap, QPainter
+from PyQt5.QtWidgets import (
+    QApplication, QProgressDialog, QMessageBox, QDialog, QMainWindow,
+    QDesktopWidget, QWidget, QTabWidget, QCheckBox, QFrame, QSizePolicy,
+    QHBoxLayout, QVBoxLayout, QPushButton, QLabel, QLineEdit, QFormLayout,
+    QGroupBox, QGridLayout, QComboBox, QSpinBox, QFileDialog
+)
+from PyQt5.QtGui import QIcon, QPixmap, QPainter, QPalette, QColor
 from PyQt5.QtSvg import QSvgRenderer
-from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal
+from PyQt5.QtCore import Qt, QThread, pyqtSignal
 import subprocess
 import platform
 import json
@@ -110,7 +115,7 @@ class Client(QMainWindow):
 
     def load_config(self):
 
-        # Initialize config dictionary
+        # Initialize config dictionary with default values
         self.config = {
             "General": {
                 "Server Address": "",
@@ -137,7 +142,7 @@ class Client(QMainWindow):
             },
             "Folders": {
                 "Redirect": False,
-                "Folders": [],
+                "Folders": []
             },
             "Administration": {
                 "Password": ""
@@ -166,8 +171,12 @@ class Client(QMainWindow):
                     for name, value in category_config.items():
 
                         # Check if the config item exists in the config
-                        if name in self.config[category] and value != self.config[category][name]:
-                            self.config[category][name] = value
+                        if name in self.config[category]:
+                            if isinstance(self.config[category][name], list) and value is None:
+                                # Make sure lists like Folders are not set to None
+                                self.config[category][name] = []
+                            else:
+                                self.config[category][name] = value
 
     def load_widgets(self):
 
@@ -175,7 +184,7 @@ class Client(QMainWindow):
         passwordLineEdit = QLineEdit()
         passwordLineEdit.setEchoMode(QLineEdit.Password)
 
-        # Initialize QLineEdit for password with echo mode set to Password
+        # Initialize QLineEdit for lock password with echo mode set to Password
         lockLineEdit = QLineEdit()
         lockLineEdit.setEchoMode(QLineEdit.Password)
 
@@ -192,34 +201,36 @@ class Client(QMainWindow):
         # Initialize resolution combo box with common resolutions
         resolutionComboBox = QComboBox()
         commonResolutions = ["800x600", "1024x768", "1280x720", "1366x768", "1920x1080", "3840x2160"]
-        # resolutionComboBox.addItems(commonResolutions)
         if currentResolution not in commonResolutions:
             commonResolutions.insert(0, currentResolution)
         resolutionComboBox.addItems(commonResolutions)
         resolutionComboBox.setCurrentText(currentResolution)
 
-        # Initialize resolution combo box with common resolutions
+        # Initialize sound options combo box
         playSoundComboBox = QComboBox()
         playSoundOptions = ["Never", "On this computer", "On the remote computer"]
         playSoundComboBox.addItems(playSoundOptions)
         playSoundComboBox.setCurrentText(self.config["Devices"]["Play sound"])
 
-        # Initialize positions array
+        # Initialize login and logo positions
         positionsOptions = ["top-left", "top-center", "top-right", "center-left", "center-center", "center-right", "bottom-left", "bottom-center", "bottom-right"]
-
-        # Initialize login position combo box
         loginPositionComboBox = QComboBox()
         loginPositionComboBox.addItems(positionsOptions)
         loginPositionComboBox.setCurrentText(self.config["Appearance"]["Login Position"])
 
-        # Initialize logo position combo box
         logoPositionComboBox = QComboBox()
         logoPositionComboBox.addItems(positionsOptions)
         logoPositionComboBox.setCurrentText(self.config["Appearance"]["Logo Position"])
 
-        # Initialize logo file line edit
-        logoFileLineEdit = QLineEdit()
-        logoFileLineEdit.setText(self.config["Appearance"]["Logo File"])
+        # Replace logo file text field with a button for file selection
+        self.logo_file_button = QPushButton("Select Logo File")
+        self.logo_file_button.setText(self.config["Appearance"]["Logo File"])
+        self.logo_file_button.clicked.connect(self.select_logo_file)
+
+        # Initialize folder redirection
+        self.folder_add_button = QPushButton("Add Folder")
+        self.folder_add_button.clicked.connect(self.select_folder)
+        self.folder_list_layout = QVBoxLayout()
 
         # Initialize widgets dictionary
         self.widgets = {
@@ -256,7 +267,7 @@ class Client(QMainWindow):
             "Appearance": {
                 "Login Position": loginPositionComboBox,
                 "Logo Position": logoPositionComboBox,
-                "Logo File": logoFileLineEdit,
+                "Logo File": self.logo_file_button,  # Use button for logo file selection
                 "Hide Exit": QCheckBox(),
                 "Hide Restart": QCheckBox(),
                 "Hide Shutdown": QCheckBox(),
@@ -264,8 +275,8 @@ class Client(QMainWindow):
             }
         }
 
+        # Load configuration files and set widget values
         config_dir = os.path.join(self.root_dir, 'config')
-
         for category in self.widgets.keys():
             config_path = os.path.join(config_dir, f'{category.lower()}.cfg')
             if os.path.exists(config_path):
@@ -336,7 +347,7 @@ class Client(QMainWindow):
 
         # Load and place the logo image
         logo_file = self.config['Appearance']['Logo File']
-        if os.path.isfile(logo_file):
+        if logo_file and os.path.isfile(logo_file):
             logo_label = QLabel(central_widget)
             pixmap = QPixmap(logo_file)
             # Set a maximum size for the logo
@@ -652,6 +663,80 @@ class Client(QMainWindow):
         # Hide the modal dialog
         self.prompt_dialog.hide()
 
+    def select_folder(self):
+        folder_dialog = QFileDialog(self)
+        folder_dialog.setFileMode(QFileDialog.Directory)
+
+        if folder_dialog.exec_():
+            selected_folder = folder_dialog.selectedFiles()[0]
+            folder_data = {"path": selected_folder, "enabled": True}
+            self.config["Folders"]["Folders"].append(folder_data)
+            self.add_folder_to_list(folder_data)
+
+            # Call on_configuration_changed to highlight the Save button
+            self.on_configuration_changed()
+
+    def add_folder_to_list(self, folder_data):
+        folder_widget = QWidget()
+        folder_layout = QHBoxLayout(folder_widget)
+
+        # Add the folder path label
+        folder_label = QLabel(folder_data["path"])
+        folder_layout.addWidget(folder_label)
+
+        # Add the enable/disable checkbox
+        folder_checkbox = QCheckBox("Enabled")
+        folder_checkbox.setChecked(folder_data["enabled"])
+        folder_layout.addWidget(folder_checkbox)
+
+        # Connect the checkbox to update folder_data["enabled"]
+        folder_checkbox.stateChanged.connect(lambda state, fd=folder_data: self.update_folder_enabled(fd, state))
+
+        # Add a delete button
+        delete_button = QPushButton("Delete")
+        delete_button.clicked.connect(lambda: self.remove_folder(folder_widget, folder_data))
+        folder_layout.addWidget(delete_button)
+
+        # Add the folder widget to the list layout
+        self.folder_list_layout.addWidget(folder_widget)
+
+        # Call on_configuration_changed to highlight the Save button
+        self.on_configuration_changed()
+
+    def update_folder_enabled(self, folder_data, state):
+        folder_data["enabled"] = bool(state)
+        # Call on_configuration_changed to highlight the Save button
+        self.on_configuration_changed()
+
+    def remove_folder(self, folder_widget, folder_data):
+
+        # Remove the folder from the list
+        self.folder_list_layout.removeWidget(folder_widget)
+        folder_widget.deleteLater()
+        self.config["Folders"]["Folders"].remove(folder_data)
+
+        # Call on_configuration_changed to highlight the Save button
+        self.on_configuration_changed()
+
+    def select_logo_file(self):
+        file_dialog = QFileDialog(self)
+        file_dialog.setFileMode(QFileDialog.ExistingFile)
+        file_dialog.setNameFilters(["Image Files (*.png *.jpg *.jpeg *.ico *.bmp)"])
+
+        if file_dialog.exec_():
+            selected_file = file_dialog.selectedFiles()[0]
+            self.config["Appearance"]["Logo File"] = selected_file
+            self.logo_file_button.setText(selected_file)
+
+    def update_application(self):
+        try:
+            subprocess.run(['git', 'pull'], check=True, cwd=self.root_dir)
+            QMessageBox.information(self, "Update", "Application updated successfully. Restarting...")
+            QApplication.quit()
+            subprocess.run([sys.executable] + sys.argv)
+        except subprocess.CalledProcessError as e:
+            QMessageBox.critical(self, "Error", f"Failed to update the application: {e}")
+
     def launch_configurations(self):
 
         # Create a password prompt
@@ -672,9 +757,6 @@ class Client(QMainWindow):
         for category, settings in self.widgets.items():
             tab = QWidget()
             layout = QFormLayout()
-            group_box = QGroupBox()
-            group_box.setObjectName("groupBox")
-            group_box.setLayout(layout)
             tab.setLayout(layout)
 
             for name, widget in settings.items():
@@ -683,11 +765,16 @@ class Client(QMainWindow):
                     for sub_name, sub_widget in widget.items():
                         layout.addRow(QLabel(f"{sub_name}"), sub_widget)
                 elif isinstance(widget, list):
-                    # Handle lists, e.g., for "Folders"
-                    placeholder_line_edit = QLineEdit()
-                    layout.addRow(QLabel(name), placeholder_line_edit)
+                    # Handle lists for folder redirection
+                    if name == "Folders":
+                        layout.addRow(QLabel(name), self.folder_add_button)  # Folder selection button
+                        for folder in self.config["Folders"]["Folders"]:
+                            self.add_folder_to_list(folder)
+                        layout.addRow(self.folder_list_layout)
                 else:
                     layout.addRow(QLabel(name), widget)
+
+                # Connect signals for widget changes
                 if isinstance(widget, QLineEdit):
                     widget.textChanged.connect(self.on_configuration_changed)
                 elif isinstance(widget, QCheckBox):
@@ -698,6 +785,12 @@ class Client(QMainWindow):
                     widget.valueChanged.connect(self.on_configuration_changed)
 
             self.configurations_tab_widget.addTab(tab, category)
+
+            # Add "Update" button in the Administration tab
+            if category == "Administration":
+                self.update_button = QPushButton("Update")
+                self.update_button.clicked.connect(self.update_application)
+                layout.addRow(QLabel("Update"), sub_widget)
 
         # Save Button
         self.save_button = QPushButton("Save")
@@ -728,11 +821,14 @@ class Client(QMainWindow):
         if not os.path.exists(config_dir):
             os.makedirs(config_dir)
 
-        # Iterate over the config dictionary to save settings
+        # Iterate over the widgets to save settings
         for category, settings in self.widgets.items():
             category_config = {}
             for name, value in settings.items():
-                if isinstance(value, dict):
+                if name == "Folders":
+                    # Save the folders list from self.config
+                    category_config[name] = self.config["Folders"]["Folders"]
+                elif isinstance(value, dict):
                     # For nested settings like in "Redirect" under "Devices"
                     category_config[name] = {sub_name: self.get_widget_value(sub_widget) for sub_name, sub_widget in value.items()}
                 else:
