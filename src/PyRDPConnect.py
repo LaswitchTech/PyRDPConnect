@@ -9,8 +9,9 @@ from PyQt5.QtGui import QIcon, QPixmap, QPainter, QPalette, QColor
 from PyQt5.QtSvg import QSvgRenderer
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 import subprocess
-import shutil
 import platform
+import shutil
+import base64
 import json
 import sys
 import os
@@ -875,11 +876,23 @@ class Client(QMainWindow):
 
             self.configurations_tab_widget.addTab(tab, category)
 
-            # Add "Update" button in the Administration tab
+            # Add additionnal controls in the Administration tab
             if category == "Administration":
+
+                # Add "Update" button in the Administration tab
                 self.update_button = QPushButton("Update")
                 self.update_button.clicked.connect(self.update_application)
                 layout.addRow(QLabel("Update"), self.update_button)
+
+                # Add "Import" button in the Administration tab
+                self.import_button = QPushButton("Import")
+                self.import_button.clicked.connect(self.import_settings)
+                layout.addRow(QLabel("Import"), self.import_button)
+
+                # Add "Export" button in the Administration tab
+                self.export_button = QPushButton("Export")
+                self.export_button.clicked.connect(self.export_settings)
+                layout.addRow(QLabel("Export"), self.export_button)
 
         # Save Button
         self.save_button = QPushButton("Save")
@@ -949,6 +962,83 @@ class Client(QMainWindow):
 
         # hide the dialog
         self.configurations_dialog.hide()
+
+    def import_settings(self):
+        try:
+            # Open a file dialog to select the import file
+            file_dialog = QFileDialog(self)
+            file_dialog.setAcceptMode(QFileDialog.AcceptOpen)
+            file_dialog.setNameFilter("JSON Files (*.json)")
+
+            if file_dialog.exec_():
+                import_file = file_dialog.selectedFiles()[0]
+
+                # Load the imported JSON file
+                with open(import_file, "r") as f:
+                    imported_data = json.load(f)
+
+                # Update the current config with the imported data
+                for category, settings in imported_data.items():
+                    if category in self.config:
+                        self.config[category].update(settings)
+
+                # Handle the imported logo if it exists (base64 encoded)
+                logo_data = self.config["Appearance"].get("Logo File", None)
+                if isinstance(logo_data, dict) and "content" in logo_data and "filename" in logo_data:
+                    logo_content = base64.b64decode(logo_data["content"])
+                    logo_filename = logo_data["filename"]
+                    logo_path = os.path.join(self.root_dir, "config", logo_filename)
+
+                    # Save the decoded logo to the config directory
+                    with open(logo_path, "wb") as logo_file:
+                        logo_file.write(logo_content)
+
+                    # Update the path to the new logo file
+                    self.config["Appearance"]["Logo File"] = logo_path
+
+                # Save the imported settings
+                self.save_config()
+
+                # Update the UI to reflect the imported settings
+                self.reset_ui()
+
+                QMessageBox.information(self, "Import Complete", "Settings successfully imported.")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to import settings: {e}")
+
+    def export_settings(self):
+        try:
+            # Collect all current settings
+            export_data = {}
+            for category, settings in self.config.items():
+                export_data[category] = settings
+
+            # Handle the custom logo (convert to base64)
+            logo_file_path = self.config["Appearance"].get("Logo File", "")
+            if logo_file_path and os.path.isfile(logo_file_path):
+                with open(logo_file_path, "rb") as logo_file:
+                    encoded_logo = base64.b64encode(logo_file.read()).decode("utf-8")
+                    export_data["Appearance"]["Logo File"] = {
+                        "filename": os.path.basename(logo_file_path),
+                        "content": encoded_logo
+                    }
+
+            # Open a file dialog to select where to save the export
+            file_dialog = QFileDialog(self)
+            file_dialog.setAcceptMode(QFileDialog.AcceptSave)
+            file_dialog.setNameFilter("JSON Files (*.json)")
+            file_dialog.setDefaultSuffix("json")
+
+            if file_dialog.exec_():
+                export_file = file_dialog.selectedFiles()[0]
+                with open(export_file, "w") as f:
+                    json.dump(export_data, f, indent=4)
+
+                QMessageBox.information(self, "Export Complete", "Settings successfully exported.")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to export settings: {e}")
 
     def get_freerdp_version(self, freerdp_path):
         try:
