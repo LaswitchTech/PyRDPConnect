@@ -965,6 +965,12 @@ class Client(QMainWindow):
 
     def import_settings(self):
         try:
+
+            # Ensure the configuration directory exists
+            config_dir = os.path.join(self.root_dir, 'config')
+            if not os.path.exists(config_dir):
+                os.makedirs(config_dir)
+
             # Open a file dialog to select the import file
             file_dialog = QFileDialog(self)
             file_dialog.setAcceptMode(QFileDialog.AcceptOpen)
@@ -989,10 +995,10 @@ class Client(QMainWindow):
                                 self.config[category][name] = value
 
                 # Handle the imported logo if it exists (base64 encoded)
-                logo_data = self.config["Appearance"].get("Logo File", None)
+                logo_data = imported_data["Appearance"]["Logo File"]
                 if isinstance(logo_data, dict) and "content" in logo_data and "filename" in logo_data:
                     logo_content = base64.b64decode(logo_data["content"])
-                    logo_path = os.path.join(self.root_dir, "config", "import.png")
+                    logo_path = os.path.join(config_dir, "import.png")
 
                     # Save the decoded logo to the config directory as import.png
                     with open(logo_path, "wb") as logo_file:
@@ -1001,9 +1007,15 @@ class Client(QMainWindow):
                     # Update the path to the newly imported logo
                     self.config["Appearance"]["Logo File"] = logo_path
 
-                # Update the button to reflect the imported logo preview
-                self.gen_logo_button(logo_path)
-                self.on_configuration_changed()  # Mark as configuration changed
+                    # Store the selected logo file path but don't save it yet
+                    self.selected_logo_file = os.path.join(logo_path)
+
+                    # Update the button to reflect the imported logo preview
+                    print("FILE:",logo_path)
+                    self.gen_logo_button(logo_path)
+
+                # Mark as configuration changed
+                self.on_configuration_changed()
 
                 # Notify the user to save the changes
                 QMessageBox.information(self, "Import Complete", "Settings successfully imported. Press 'Save' to apply changes.")
