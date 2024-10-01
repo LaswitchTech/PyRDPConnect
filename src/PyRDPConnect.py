@@ -9,6 +9,7 @@ from PyQt5.QtGui import QIcon, QPixmap, QPainter, QPalette, QColor
 from PyQt5.QtSvg import QSvgRenderer
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 import subprocess
+import shutil
 import platform
 import json
 import sys
@@ -755,7 +756,7 @@ class Client(QMainWindow):
 
     def select_logo_file(self):
         """
-        File selection dialog for choosing a PNG logo file. Updates the button and saves it in config/logo.png.
+        File selection dialog for choosing a PNG logo file. Updates the button but does not copy the file yet.
         """
         file_dialog = QFileDialog(self)
         file_dialog.setFileMode(QFileDialog.ExistingFile)
@@ -764,13 +765,10 @@ class Client(QMainWindow):
         if file_dialog.exec_():
             selected_file = file_dialog.selectedFiles()[0]
             if os.path.isfile(selected_file):
-                # Copy the selected file to 'config/logo.png'
-                target_logo_path = os.path.join(self.root_dir, 'config', 'logo.png')
-                shutil.copyfile(selected_file, target_logo_path)
-
-                # Update the config to point to the new logo
-                self.config["Appearance"]["Logo File"] = target_logo_path
-                self.update_logo_button(target_logo_path)  # Update the button with the new logo preview
+                # Store the selected logo file path but don't save it yet
+                self.selected_logo_file = selected_file
+                # Update the button to reflect the new logo preview
+                self.update_logo_button(self.selected_logo_file)
                 self.on_configuration_changed()  # Mark as configuration changed
 
     def update_application(self):
@@ -885,8 +883,9 @@ class Client(QMainWindow):
 
             # Ensure the default logo is saved if no file is selected
             if category == "Appearance" and "Logo File" in category_config:
-                if not os.path.isfile(category_config["Logo File"]):
-                    category_config["Logo File"] = self.get_path(os.path.join('img', 'logo.png'))
+                if not os.path.isfile(self.selected_logo_file):
+                    shutil.copyfile(self.selected_logo_file, self.get_path(os.path.join('config', 'logo.png')))
+                    category_config["Logo File"] = self.get_path(os.path.join('config', 'logo.png'))
 
             config_path = os.path.join(config_dir, f'{category.lower()}.cfg')
             with open(config_path, 'w') as f:
