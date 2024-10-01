@@ -790,7 +790,7 @@ class Client(QMainWindow):
             if category == "Administration":
                 self.update_button = QPushButton("Update")
                 self.update_button.clicked.connect(self.update_application)
-                layout.addRow(QLabel("Update"), sub_widget)
+                layout.addRow(QLabel("Update"), self.update_button)
 
         # Save Button
         self.save_button = QPushButton("Save")
