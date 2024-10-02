@@ -1247,27 +1247,21 @@ class Client(QMainWindow):
                 command.append("/audio-mode:1")
 
         # Add Devices Settings
+        if devices_printers:
+            command.append("/printer")
+        if devices_drives:
+            command.append("/drives")
         # if major_version and major_version < 3:
-        #     if device_printers:
-        #         command.append("/printer")
-        #     if device_smart_cards:
+        #     if devices_smart_cards:
         #         command.append("/smartcard")
-        #     if device_ports:
+        #     if devices_ports:
         #         command.append(f"/serial:{redirect_ports}")
-        #     if device_drives:
-        #         command.append("/drive:shared")
         # else:
-        #     # Adjust the redirection options for FreeRDP 3.x
-        #     if device_printers:
-        #         for printer, driver in self.get_printers():
-        #             if driver != "None":
-        #                 command.append(f"/printer:{printer},'{driver}'")
-        #     if device_smart_cards:
+            # Adjust the redirection options for FreeRDP 3.x
+        #     if devices_smart_cards:
         #         command.append("/smartcard:off")
-        #     if device_ports:
+        #     if devices_ports:
         #         command.append("/serial:off")
-        #     if device_drives:
-        #         command.append("/drive:off")
 
         # Add Experiance Settings
         if experience_clipboard:
