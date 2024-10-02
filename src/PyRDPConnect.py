@@ -132,12 +132,12 @@ class Client(QMainWindow):
                 "Start session in fullscreen": False,
                 "Fit session to window": False
             },
-            "Devices": {
-                "Play sound": ""
+            "Audio": {
+                "Play sound": "",
+                "Record sound": "",
             },
-            "Redirect": {
+            "Devices": {
                 "Printers": False,
-                "Clipboard": False,
                 "Smart Cards": False,
                 "Ports": False,
                 "Drives": False
@@ -146,18 +146,28 @@ class Client(QMainWindow):
                 "Redirect": False,
                 "Folders": []
             },
-            "Administration": {
-                "Password": ""
+            "Experience": {
+                "Clipboard": False,
+                "RemoteFX": False,
+                "Smooth Fonts": False,
+                "Desktop Composition": False,
+                "Full Window Drag": False,
+                "Menu Animations": False,
+                "Disable Themes": False,
+                "Disable Wallpaper": False,
             },
             "Appearance": {
-                "Login Position": "center-center",
-                "Logo Position": "top-center",
                 "Logo File": "",
+                "Logo Position": "top-center",
+                "Login Position": "center-center",
                 "Hide Exit": False,
                 "Hide Restart": False,
                 "Hide Shutdown": False,
                 "Fullscreen": False
-            }
+            },
+            "Administration": {
+                "Password": ""
+            },
         }
 
         # Load config from file
@@ -224,7 +234,13 @@ class Client(QMainWindow):
         playSoundComboBox = QComboBox()
         playSoundOptions = ["Never", "On this computer", "On the remote computer"]
         playSoundComboBox.addItems(playSoundOptions)
-        playSoundComboBox.setCurrentText(self.config["Devices"]["Play sound"])
+        playSoundComboBox.setCurrentText(self.config["Audio"]["Play sound"])
+
+        # Initialize sound options combo box
+        recordSoundComboBox = QComboBox()
+        recordSoundOptions = ["Never", "On this computer", "On the remote computer"]
+        recordSoundComboBox.addItems(recordSoundOptions)
+        recordSoundComboBox.setCurrentText(self.config["Audio"]["Record sound"])
 
         # Initialize login and logo positions
         positionsOptions = ["top-left", "top-center", "top-right", "center-left", "center-center", "center-right", "bottom-left", "bottom-center", "bottom-right"]
@@ -245,6 +261,18 @@ class Client(QMainWindow):
         self.folder_add_button.clicked.connect(self.select_folder)
         self.folder_list_layout = QVBoxLayout()
 
+        # Add "Update" button in the Administration tab
+        self.update_button = QPushButton("Update")
+        self.update_button.clicked.connect(self.update_application)
+
+        # Add "Import" button in the Administration tab
+        self.import_button = QPushButton("Import")
+        self.import_button.clicked.connect(self.import_settings)
+
+        # Add "Export" button in the Administration tab
+        self.export_button = QPushButton("Export")
+        self.export_button.clicked.connect(self.export_settings)
+
         # Initialize widgets dictionary
         self.widgets = {
             "General": {
@@ -252,40 +280,53 @@ class Client(QMainWindow):
                 "Port": portSpinBox,
                 "Username": QLineEdit(),
                 "Password": passwordLineEdit,
-                "Domain": QLineEdit()
+                "Domain": QLineEdit(),
             },
             "Display": {
                 "Resolution": resolutionComboBox,
                 "Use all monitors": QCheckBox(),
                 "Start session in fullscreen": QCheckBox(),
-                "Fit session to window": QCheckBox()
+                "Fit session to window": QCheckBox(),
+            },
+            "Audio": {
+                "Play sound": playSoundComboBox,
+                "Record sound": recordSoundComboBox,
             },
             "Devices": {
-                "Play sound": playSoundComboBox
-            },
-            "Redirect": {
                 "Printers": QCheckBox(),
-                "Clipboard": QCheckBox(),
                 "Smart Cards": QCheckBox(),
                 "Ports": QCheckBox(),
-                "Drives": QCheckBox()
+                "Drives": QCheckBox(),
             },
             "Folders": {
                 "Redirect": QCheckBox(),
                 "Folders": [],
             },
-            "Administration": {
-                "Password": lockLineEdit,
+            "Experience": {
+                "Clipboard": QCheckBox(),
+                "RemoteFX": QCheckBox(),
+                "Smooth Fonts": QCheckBox(),
+                "Desktop Composition": QCheckBox(),
+                "Full Window Drag": QCheckBox(),
+                "Menu Animations": QCheckBox(),
+                "Disable Themes": QCheckBox(),
+                "Disable Wallpaper": QCheckBox(),
             },
             "Appearance": {
-                "Login Position": loginPositionComboBox,
-                "Logo Position": logoPositionComboBox,
                 "Logo File": self.logo_file_button,
+                "Logo Position": logoPositionComboBox,
+                "Login Position": loginPositionComboBox,
                 "Hide Exit": QCheckBox(),
                 "Hide Restart": QCheckBox(),
                 "Hide Shutdown": QCheckBox(),
-                "Fullscreen": QCheckBox()
-            }
+                "Fullscreen": QCheckBox(),
+            },
+            "Administration": {
+                "Password": lockLineEdit,
+                "Update": self.update_button,
+                "Import": self.import_button,
+                "Export": self.export_button,
+            },
         }
 
         # Load configuration files and set widget values
@@ -876,24 +917,6 @@ class Client(QMainWindow):
 
             self.configurations_tab_widget.addTab(tab, category)
 
-            # Add additionnal controls in the Administration tab
-            if category == "Administration":
-
-                # Add "Update" button in the Administration tab
-                self.update_button = QPushButton("Update")
-                self.update_button.clicked.connect(self.update_application)
-                layout.addRow(QLabel("Update"), self.update_button)
-
-                # Add "Import" button in the Administration tab
-                self.import_button = QPushButton("Import")
-                self.import_button.clicked.connect(self.import_settings)
-                layout.addRow(QLabel("Import"), self.import_button)
-
-                # Add "Export" button in the Administration tab
-                self.export_button = QPushButton("Export")
-                self.export_button.clicked.connect(self.export_settings)
-                layout.addRow(QLabel("Export"), self.export_button)
-
         # Save Button
         self.save_button = QPushButton("Save")
         self.save_button.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
@@ -1154,91 +1177,115 @@ class Client(QMainWindow):
         command = [freerdp_path]
 
         # Gather the configuration values, retrieving from widgets if necessary
-        server_address = self.config["General"]["Server Address"] or self.server_edit.text()
-        port = self.config["General"]["Port"] or self.port_edit.value()
-        username = self.config["General"]["Username"] or self.username_edit.text()
-        password = self.config["General"]["Password"] or self.password_edit.text()
-        domain = self.config["General"]["Domain"] or self.domain_edit.text()
-        resolution = self.config["Display"]["Resolution"]
-        use_all_monitors = self.config["Display"]["Use all monitors"]
-        fullscreen = self.config["Display"]["Start session in fullscreen"]
-        fit_window = self.config["Display"]["Fit session to window"]
-        play_sound = self.config["Devices"]["Play sound"]
-        redirect_printers = self.config["Redirect"]["Printers"]
-        redirect_clipboard = self.config["Redirect"]["Clipboard"]
-        redirect_smart_cards = self.config["Redirect"]["Smart Cards"]
-        redirect_ports = self.config["Redirect"]["Ports"]
-        redirect_drives = self.config["Redirect"]["Drives"]
-        folder_redirect = self.config["Folders"]["Redirect"]
-        folders = self.config["Folders"]["Folders"]
+        general_server_address = self.config["General"]["Server Address"] or self.server_edit.text()
+        general_port = self.config["General"]["Port"] or self.port_edit.value()
+        general_username = self.config["General"]["Username"] or self.username_edit.text()
+        general_password = self.config["General"]["Password"] or self.password_edit.text()
+        general_domain = self.config["General"]["Domain"] or self.domain_edit.text()
+        display_resolution = self.config["Display"]["Resolution"]
+        display_use_all_monitors = self.config["Display"]["Use all monitors"]
+        display_fullscreen = self.config["Display"]["Start session in fullscreen"]
+        display_fit_window = self.config["Display"]["Fit session to window"]
+        audio_play_sound = self.config["Audio"]["Play sound"]
+        audio_record_sound = self.config["Audio"]["Record sound"]
+        devices_printers = self.config["Devices"]["Printers"]
+        devices_smart_cards = self.config["Devices"]["Smart Cards"]
+        devices_ports = self.config["Devices"]["Ports"]
+        devices_drives = self.config["Devices"]["Drives"]
+        folders_redirect = self.config["Folders"]["Redirect"]
+        folders_folders = self.config["Folders"]["Folders"]
+        experience_clipboard = self.config["Experience"]["Clipboard"]
+        experience_remotefx = self.config["Experience"]["RemoteFX"]
+        experience_smooth_fonts = self.config["Experience"]["Smooth Fonts"]
+        experience_desktop_composition = self.config["Experience"]["Desktop Composition"]
+        experience_full_window_drag = self.config["Experience"]["Full Window Drag"]
+        experience_menu_animations = self.config["Experience"]["Menu Animations"]
+        experience_disable_themes = self.config["Experience"]["Disable Themes"]
+        experience_disable_wallpaper = self.config["Experience"]["Disable Wallpaper"]
 
         # Add server address and port
-        if port:
-            command.append(f"/v:{server_address}:{port}")
+        if general_port:
+            command.append(f"/v:{general_server_address}:{general_port}")
         else:
-            command.append(f"/v:{server_address}")
+            command.append(f"/v:{general_server_address}")
 
         # Add username and domain
-        if username:
-            command.append(f"/u:{username}")
-        if domain:
-            command.append(f"/d:{domain}")
+        if general_username:
+            command.append(f"/u:{general_username}")
+        if general_domain:
+            command.append(f"/d:{general_domain}")
 
         # Add password securely
-        if password:
-            command.append(f"/p:{password}")
+        if general_password:
+            command.append(f"/p:{general_password}")
 
         # Add display settings
-        if resolution:
-            command.append(f"/size:{resolution}")
-        if use_all_monitors:
+        if display_resolution:
+            command.append(f"/size:{display_resolution}")
+        if display_use_all_monitors:
             command.append("/multimon")
-        if fullscreen:
+        if display_fullscreen:
             command.append("/f")
-        if fit_window:
+        if display_fit_window:
             command.append("/smart-sizing")
 
-        # Add sound settings
-        # if major_version and major_version < 3:
-        #     if play_sound == "Never":
-        #         command.append("/sound:off")
-        #     elif play_sound == "On this computer":
-        #         command.append("/sound:sys:alsa")
-        #     elif play_sound == "On the remote computer":
-        #         command.append("/sound:sys:rdpsnd")
-        # else:
-        #     # Adjust the sound options for FreeRDP 3.x
-        #     if play_sound == "Never":
-        #         command.append("/audio-mode:2")
-        #     elif play_sound == "On this computer":
-        #         command.append("/audio-mode:0")
-        #     elif play_sound == "On the remote computer":
-        #         command.append("/audio-mode:1")
+        # Add Audio settings
+        if major_version and major_version < 3:
+            if audio_play_sound == "Never":
+                command.append("/sound:off")
+            elif audio_play_sound == "On this computer":
+                command.append("/sound:sys:alsa")
+            elif audio_play_sound == "On the remote computer":
+                command.append("/sound:sys:rdpsnd")
+        else:
+            # Adjust the sound options for FreeRDP 3.x
+            if audio_play_sound == "Never":
+                command.append("/audio-mode:2")
+            elif audio_play_sound == "On this computer":
+                command.append("/audio-mode:0")
+            elif audio_play_sound == "On the remote computer":
+                command.append("/audio-mode:1")
 
-        # Add redirection settings
-        if redirect_clipboard:
-            command.append("+clipboard")
+        # Add Devices Settings
         # if major_version and major_version < 3:
-        #     if redirect_printers:
+        #     if device_printers:
         #         command.append("/printer")
-        #     if redirect_smart_cards:
+        #     if device_smart_cards:
         #         command.append("/smartcard")
-        #     if redirect_ports:
+        #     if device_ports:
         #         command.append(f"/serial:{redirect_ports}")
-        #     if redirect_drives:
+        #     if device_drives:
         #         command.append("/drive:shared")
         # else:
         #     # Adjust the redirection options for FreeRDP 3.x
-        #     if redirect_printers:
+        #     if device_printers:
         #         for printer, driver in self.get_printers():
         #             if driver != "None":
         #                 command.append(f"/printer:{printer},'{driver}'")
-        #     if redirect_smart_cards:
+        #     if device_smart_cards:
         #         command.append("/smartcard:off")
-        #     if redirect_ports:
+        #     if device_ports:
         #         command.append("/serial:off")
-        #     if redirect_drives:
+        #     if device_drives:
         #         command.append("/drive:off")
+
+        # Add Experiance Settings
+        if experience_clipboard:
+            command.append("+clipboard")
+        if experience_remotefx:
+            command.append("/rfx")
+        if experience_smooth_fonts:
+            command.append("+fonts")
+        if experience_desktop_composition:
+            command.append("+aero")
+        if experience_full_window_drag:
+            command.append("+window-drag")
+        if experience_menu_animations:
+            command.append("+menu-anims")
+        if experience_disable_themes:
+            command.append("-themes")
+        if experience_disable_wallpaper:
+            command.append("-wallpaper")
 
         # Ignore Certificate
         if major_version and major_version < 3:
