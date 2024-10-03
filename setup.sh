@@ -2,7 +2,9 @@
 
 # Function to detect the operating system distribution
 get_distribution() {
-    if [ -f /etc/os-release ]; then
+    if [ "$(cat /proc/cpuinfo | egrep -i "raspberry pi")" != "" ]; then
+        echo "raspbian"
+    elif [ -f /etc/os-release ]; then
         . /etc/os-release
         echo "$ID"
     else
@@ -165,8 +167,10 @@ if [ "$DISTRO" == "raspbian" ]; then
     # Set up Raspberry Pi to boot into the desktop environment
     sudo raspi-config nonint do_boot_behaviour B4
 
-    # Enable HDMI output for both monitors
-    sudo bash -c 'cat <<EOL >> /boot/config.txt
+    if [ "$(echo $@ | grep '--multimon')" != "" ]; then
+
+        # Enable HDMI output for both monitors
+        sudo bash -c 'cat <<EOL >> /boot/config.txt
 # Enable HDMI output for both monitors
 hdmi_force_hotplug=1
 hdmi_force_hotplug:1=1
@@ -176,6 +180,7 @@ hdmi_group:1=2
 hdmi_mode:1=82
 disable_overscan=1
 EOL'
+    fi
 fi
 
 # Final instructions
