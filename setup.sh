@@ -167,7 +167,7 @@ if [ "$DISTRO" == "raspbian" ]; then
     # Set up Raspberry Pi to boot into the desktop environment
     sudo raspi-config nonint do_boot_behaviour B4
 
-    if [ "$(echo $@ | grep '--multimon')" != "" ]; then
+    if [ "$(echo "./setup --multimon" | grep -- --multimon)" != "" ]; then
 
         # Enable HDMI output for both monitors
         sudo bash -c 'cat <<EOL >> /boot/config.txt
