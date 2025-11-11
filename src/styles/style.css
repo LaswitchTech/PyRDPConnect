@@ -12,6 +12,8 @@
     border: 1px solid #76797C;
     border-bottom: 0; /* Remove border bottom */
     border-radius: 0px; /* Rounded corners */
+    background-color: #212121;
+    color: #FFFFFF;
 }
 
 /* Style for the first input fields */

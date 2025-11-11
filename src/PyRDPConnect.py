@@ -3,7 +3,8 @@ from PyQt5.QtWidgets import (
     QApplication, QProgressDialog, QMessageBox, QDialog, QMainWindow,
     QDesktopWidget, QWidget, QTabWidget, QCheckBox, QFrame, QSizePolicy,
     QHBoxLayout, QVBoxLayout, QPushButton, QLabel, QLineEdit, QFormLayout,
-    QGroupBox, QGridLayout, QComboBox, QSpinBox, QFileDialog, QColorDialog
+    QGroupBox, QGridLayout, QComboBox, QSpinBox, QFileDialog, QColorDialog,
+    QTextEdit, QListWidget, QListWidgetItem
 )
 from PyQt5.QtGui import QIcon, QPixmap, QPainter, QPalette, QColor, QValidator
 from PyQt5.QtSvg import QSvgRenderer
@@ -25,6 +26,127 @@ class Severity(enum.Enum):
     INFO = 1
     WARNING = 2
     ERROR = 3
+
+class DiagnosticsThread(QThread):
+    log = pyqtSignal(str)         # incremental log lines
+    step = pyqtSignal(str, bool)  # ("Step name", passed True/False)
+    done = pyqtSignal(bool)       # overall status
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+    # --- helpers ---
+    def _run(self, cmd):
+        try:
+            p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                text=True, timeout=6)
+            return p.returncode, (p.stdout or "").strip()
+        except Exception as e:
+            return 1, f"{type(e).__name__}: {e}"
+
+    def _ping(self, host, osname):
+        # macOS: -c 1 -t 1 ; Linux: -c 1 -W 1
+        args = ["ping", "-c", "1"] + (["-t", "1"] if osname == "Darwin" else ["-W", "1"])
+        return self._run(args + [host])[0] == 0
+
+    def _default_gateway(self, osname):
+        if osname == "Darwin":
+            rc, out = self._run(["/sbin/route", "-n", "get", "default"])
+            if rc == 0:
+                m = re.search(r"gateway:\s+([0-9.]+)", out)
+                if m: return m.group(1)
+        else:
+            rc, out = self._run(["/sbin/ip", "route"])
+            if rc == 0:
+                for line in out.splitlines():
+                    if line.startswith("default via "):
+                        parts = line.split()
+                        if len(parts) >= 3:
+                            return parts[2]
+        return None
+
+    def _egress_ip(self):
+        # robust, no external deps: synthetic UDP connect to 8.8.8.8 to learn source IP
+        import socket
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.settimeout(2)
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+            s.close()
+            return ip
+        except Exception:
+            return None
+
+    def _is_apipa(self, ip):
+        # APIPA = 169.254.0.0/16 (note: not 169.0.0.0/8)
+        return isinstance(ip, str) and ip.startswith("169.254.")
+
+    def _dns_lookup(self, host):
+        import socket
+        try:
+            addr = socket.gethostbyname(host)
+            return True, addr
+        except Exception as e:
+            return False, str(e)
+
+    # --- main run ---
+    def run(self):
+        ok_all = True
+        osname = platform.system()
+
+        # 1) Local IP
+        self.log.emit("Step 1/4: Detecting local egress IP…")
+        ip = self._egress_ip()
+        if not ip:
+            self.step.emit("Local IP detection", False)
+            self.log.emit("❌ Could not determine local IP used for egress.")
+            self.done.emit(False); return
+        if self._is_apipa(ip):
+            self.step.emit("Local IP detection", False)
+            self.log.emit(f"❌ Local IP is APIPA ({ip}). DHCP likely failed.")
+            self.done.emit(False); return
+        self.step.emit("Local IP detection", True)
+        self.log.emit(f"✅ Local IP: {ip}")
+
+        # 2) Default gateway ping
+        self.log.emit("Step 2/4: Finding and pinging default gateway…")
+        gw = self._default_gateway(osname)
+        if not gw:
+            self.step.emit("Gateway discovery", False)
+            self.log.emit("❌ Could not find default gateway.")
+            self.done.emit(False); return
+        self.log.emit(f"Gateway: {gw}")
+        if self._ping(gw, osname):
+            self.step.emit("Gateway ping", True)
+            self.log.emit("✅ Gateway reachable")
+        else:
+            ok_all = False
+            self.step.emit("Gateway ping", False)
+            self.log.emit("❌ Gateway not reachable")
+
+        # 3) Public ping
+        self.log.emit("Step 3/4: Pinging 8.8.8.8…")
+        if self._ping("8.8.8.8", osname):
+            self.step.emit("Public ping (8.8.8.8)", True)
+            self.log.emit("✅ Public internet reachable")
+        else:
+            ok_all = False
+            self.step.emit("Public ping (8.8.8.8)", False)
+            self.log.emit("❌ Could not reach 8.8.8.8")
+
+        # 4) DNS lookup
+        self.log.emit("Step 4/4: Resolving google.com…")
+        dns_ok, detail = self._dns_lookup("google.com")
+        if dns_ok:
+            self.step.emit("DNS lookup (google.com)", True)
+            self.log.emit(f"✅ DNS OK → {detail}")
+        else:
+            ok_all = False
+            self.step.emit("DNS lookup (google.com)", False)
+            self.log.emit(f"❌ DNS failed: {detail}")
+
+        self.done.emit(ok_all)
 
 class FreerdpEvent:
     def __init__(self, severity: Severity, code: str, message: str, hint: str = ""):
@@ -466,6 +588,12 @@ class Client(QMainWindow):
         # Add "Export" button in the Administration tab
         self.export_button = QPushButton("Export")
         self.export_button.clicked.connect(self.export_settings)
+
+        # --- Diagnostics UI pieces (created once) ---
+        self.diag_run_button = QPushButton("Run Diagnostics")
+        self.diag_log = QTextEdit()
+        self.diag_log.setReadOnly(True)
+        self.diag_status_label = QLabel("")  # will show a summary result
 
         # Initialize widgets dictionary
         self.widgets = {
@@ -1132,6 +1260,23 @@ class Client(QMainWindow):
 
             self.configurations_tab_widget.addTab(tab, category)
 
+        # --- Diagnostics tab ---
+        diag_tab = QWidget()
+        diag_layout = QVBoxLayout(diag_tab)
+
+        # A simple summary/status line
+        diag_layout.addWidget(self.diag_status_label)
+
+        # Run button
+        self.diag_run_button.clicked.disconnect() if self.diag_run_button.receivers(self.diag_run_button.clicked) else None
+        self.diag_run_button.clicked.connect(self.start_diagnostics)
+        diag_layout.addWidget(self.diag_run_button)
+
+        # Log box
+        diag_layout.addWidget(self.diag_log)
+
+        self.configurations_tab_widget.addTab(diag_tab, "Diagnostics")
+
         # Save Button
         self.save_button = QPushButton("Save")
         self.save_button.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
@@ -1621,6 +1766,29 @@ class Client(QMainWindow):
 
         self.connection_dialog.reject()  # Close the dialog
         self.reset_ui()  # Reset the UI
+
+    def start_diagnostics(self):
+        # clear old
+        self.diag_log.clear()
+        self.diag_status_label.setText("Running…")
+        self.diag_run_button.setEnabled(False)
+
+        self._diag_thread = DiagnosticsThread(self)
+        self._diag_thread.log.connect(self._on_diag_log)
+        self._diag_thread.step.connect(self._on_diag_step)
+        self._diag_thread.done.connect(self._on_diag_done)
+        self._diag_thread.start()
+
+    def _on_diag_log(self, line: str):
+        self.diag_log.append(line)
+
+    def _on_diag_step(self, name: str, passed: bool):
+        prefix = "✅" if passed else "❌"
+        self.diag_log.append(f"{prefix} {name}")
+
+    def _on_diag_done(self, ok: bool):
+        self.diag_status_label.setText("All checks passed." if ok else "Some checks failed.")
+        self.diag_run_button.setEnabled(True)
 
 if __name__ == "__main__":
     app = QApplication([])
