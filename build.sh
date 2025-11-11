@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 # Function to print messages with a timestamp
 log() {
@@ -78,11 +79,6 @@ python -m pip install "pyinstaller>=6.9,<7" "sip>=6.9,<7" "PyQt5>=5.15,<6"
 
 # Optional tools you had; keeping them only if you need them:
 python -m pip install importlib PySide6-Addons
-
-# # Ensure the necessary packages are installed
-# log "Installing required packages..."
-# pip install pyinstaller sip importlib PySide6-Addons
-# pip install pyqt5 --config-settings --confirm-license= --verbose
 
 # Check if the .spec file exists
 SPEC_FILE="$NAME.spec"
@@ -188,6 +184,102 @@ if [ "$OS" == "macos" ]; then
     # (Optional) Verify:
     log "Verifying linkage:"
     otool -L "$FREERDP_BIN" | sed 's/^/  /'
+
+    # ---- BEGIN: Bundle X11 stack + add rpath + ad-hoc sign (Bash 3.2-safe) ----
+    X11_DIR="$APP_FRAMEWORKS/x11"
+    mkdir -p "$X11_DIR"
+
+    # Discover Homebrew prefix (Apple Silicon=/opt/homebrew; Intel=/usr/local)
+    BREW_PREFIX="$(brew --prefix 2>/dev/null || echo /opt/homebrew)"
+
+    # Direct X11 deps that xfreerdp links against (seed set)
+    REQUIRED_X11=(
+      "$BREW_PREFIX/opt/libx11/lib/libX11.6.dylib"
+      "$BREW_PREFIX/opt/libxext/lib/libXext.6.dylib"
+      "$BREW_PREFIX/opt/libxinerama/lib/libXinerama.1.dylib"
+      "$BREW_PREFIX/opt/libxcursor/lib/libXcursor.1.dylib"
+      "$BREW_PREFIX/opt/libxv/lib/libXv.1.dylib"
+      "$BREW_PREFIX/opt/libxi/lib/libXi.6.dylib"
+      "$BREW_PREFIX/opt/libxrender/lib/libXrender.1.dylib"
+      "$BREW_PREFIX/opt/libxrandr/lib/libXrandr.2.dylib"
+      "$BREW_PREFIX/opt/libxfixes/lib/libXfixes.3.dylib"
+    )
+
+    # Helper to change a reference if present
+    chg_ref() {
+      local from="$1" to="$2" file="$3"
+      if otool -L "$file" | awk '{print $1}' | grep -Fq "$from"; then
+        install_name_tool -change "$from" "$to" "$file"
+      fi
+    }
+
+    # Recursively copy any Homebrew-provided dep and rewrite to @rpath/<name>
+    copy_and_patch_lib() {
+      local src="$1"
+      local base="$(basename "$src")"
+      local dst="$X11_DIR/$base"
+
+      # Skip if already present (acts like a visited-set)
+      if [ -f "$dst" ]; then
+        return 0
+      fi
+
+      if [ ! -f "$src" ]; then
+        log "WARN: missing expected lib: $src"
+        return 0
+      fi
+
+      cp -p "$src" "$dst"
+      install_name_tool -id "@rpath/$base" "$dst"
+
+      # Walk deps; copy any from Homebrew (opt|Cellar), then rewrite to @rpath
+      # Note: first line of otool -L is the file itself; skip it.
+      otool -L "$dst" | awk 'NR>1{print $1}' | while read -r dep; do
+        # skip blank lines
+        [ -z "$dep" ] && continue
+        # ignore self and system libs
+        case "$dep" in
+          "$src") continue ;;
+          /usr/lib/*) continue ;;
+          /System/*) continue ;;
+        esac
+        if echo "$dep" | grep -Eq "^$BREW_PREFIX/(opt|Cellar)/"; then
+          local depbase="$(basename "$dep")"
+          copy_and_patch_lib "$dep"
+          chg_ref "$dep" "@rpath/$depbase" "$dst"
+        fi
+      done
+    }
+
+    log "Bundling X11 dylibs (with recursive Homebrew deps)..."
+    for lib in "${REQUIRED_X11[@]}"; do
+      copy_and_patch_lib "$lib"
+    done
+
+    # Ensure xfreerdp can find both freerdp libs and x11 libs
+    install_name_tool -add_rpath "@executable_path/../Frameworks/x11" "$FREERDP_BIN" 2>/dev/null || true
+
+    # Rewrite any remaining X11 references in xfreerdp from Homebrew paths -> @rpath/<name>
+    otool -L "$FREERDP_BIN" | awk 'NR>1{print $1}' | while read -r dep; do
+      [ -z "$dep" ] && continue
+      if echo "$dep" | grep -Eq "^$BREW_PREFIX/(opt|Cellar)/"; then
+        base="$(basename "$dep")"
+        chg_ref "$dep" "@rpath/$base" "$FREERDP_BIN"
+      fi
+    done
+
+    # Quick verification (optional)
+    log "Verifying X11 + rpaths on xfreerdp:"
+    otool -L "$FREERDP_BIN" | sed 's/^/  /'
+    otool -l "$FREERDP_BIN" | awk '/LC_RPATH/{flag=1;print;next}/cmd /{flag=0}flag' | sed 's/^/  /'
+
+    # Ad-hoc sign libraries and the app so macOS doesn’t kill the process
+    log "Ad-hoc codesigning bundled libs and app..."
+    find "$APP_FRAMEWORKS" -type f -name "*.dylib" -exec codesign --force --timestamp=none -s - {} \;
+    codesign --force --timestamp=none -s - "$FREERDP_BIN"
+    codesign --force --deep --timestamp=none -s - "dist/$NAME.app"
+    xattr -dr com.apple.quarantine "dist/$NAME.app" || true
+    # ---- END: Bundle X11 stack + add rpath + ad-hoc sign ----
 else
     log "Linux build does not require copying resources to a separate directory, as it is a single-file executable."
 

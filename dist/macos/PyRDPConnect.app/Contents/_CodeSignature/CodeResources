@@ -362,11 +362,99 @@
 		</data>
 		<key>Resources/base_library.zip</key>
 		<data>
-		FYYFjSZ/qgoBNbuR4lOKDQkIhDk=
+		pRW39fF/P62oH1NgMDzcYRPV5+0=
 		</data>
 		<key>Resources/icon.icns</key>
 		<data>
 		KVAG9bgFQXB/wOIpi833kDUo6Ok=
+		</data>
+		<key>Resources/icons/arrow-clockwise.svg</key>
+		<data>
+		qfoFhPigxqFY2sxdHHP1M90lflY=
+		</data>
+		<key>Resources/icons/arrow-repeat.svg</key>
+		<data>
+		aNnlfcfDTiTw80mpRWeaHeJCdP8=
+		</data>
+		<key>Resources/icons/box-arrow-in-right.svg</key>
+		<data>
+		4G8fN3Rr7kxe6aZWQ99GWevOk3s=
+		</data>
+		<key>Resources/icons/box-arrow-right.svg</key>
+		<data>
+		2JdU5/tXw1Lg9jfDXNzbDeN+ZkM=
+		</data>
+		<key>Resources/icons/door-closed.svg</key>
+		<data>
+		CNImdpABOCfVecbP9PHEJQe/sZM=
+		</data>
+		<key>Resources/icons/eye-slash.svg</key>
+		<data>
+		bPo+Pd+LnhMXm/HdksTVmsklJuI=
+		</data>
+		<key>Resources/icons/eye.svg</key>
+		<data>
+		dyBm96/2O+0sa00kqH0H25m6K60=
+		</data>
+		<key>Resources/icons/gear-fill.ico</key>
+		<data>
+		v28XHr+KIV/TKBB8+dP8a778dcw=
+		</data>
+		<key>Resources/icons/gear-fill.svg</key>
+		<data>
+		QPt7QEQiaJ/e4o9OIlw6Cn5UuJk=
+		</data>
+		<key>Resources/icons/icon.icns</key>
+		<data>
+		KVAG9bgFQXB/wOIpi833kDUo6Ok=
+		</data>
+		<key>Resources/icons/icon.png</key>
+		<data>
+		P8w/Ie0+FAMafIcVp3f55c385KQ=
+		</data>
+		<key>Resources/icons/play-fill.ico</key>
+		<data>
+		IHWwNGKjRg1Ggc+oKv2KJLs1Ro4=
+		</data>
+		<key>Resources/icons/play-fill.svg</key>
+		<data>
+		+xfiBO1UkDbN9Vq7wE4WBY7kaog=
+		</data>
+		<key>Resources/icons/power.svg</key>
+		<data>
+		9rZH7ayehdPlDbFkNgQDqBAi8jo=
+		</data>
+		<key>Resources/icons/reception-0.svg</key>
+		<data>
+		6RftUSx7rKr0C6ZlExnr4Ic2R20=
+		</data>
+		<key>Resources/icons/reception-1.svg</key>
+		<data>
+		Oyqbv03IORrHuN62NBaNokITLU0=
+		</data>
+		<key>Resources/icons/reception-2.svg</key>
+		<data>
+		C5pCfGl05GATIqAqEJkVd1Ve6dE=
+		</data>
+		<key>Resources/icons/reception-3.svg</key>
+		<data>
+		KnDxd70WxR7v3xK/tveFpkQzb4U=
+		</data>
+		<key>Resources/icons/reception-4.svg</key>
+		<data>
+		bHY1qkMYf3pzZedXlt3JgLsaKbI=
+		</data>
+		<key>Resources/icons/x-octagon.svg</key>
+		<data>
+		Tu8HfH2HHhXbq58akNnwYbTwDLo=
+		</data>
+		<key>Resources/img/logo.png</key>
+		<data>
+		P8w/Ie0+FAMafIcVp3f55c385KQ=
+		</data>
+		<key>Resources/styles/style.css</key>
+		<data>
+		6kbaliptNjKCgpz3Agph+EF/Obk=
 		</data>
 	</dict>
 	<key>files2</key>
@@ -764,6 +852,195 @@
 		<dict>
 			<key>symlink</key>
 			<string>../Resources/base_library.zip</string>
+		</dict>
+		<key>Frameworks/freerdp/libfreerdp-client3.3.17.2.dylib</key>
+		<dict>
+			<key>cdhash</key>
+			<data>
+			v935BgR4zwoLBPwO536tl+um7pU=
+			</data>
+			<key>requirement</key>
+			<string>cdhash H"bfddf9060478cf0a0b04fc0ee77ead97eba6ee95"</string>
+		</dict>
+		<key>Frameworks/freerdp/libfreerdp-client3.3.dylib</key>
+		<dict>
+			<key>cdhash</key>
+			<data>
+			o5B3YVkuhY0nnkZ0T4S59dqZBOQ=
+			</data>
+			<key>requirement</key>
+			<string>cdhash H"a3907761592e858d279e46744f84b9f5da9904e4"</string>
+		</dict>
+		<key>Frameworks/freerdp/libfreerdp-client3.dylib</key>
+		<dict>
+			<key>cdhash</key>
+			<data>
+			vulVeKaaUh5NXvlbJAhBBtZ09yI=
+			</data>
+			<key>requirement</key>
+			<string>cdhash H"bee95578a69a521e4d5ef95b24084106d674f722"</string>
+		</dict>
+		<key>Frameworks/freerdp/libfreerdp-server-proxy3.3.17.2.dylib</key>
+		<dict>
+			<key>cdhash</key>
+			<data>
+			oL+9GybIYrKOcMPOkbdXVcVirQc=
+			</data>
+			<key>requirement</key>
+			<string>cdhash H"a0bfbd1b26c862b28e70c3ce91b75755c562ad07"</string>
+		</dict>
+		<key>Frameworks/freerdp/libfreerdp-server-proxy3.3.dylib</key>
+		<dict>
+			<key>cdhash</key>
+			<data>
+			vpnwBJCBKQib34TF41t0OvVyKmA=
+			</data>
+			<key>requirement</key>
+			<string>cdhash H"be99f004908129089bdf84c5e35b743af5722a60"</string>
+		</dict>
+		<key>Frameworks/freerdp/libfreerdp-server-proxy3.dylib</key>
+		<dict>
+			<key>cdhash</key>
+			<data>
+			aWzsLtctIt0ibcQr92rYExPl/SY=
+			</data>
+			<key>requirement</key>
+			<string>cdhash H"696cec2ed72d22dd226dc42bf76ad81313e5fd26"</string>
+		</dict>
+		<key>Frameworks/freerdp/libfreerdp-server3.3.17.2.dylib</key>
+		<dict>
+			<key>cdhash</key>
+			<data>
+			S94EdNdi1cY8A8ikjhCkiuDk1mA=
+			</data>
+			<key>requirement</key>
+			<string>cdhash H"4bde0474d762d5c63c03c8a48e10a48ae0e4d660"</string>
+		</dict>
+		<key>Frameworks/freerdp/libfreerdp-server3.3.dylib</key>
+		<dict>
+			<key>cdhash</key>
+			<data>
+			ubhYA37aVXkoXVucDAQoprzhKic=
+			</data>
+			<key>requirement</key>
+			<string>cdhash H"b9b858037eda5579285d5b9c0c0428a6bce12a27"</string>
+		</dict>
+		<key>Frameworks/freerdp/libfreerdp-server3.dylib</key>
+		<dict>
+			<key>cdhash</key>
+			<data>
+			atQ/1boZ5egLW2wPz64PaZI/a7Q=
+			</data>
+			<key>requirement</key>
+			<string>cdhash H"6ad43fd5ba19e5e80b5b6c0fcfae0f69923f6bb4"</string>
+		</dict>
+		<key>Frameworks/freerdp/libfreerdp3.3.17.2.dylib</key>
+		<dict>
+			<key>cdhash</key>
+			<data>
+			zHn1MsMsYLE/wwHsokACa9uc7IY=
+			</data>
+			<key>requirement</key>
+			<string>cdhash H"cc79f532c32c60b13fc301eca240026bdb9cec86"</string>
+		</dict>
+		<key>Frameworks/freerdp/libfreerdp3.3.dylib</key>
+		<dict>
+			<key>cdhash</key>
+			<data>
+			MZhgv6i38pON37Bw7ZXkiXv5XRM=
+			</data>
+			<key>requirement</key>
+			<string>cdhash H"319860bfa8b7f2938ddfb070ed95e4897bf95d13"</string>
+		</dict>
+		<key>Frameworks/freerdp/libfreerdp3.dylib</key>
+		<dict>
+			<key>cdhash</key>
+			<data>
+			WBaMGyqDUJsnNZlrHtRL3XX4H+Q=
+			</data>
+			<key>requirement</key>
+			<string>cdhash H"58168c1b2a83509b2735996b1ed44bdd75f81fe4"</string>
+		</dict>
+		<key>Frameworks/freerdp/librdtk0.0.2.0.dylib</key>
+		<dict>
+			<key>cdhash</key>
+			<data>
+			gZHhvKnX8SmIKbN2SerrKkUQRP4=
+			</data>
+			<key>requirement</key>
+			<string>cdhash H"8191e1bca9d7f1298829b37649eaeb2a451044fe"</string>
+		</dict>
+		<key>Frameworks/freerdp/librdtk0.0.dylib</key>
+		<dict>
+			<key>cdhash</key>
+			<data>
+			y/JUf9vxAubllgeiUjwLteXcsfE=
+			</data>
+			<key>requirement</key>
+			<string>cdhash H"cbf2547fdbf102e6e59607a2523c0bb5e5dcb1f1"</string>
+		</dict>
+		<key>Frameworks/freerdp/librdtk0.dylib</key>
+		<dict>
+			<key>cdhash</key>
+			<data>
+			SOQdriTl8ZL/Y6lGWEsvmAL0qW4=
+			</data>
+			<key>requirement</key>
+			<string>cdhash H"48e41dae24e5f192ff63a946584b2f9802f4a96e"</string>
+		</dict>
+		<key>Frameworks/freerdp/libwinpr-tools3.3.17.2.dylib</key>
+		<dict>
+			<key>cdhash</key>
+			<data>
+			lCYWUnfoUWNHZcwxJ6mo29SRCVk=
+			</data>
+			<key>requirement</key>
+			<string>cdhash H"9426165277e851634765cc3127a9a8dbd4910959"</string>
+		</dict>
+		<key>Frameworks/freerdp/libwinpr-tools3.3.dylib</key>
+		<dict>
+			<key>cdhash</key>
+			<data>
+			HrhrNQNz29aq5Jj547ZSx7ei+30=
+			</data>
+			<key>requirement</key>
+			<string>cdhash H"1eb86b350373dbd6aae498f9e3b652c7b7a2fb7d"</string>
+		</dict>
+		<key>Frameworks/freerdp/libwinpr-tools3.dylib</key>
+		<dict>
+			<key>cdhash</key>
+			<data>
+			bA4Wf57ONvfjrsTKa5/L+NYwwmU=
+			</data>
+			<key>requirement</key>
+			<string>cdhash H"6c0e167f9ece36f7e3aec4ca6b9fcbf8d630c265"</string>
+		</dict>
+		<key>Frameworks/freerdp/libwinpr3.3.17.2.dylib</key>
+		<dict>
+			<key>cdhash</key>
+			<data>
+			euwNtuBHh/oLw+p9Jm0fE8haUoQ=
+			</data>
+			<key>requirement</key>
+			<string>cdhash H"7aec0db6e04787fa0bc3ea7d266d1f13c85a5284"</string>
+		</dict>
+		<key>Frameworks/freerdp/libwinpr3.3.dylib</key>
+		<dict>
+			<key>cdhash</key>
+			<data>
+			R3AbeESbwuySAi1AE0S42mMH1Pc=
+			</data>
+			<key>requirement</key>
+			<string>cdhash H"47701b78449bc2ec92022d401344b8da6307d4f7"</string>
+		</dict>
+		<key>Frameworks/freerdp/libwinpr3.dylib</key>
+		<dict>
+			<key>cdhash</key>
+			<data>
+			O9yOsPB9d1Lgm7j0YyurPsQuWxA=
+			</data>
+			<key>requirement</key>
+			<string>cdhash H"3bdc8eb0f07d7752e09bb8f4632bab3ec42e5b10"</string>
 		</dict>
 		<key>Frameworks/libcrypto.3.dylib</key>
 		<dict>
@@ -1192,6 +1469,123 @@
 			</data>
 			<key>requirement</key>
 			<string>cdhash H"d770a323e4b5d724bdb9b2a4c9a7f43bcf87ed12"</string>
+		</dict>
+		<key>Frameworks/x11/libX11.6.dylib</key>
+		<dict>
+			<key>cdhash</key>
+			<data>
+			RT6ydMH7C804NLY/87dxD09Vn2w=
+			</data>
+			<key>requirement</key>
+			<string>cdhash H"453eb274c1fb0bcd3834b63ff3b7710f4f559f6c"</string>
+		</dict>
+		<key>Frameworks/x11/libXau.6.dylib</key>
+		<dict>
+			<key>cdhash</key>
+			<data>
+			uch7y9P1WMgpfYySIEXHCGnG+c0=
+			</data>
+			<key>requirement</key>
+			<string>cdhash H"b9c87bcbd3f558c8297d8c922045c70869c6f9cd"</string>
+		</dict>
+		<key>Frameworks/x11/libXcursor.1.dylib</key>
+		<dict>
+			<key>cdhash</key>
+			<data>
+			lZpJfmjRe7NM2QaP3xRM5HBSGfs=
+			</data>
+			<key>requirement</key>
+			<string>cdhash H"959a497e68d17bb34cd9068fdf144ce4705219fb"</string>
+		</dict>
+		<key>Frameworks/x11/libXdmcp.6.dylib</key>
+		<dict>
+			<key>cdhash</key>
+			<data>
+			W43FFBxwBiHXm5p5o9FsBcX+1fs=
+			</data>
+			<key>requirement</key>
+			<string>cdhash H"5b8dc5141c700621d79b9a79a3d16c05c5fed5fb"</string>
+		</dict>
+		<key>Frameworks/x11/libXext.6.dylib</key>
+		<dict>
+			<key>cdhash</key>
+			<data>
+			RlbTVKeZUGbXiRL6N5i28gT4lnk=
+			</data>
+			<key>requirement</key>
+			<string>cdhash H"4656d354a7995066d78912fa3798b6f204f89679"</string>
+		</dict>
+		<key>Frameworks/x11/libXfixes.3.dylib</key>
+		<dict>
+			<key>cdhash</key>
+			<data>
+			RauqNz9LAkCPbAIptpMawPw55gQ=
+			</data>
+			<key>requirement</key>
+			<string>cdhash H"45abaa373f4b02408f6c0229b6931ac0fc39e604"</string>
+		</dict>
+		<key>Frameworks/x11/libXi.6.dylib</key>
+		<dict>
+			<key>cdhash</key>
+			<data>
+			tbcHMoY4pKBk7owSWu/TAMmitE8=
+			</data>
+			<key>requirement</key>
+			<string>cdhash H"b5b707328638a4a064ee8c125aefd300c9a2b44f"</string>
+		</dict>
+		<key>Frameworks/x11/libXinerama.1.dylib</key>
+		<dict>
+			<key>cdhash</key>
+			<data>
+			/1SvnoztIaup5YgrdDatqdWX7H8=
+			</data>
+			<key>requirement</key>
+			<string>cdhash H"ff54af9e8ced21aba9e5882b7436ada9d597ec7f"</string>
+		</dict>
+		<key>Frameworks/x11/libXrandr.2.dylib</key>
+		<dict>
+			<key>cdhash</key>
+			<data>
+			qyDdwgZUwEwDrwZeUEZ3AIWrnAE=
+			</data>
+			<key>requirement</key>
+			<string>cdhash H"ab20ddc20654c04c03af065e5046770085ab9c01"</string>
+		</dict>
+		<key>Frameworks/x11/libXrender.1.dylib</key>
+		<dict>
+			<key>cdhash</key>
+			<data>
+			d5Z6ucBKyYroraxmXMfWP/HG7Hg=
+			</data>
+			<key>requirement</key>
+			<string>cdhash H"77967ab9c04ac98ae8adac665cc7d63ff1c6ec78"</string>
+		</dict>
+		<key>Frameworks/x11/libXv.1.dylib</key>
+		<dict>
+			<key>cdhash</key>
+			<data>
+			04LoK8cMWA0lmvRwOQSY+jrZ+N4=
+			</data>
+			<key>requirement</key>
+			<string>cdhash H"d382e82bc70c580d259af470390498fa3ad9f8de"</string>
+		</dict>
+		<key>Frameworks/x11/libxcb.1.dylib</key>
+		<dict>
+			<key>cdhash</key>
+			<data>
+			punbcksbNjupNrWirC8CMUW+eX0=
+			</data>
+			<key>requirement</key>
+			<string>cdhash H"a6e9db724b1b363ba936b5a2ac2f023145be797d"</string>
+		</dict>
+		<key>MacOS/xfreerdp</key>
+		<dict>
+			<key>cdhash</key>
+			<data>
+			nS/wQ6fomchRCFDIwdMtUCimmQI=
+			</data>
+			<key>requirement</key>
+			<string>cdhash H"9d2ff043a7e899c8510850c8c1d32d5028a69902"</string>
 		</dict>
 		<key>Resources/PyQt5/Qt5/lib</key>
 		<dict>
@@ -1920,7 +2314,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			jPLS1iX5cPJ0/hqMQjxVj5VLyVdTQznyigpf8yD/MIU=
+			e3CtDSMHvuizESKGLm9weTvM9piHrSMhtbJu2ib6ZIw=
 			</data>
 		</dict>
 		<key>Resources/icon.icns</key>
@@ -1928,6 +2322,153 @@
 			<key>hash2</key>
 			<data>
 			OOy/WAPn3hlwK1ZqVjL+XvcI/+TeV3l+/HC1Pw7JV30=
+			</data>
+		</dict>
+		<key>Resources/icons/arrow-clockwise.svg</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			V/v4mbkfhynlnRUpnzFye5Gl4sRqL2125ed1sjXFioo=
+			</data>
+		</dict>
+		<key>Resources/icons/arrow-repeat.svg</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			Cs6+B9x6WDZlKDTx3YvINg9XRrWn1nbri0CT/iBPoL8=
+			</data>
+		</dict>
+		<key>Resources/icons/box-arrow-in-right.svg</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			a3oNdlisMMTUrBWkJ4FhMYIbMdy4aS/LvGcDVA4DzD0=
+			</data>
+		</dict>
+		<key>Resources/icons/box-arrow-right.svg</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			omBOi25ir1b1+62GN8PpU64f+7y0Bd3RwZ31I4v5e1I=
+			</data>
+		</dict>
+		<key>Resources/icons/door-closed.svg</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			5Op5ODmP2MC7fTCRZBBKJcIFmFJMkF/iq2kmK4PgdUk=
+			</data>
+		</dict>
+		<key>Resources/icons/eye-slash.svg</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			NO7ljo7DuDCTHbNzCxXxrow13xr4HTRiLiiCBdNo/Mg=
+			</data>
+		</dict>
+		<key>Resources/icons/eye.svg</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			xYb6iODQBiXIrzq/A9vVTY3Na8zLEB4DRwNHm5wa2qQ=
+			</data>
+		</dict>
+		<key>Resources/icons/gear-fill.ico</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			Lfgt/SLBPaUQIf4jxn2rZOtq6AimhaFiqjg4KmhCMBI=
+			</data>
+		</dict>
+		<key>Resources/icons/gear-fill.svg</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			67pmWgvAfHFgEyopF7uk3QNApvzkFkic52nk6UkZbA4=
+			</data>
+		</dict>
+		<key>Resources/icons/icon.icns</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			OOy/WAPn3hlwK1ZqVjL+XvcI/+TeV3l+/HC1Pw7JV30=
+			</data>
+		</dict>
+		<key>Resources/icons/icon.png</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			IdC2xcwm+c2aSuHQPMvLp12ZCGx+kVx0H4/ph3JcM/U=
+			</data>
+		</dict>
+		<key>Resources/icons/play-fill.ico</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			EFW1bgoGAXKzrBFzy6NBpja/O1LtJy/Vw/DOy0gEEDA=
+			</data>
+		</dict>
+		<key>Resources/icons/play-fill.svg</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			6xJA07rqsBp7q/AeRWyqnw4tHi2odW6Cc8MVQ0i5Qlo=
+			</data>
+		</dict>
+		<key>Resources/icons/power.svg</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			bYt9IKSEyef+6v0Qg5/FokKg1u2mwaqIFd/4wHxdxyU=
+			</data>
+		</dict>
+		<key>Resources/icons/reception-0.svg</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			qo3yN5MMxqDcVnARQzhFA7eK0Y8qTD89r5WcpTOVtOo=
+			</data>
+		</dict>
+		<key>Resources/icons/reception-1.svg</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			s0Z5XH4HbUVAdr1suLBdhw6Cc/YVoXHHupp4h7CWIZE=
+			</data>
+		</dict>
+		<key>Resources/icons/reception-2.svg</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			ZkMuPA9WRhyRqYkZL51WpuT3FcLXlrsdeCH6OKf1nN4=
+			</data>
+		</dict>
+		<key>Resources/icons/reception-3.svg</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			hVle2Uellv8NsmMYk6v1RIVaUMjTfTPl+YRRbWNVewY=
+			</data>
+		</dict>
+		<key>Resources/icons/reception-4.svg</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			kPC4jIhpNwPlQLR4oTJTr96A6Dw584go5KNQfuVWVzo=
+			</data>
+		</dict>
+		<key>Resources/icons/x-octagon.svg</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			nX5WMI+NxpGjIE3um0g81gju00IsCHmZTaA6qYFOEus=
+			</data>
+		</dict>
+		<key>Resources/img/logo.png</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			IdC2xcwm+c2aSuHQPMvLp12ZCGx+kVx0H4/ph3JcM/U=
 			</data>
 		</dict>
 		<key>Resources/libcrypto.3.dylib</key>
@@ -1954,6 +2495,13 @@
 		<dict>
 			<key>symlink</key>
 			<string>../Frameworks/python3.13</string>
+		</dict>
+		<key>Resources/styles/style.css</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			sp43wE8fchYoG5oS6ZnaLOhiiNo9b7zbBYzYeAfeR3U=
+			</data>
 		</dict>
 	</dict>
 	<key>rules</key>
