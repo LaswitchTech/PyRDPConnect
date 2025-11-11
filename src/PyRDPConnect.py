@@ -28,31 +28,29 @@ class ConnectionThread(QThread):
 
     def run(self):
         try:
-            # Start the freerdp3 connection as a subprocess
+            env = os.environ.copy()
+            # If the first arg looks like your bundled binary, add DYLD_LIBRARY_PATH to its sibling lib
+            freerdp_bin = self.command[0]
+            maybe_lib = os.path.join(os.path.dirname(freerdp_bin), 'lib')
+            if os.path.isdir(maybe_lib):
+                env['DYLD_LIBRARY_PATH'] = maybe_lib
+
             self.freerdp_process = subprocess.Popen(
                 self.command,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=True
+                text=True,
+                env=env
             )
-
-            # Capture output and errors
             stdout, stderr = self.freerdp_process.communicate()
-
-            # Check if the thread is supposed to stop
             if self.stop_thread:
-                self.freerdp_process.terminate()  # Terminate the subprocess
+                self.freerdp_process.terminate()
                 return
-
-            # Check for errors in stderr
             if self.freerdp_process.returncode != 0:
-                error_message = stderr.strip()
-                self.connection_failed.emit(error_message)
+                self.connection_failed.emit(stderr.strip())
             else:
                 self.connection_success.emit()
-
         except Exception as e:
-            # Emit failed signal with error message if any exception occurs
             self.connection_failed.emit(str(e))
 
     def stop(self):
@@ -1155,15 +1153,18 @@ class Client(QMainWindow):
 
     def get_freerdp_version(self, freerdp_path):
         try:
-            result = subprocess.run([freerdp_path, '+version'], capture_output=True, text=True)
-            version_line = result.stdout.splitlines()[0].strip()  # Get the first line of the output
-            version_parts = version_line.split()  # Split the line into words
-            if len(version_parts) > 4:  # Check if the version string is present
-                return version_parts[4]  # The version is the fifth element in the split output
-            elif len(version_parts) > 3:  # Check if the version string is present
-                return version_parts[3]  # The version is the fourth element in the split output
-            else:
+            res = subprocess.run([freerdp_path, '+version'], capture_output=True, text=True)
+            if res.returncode != 0:
                 return None
+            lines = [ln.strip() for ln in res.stdout.splitlines() if ln.strip()]
+            if not lines:
+                return None
+            parts = lines[0].split()
+            # Find something like 3.3.17 or 3.8 etc.
+            for token in parts:
+                if re.match(r'^\d+\.\d+(\.\d+)?$', token):
+                    return token
+            return None
         except Exception as e:
             print(f"Error retrieving FreeRDP version: {e}")
             return None
