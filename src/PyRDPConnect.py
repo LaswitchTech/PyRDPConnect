@@ -3,7 +3,7 @@ from PyQt5.QtWidgets import (
     QApplication, QProgressDialog, QMessageBox, QDialog, QMainWindow,
     QDesktopWidget, QWidget, QTabWidget, QCheckBox, QFrame, QSizePolicy,
     QHBoxLayout, QVBoxLayout, QPushButton, QLabel, QLineEdit, QFormLayout,
-    QGroupBox, QGridLayout, QComboBox, QSpinBox, QFileDialog
+    QGroupBox, QGridLayout, QComboBox, QSpinBox, QFileDialog, QColorDialog
 )
 from PyQt5.QtGui import QIcon, QPixmap, QPainter, QPalette, QColor
 from PyQt5.QtSvg import QSvgRenderer
@@ -1251,6 +1251,8 @@ class Client(QMainWindow):
             command.append("/printer")
         if devices_drives:
             command.append("/drives")
+        if devices_ports:
+            command.append("/usb:auto")
         # if major_version and major_version < 3:
         #     if devices_smart_cards:
         #         command.append("/smartcard")
@@ -1267,7 +1269,7 @@ class Client(QMainWindow):
         if experience_clipboard:
             command.append("+clipboard")
         if experience_remotefx:
-            command.append("/rfx")
+            command.append("/rfx /gfx /gfx-h264 /gdi:hw")
         if experience_smooth_fonts:
             command.append("+fonts")
         if experience_desktop_composition:

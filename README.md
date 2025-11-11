@@ -4,6 +4,7 @@
 ![License](https://img.shields.io/github/license/LaswitchTech/PyRDPConnect?style=for-the-badge)
 ![GitHub repo size](https://img.shields.io/github/repo-size/LaswitchTech/PyRDPConnect?style=for-the-badge&logo=github)
 ![GitHub top language](https://img.shields.io/github/languages/top/LaswitchTech/PyRDPConnect?style=for-the-badge)
+![GitHub Downloads](https://img.shields.io/github/downloads/LaswitchTech/PyRDPConnect/total?style=for-the-badge)
 ![Version](https://img.shields.io/github/v/release/LaswitchTech/PyRDPConnect?label=Version&style=for-the-badge)
 
 ## Description
@@ -42,4 +43,10 @@ Contributions to PyRDPConnect are welcome! If you have ideas for new features or
   - **PyInstaller**: For simplifying the process of packaging Python applications for distribution.
 
 ## Wait, where is the documentation?
-Review the [Documentation](docs/usage.md).
+Review the [Documentation](https://laswitchtech.com/en/blog/projects/pyrdpconnect/index).
+
+## What about the download button?
+The download button is available [here](https://github.com/LaswitchTech/PyRDPConnect/releases/latest/download/source.zip).
+
+## GitHub Stats
+![Alt](https://repobeats.axiom.co/api/embed/603b0d29bc11648a9839888410814e133b5be9dd.svg "Repobeats analytics image")
