@@ -1258,7 +1258,7 @@ class Client(QMainWindow):
         command = [freerdp_path]
 
         # enable verboose logging for debugging
-        # command.append("/log-level:TRACE")
+        command.append("/log-level:TRACE")
 
         # Gather the configuration values, retrieving from widgets if necessary
         general_server_address = self.config["General"]["Server Address"] or self.server_edit.text()
