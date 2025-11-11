@@ -16,48 +16,197 @@ import json
 import sys
 import os
 import re
+import enum
+import threading
+import queue
+import time
+
+class Severity(enum.Enum):
+    INFO = 1
+    WARNING = 2
+    ERROR = 3
+
+class FreerdpEvent:
+    def __init__(self, severity: Severity, code: str, message: str, hint: str = ""):
+        self.severity = severity
+        self.code = code             # e.g. ERRCONNECT_ACTIVATION_TIMEOUT
+        self.message = message       # user-facing short message
+        self.hint = hint             # optional suggestion/fix
+
+class FreerdpLogInterpreter:
+    def __init__(self, show_cert_warning: bool = False):
+        self.show_cert_warning = show_cert_warning
+
+    # Patterns → (severity, code, user message, hint)
+    RULES = [
+        # --- Normal/expected endings ---
+        (r'ERRINFO_LOGOFF_BY_USER', (Severity.INFO, 'ERRINFO_LOGOFF_BY_USER',
+            'You logged off the remote session.',
+            'This is normal if you clicked Disconnect/Sign out on the remote Windows session.')),
+        (r'ERRINFO_IDLE_TIMEOUT', (Severity.INFO, 'ERRINFO_IDLE_TIMEOUT',
+            'Disconnected due to inactivity.', 'Reconnect to continue.')),
+
+        # --- Connect/handshake timeouts ---
+        (r'ERRCONNECT_ACTIVATION_TIMEOUT', (Severity.ERROR, 'ERRCONNECT_ACTIVATION_TIMEOUT',
+            'The server took too long to activate the session.',
+            'Try again, or increase the connection timeout in Settings.')),
+
+        # --- Certificate warnings ---
+        (r'Certificate not checked, /cert:ignore in use', (Severity.WARNING, 'CERT_IGNORE',
+            'Unverified server certificate (ignored).',
+            'Only use /cert:ignore on trusted LAN. Otherwise, enable certificate validation.')),
+
+        # --- Password on CLI warnings (don’t block, just hint) ---
+        (r'Using /p is insecure', (Severity.WARNING, 'INSECURE_PASSWORD_ARG',
+            'Password was passed on the command line.',
+            'Use /from-stdin or set FREERDP_ASKPASS for safer credential entry.')),
+
+        # --- Device hotplug noise (non-fatal) ---
+        (r'handle_hotplug failed with error 1', (Severity.WARNING, 'RDPDR_HOTPLUG',
+            'A redirected device failed to hot-plug.',
+            'Usually harmless. If it persists, disable “Drives/Printers” redirection and retry.')),
+
+        # --- Generic catch-alls we still want to prettify ---
+        (r'Could not connect to RDP server', (Severity.ERROR, 'CANNOT_CONNECT',
+            'Could not connect to the server.', 'Verify IP/hostname and port 3389 reachability.')),
+        (r'Access Denied', (Severity.ERROR, 'ACCESS_DENIED',
+            'Access denied by the server.', 'Check username, password, and domain.')),
+        (r'LOGON_FAILURE', (Severity.ERROR, 'LOGON_FAILURE',
+            'Logon failed.', 'Check credentials or account lockout.')),
+        (r'hostname cannot be resolved', (Severity.ERROR, 'DNS_FAIL',
+            'Host cannot be resolved.', 'Check DNS or use the IP address.')),
+        (r'GATEWAY.*denied|HTTP/.* 403', (Severity.ERROR, 'GATEWAY_DENIED',
+            'Gateway denied the connection.', 'Check RD Gateway URL/credentials.')),
+    ]
+
+    def classify(self, text: str) -> list:
+        events = []
+        for pat, (sev, code, msg, hint) in self.RULES:
+            if re.search(pat, text, re.IGNORECASE):
+                if code == 'CERT_IGNORE' and not self.show_cert_warning:
+                    continue
+                events.append(FreerdpEvent(sev, code, msg, hint))
+        return events
+
+    def most_relevant(self, events: list) -> FreerdpEvent | None:
+        if not events:
+            return None
+        # Prefer ERROR > WARNING > INFO
+        priority = {Severity.ERROR: 3, Severity.WARNING: 2, Severity.INFO: 1}
+        events.sort(key=lambda e: priority[e.severity], reverse=True)
+        return events[0]
 
 class ConnectionThread(QThread):
     connection_success = pyqtSignal()
-    connection_failed = pyqtSignal(str)
-    stop_thread = False  # Flag to stop the thread
+    connection_failed = pyqtSignal(str, str)   # (title, details)
+    connection_info   = pyqtSignal(str)        # live status text (optional)
+    stop_thread = False
 
-    def __init__(self, command, parent=None):
+    def __init__(self, command, parent = None, show_cert_warning: bool = False, stdin_password: str | None = None, debug_enabled: bool = False):
         super().__init__(parent)
         self.command = command
+        self.freerdp_process = None
+        self._interpreter = FreerdpLogInterpreter(show_cert_warning=show_cert_warning)
+        self._stdin_password = stdin_password
+        self._debug_enabled = debug_enabled
 
     def run(self):
         try:
             env = os.environ.copy()
-            # If the first arg looks like your bundled binary, add DYLD_LIBRARY_PATH to its sibling lib
             freerdp_bin = self.command[0]
             maybe_lib = os.path.join(os.path.dirname(freerdp_bin), 'lib')
             if os.path.isdir(maybe_lib):
                 env['DYLD_LIBRARY_PATH'] = maybe_lib
 
+            # Stream stdout/stderr so we can classify in real time
             self.freerdp_process = subprocess.Popen(
                 self.command,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
+                stdin=subprocess.PIPE,
                 text=True,
-                env=env
+                env=env,
+                bufsize=1,
+                universal_newlines=True
             )
-            stdout, stderr = self.freerdp_process.communicate()
+
+            # If we're using stdin-based credentials, send the password once.
+            # FreeRDP expects the password followed by newline.
+            try:
+                if any(arg.startswith("/from-stdin") for arg in self.command) and self._stdin_password is not None:
+                    self.freerdp_process.stdin.write(self._stdin_password + "\n")
+                    self.freerdp_process.stdin.flush()
+                    # optional: close to signal EOF if you don't expect further prompts
+                    self.freerdp_process.stdin.close()
+            except Exception:
+                # Don't fail the connection solely because of stdin close timing
+                pass
+
+            collected = []
+
+            def pump(stream):
+                for line in iter(stream.readline, ''):
+                    if self.stop_thread:
+                        break
+                    ln = line.rstrip()
+                    collected.append(ln)
+                    if self._debug_enabled:
+                        # Optionally show a short live status (trim spammy lines)
+                        if 'NEGO' in ln or 'NLA' in ln or 'connect' in ln.lower():
+                            self.connection_info.emit(ln)
+                stream.close()
+
+            # Read both streams
+            t_out = threading.Thread(target=pump, args=(self.freerdp_process.stdout,))
+            t_err = threading.Thread(target=pump, args=(self.freerdp_process.stderr,))
+            t_out.start(); t_err.start()
+
+            # Wait for freerdp to exit
+            rc = self.freerdp_process.wait()
+            t_out.join(); t_err.join()
+
+            text = "\n".join(collected)
+
             if self.stop_thread:
-                self.freerdp_process.terminate()
+                # Treat as a user-cancel—don’t show an error dialog
                 return
-            if self.freerdp_process.returncode != 0:
-                self.connection_failed.emit(stderr.strip())
-            else:
+
+            # If return code is 0, success
+            if rc == 0:
                 self.connection_success.emit()
+                return
+
+            # Classify errors
+            events = self._interpreter.classify(text)
+            top = self._interpreter.most_relevant(events)
+
+            # Special case: treat user logoff as INFO, not an error
+            if top and top.code == 'ERRINFO_LOGOFF_BY_USER':
+                self.connection_failed.emit("Disconnected", top.message + (f"\n\nHint: {top.hint}" if top.hint else ""))
+                return
+
+            # Build a friendly message
+            if top:
+                title = "Connection problem" if top.severity != Severity.INFO else "Information"
+                details = top.message
+                if top.hint:
+                    details += f"\n\nHint: {top.hint}"
+            else:
+                title = "Connection failed"
+                details = "The connection ended unexpectedly.\n\nOpen the detailed log for more information."
+
+            self.connection_failed.emit(title, details)
+
         except Exception as e:
-            self.connection_failed.emit(str(e))
+            self.connection_failed.emit("Unexpected error", str(e))
 
     def stop(self):
-        # Method to stop the thread
         self.stop_thread = True
         if self.freerdp_process:
-            self.freerdp_process.terminate()  # Terminate the subprocess if running
+            try:
+                self.freerdp_process.terminate()
+            except Exception:
+                pass
 
 class ColorButton(QPushButton):
     """
@@ -198,8 +347,12 @@ class Client(QMainWindow):
                 "Gradient Start": "#265162",
                 "Gradient End":   "#002136"
             },
+            "Security": {
+                "Show certificate warning": False
+            },
             "Administration": {
-                "Password": ""
+                "Password": "",
+                "Debug logging": False
             },
         }
 
@@ -364,8 +517,12 @@ class Client(QMainWindow):
                 "Gradient Start": gradient_start_btn,
                 "Gradient End": gradient_end_btn
             },
+            "Security": {
+                "Show certificate warning": QCheckBox(),
+            },
             "Administration": {
                 "Password": lockLineEdit,
+                "Debug logging": QCheckBox(),
                 "Update": self.update_button,
                 "Import": self.import_button,
                 "Export": self.export_button,
@@ -1255,18 +1412,6 @@ class Client(QMainWindow):
 
     def gen_command(self):
 
-        # # Get the path to the bundled xfreerdp
-        # if self.get_os() == "macos":
-        #     # if frozen, sys.executable is .../Contents/MacOS/PyRDPConnect
-        #     if getattr(sys, 'frozen', False):
-        #         freerdp_path = os.path.join(os.path.dirname(sys.executable), 'xfreerdp')
-        #     else:
-        #         # fallback to repo copy, or system xfreerdp if you want
-        #         candidate = self.get_path('freerdp/macos/xfreerdp')
-        #         freerdp_path = candidate if candidate and os.path.exists(candidate) else shutil.which('xfreerdp') or 'xfreerdp'
-        # else:
-        #     freerdp_path = "xfreerdp"
-
         # Get the path to the bundled xfreerdp
         freerdp_path = self.get_freerdp_bin_path()
 
@@ -1285,10 +1430,11 @@ class Client(QMainWindow):
             "/sec:nla",         # explicit security (same as most servers expect)
             "-multitransport",  # avoid RDPEUDP weirdness through NAT/middleboxes
             "/timeout:30000",   # 30 second connection timeout
-            # "/gdi:sw",          # use software GDI rendering for compatibility
-            # "/log-level:TRACE", # verbose logging for debugging
-            "/log-level:DEBUG", # verbose logging for debugging
         ]
+
+        # Enable debug logging if set
+        if self.config["Administration"]["Debug logging"]:
+            command += ["/log-level:DEBUG"]
 
         # Gather the configuration values, retrieving from widgets if necessary
         general_server_address = self.config["General"]["Server Address"] or self.server_edit.text()
@@ -1331,7 +1477,8 @@ class Client(QMainWindow):
 
         # Add password securely
         if general_password:
-            command.append(f"/p:{general_password}")
+            command.append("/from-stdin:force")
+            # command.append(f"/p:{general_password}")
 
         # Add display settings
         if display_resolution:
@@ -1398,8 +1545,15 @@ class Client(QMainWindow):
             command.append("-wallpaper")
 
         # Debugging: Print the final command
-        print(f"Generated freerdp({freerdp_version}) command:")
-        print(" ".join(command))
+        if self.config["Administration"]["Debug logging"]:
+            print(f"Generated freerdp({freerdp_version}) command:")
+            debug_cmd = []
+            for tok in command:
+                if tok.startswith("/p:"):
+                    debug_cmd.append("/p:********")
+                else:
+                    debug_cmd.append(tok)
+            print(" ".join(debug_cmd))
 
         return command
 
@@ -1427,30 +1581,35 @@ class Client(QMainWindow):
         self.connect()
 
     def connect(self):
-
-        # Construct the freerdp3 command using the dedicated method
         command = self.gen_command()
-
-        # Create a thread for the connection process
-        self.connection_thread = ConnectionThread(command)
-
-        # Connect the success and failure signals to appropriate slots
+        show_cert_warning = self.config.get("Security", {}).get("Show certificate warning", False)
+        debug_enabled = self.config.get("Administration", {}).get("Debug logging", False)
+        general_password = self.config["General"]["Password"] or getattr(self, "password_edit", QLineEdit()).text()
+        stdin_password = general_password if any(arg.startswith("/from-stdin") for arg in command) else None
+        self.connection_thread = ConnectionThread(command, show_cert_warning=show_cert_warning, stdin_password=stdin_password, debug_enabled=debug_enabled)
         self.connection_thread.connection_success.connect(self.on_connection_success)
         self.connection_thread.connection_failed.connect(self.on_connection_failed)
-
-        # Start the connection thread
+        self.connection_thread.connection_info.connect(self.on_connection_info)
         self.connection_thread.start()
 
+    def on_connection_info(self, line: str):
+        try:
+            self.connection_dialog.setLabelText(f"Connecting…\n{line}")
+        except Exception:
+            pass
+
     def on_connection_success(self):
-        # Handle successful connection
         self.connection_dialog.hide()
         QMessageBox.information(self, "Connected", "Connection to the server was successful.")
         self.reset_ui()
 
-    def on_connection_failed(self, error_message):
-        # Handle failed connection
+    def on_connection_failed(self, title: str, details: str):
         self.connection_dialog.hide()
-        QMessageBox.critical(self, "Error", f"Failed to connect to the server: {error_message}")
+        # If the server reported a user-initiated logoff, show as information
+        icon = QMessageBox.Critical if title.lower().startswith("connection") else QMessageBox.Information
+        m = QMessageBox(icon, title, details, parent=self)
+        m.setDetailedText("")  # (Optionally add the raw log buffer if you keep it)
+        m.exec_()
         self.reset_ui()
 
     def connection_timeout(self):

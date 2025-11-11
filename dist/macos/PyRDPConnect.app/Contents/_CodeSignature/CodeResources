@@ -362,7 +362,7 @@
 		</data>
 		<key>Resources/base_library.zip</key>
 		<data>
-		J518xerxbQq7AlZHjQCOfOsW6WE=
+		oljRsKDoqDinw3zPQwcl0uIsd98=
 		</data>
 		<key>Resources/icon.icns</key>
 		<data>
@@ -1289,6 +1289,15 @@
 			</data>
 			<key>requirement</key>
 			<string>cdhash H"dbc829ae11e7ebe343ef3e3cf071dcda5f3ae9e1"</string>
+		</dict>
+		<key>Frameworks/python3__dot__13/lib-dynload/_queue.cpython-313-darwin.so</key>
+		<dict>
+			<key>cdhash</key>
+			<data>
+			dQny6N2KGCmn4rxYIOkkoGSpRsg=
+			</data>
+			<key>requirement</key>
+			<string>cdhash H"7509f2e8dd8a1829a7e2bc5820e924a064a946c8"</string>
 		</dict>
 		<key>Frameworks/python3__dot__13/lib-dynload/_random.cpython-313-darwin.so</key>
 		<dict>
@@ -2314,7 +2323,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			RIECRnKjv+zbEmJCdrxX3/sXg9hYKVbM2+wwzYZW/mA=
+			w9VYXjMslDYO/xEkIXLbuZ1YR5dxmcfVnJvu4fWB2ck=
 			</data>
 		</dict>
 		<key>Resources/icon.icns</key>
