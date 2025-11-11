@@ -1257,6 +1257,9 @@ class Client(QMainWindow):
         # Construct the command using the bundled xfreerdp
         command = [freerdp_path]
 
+        # enable verboose logging for debugging
+        command.append("/log-level:DEBUG")
+
         # Gather the configuration values, retrieving from widgets if necessary
         general_server_address = self.config["General"]["Server Address"] or self.server_edit.text()
         general_port = self.config["General"]["Port"] or self.port_edit.value()
