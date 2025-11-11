@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import (
     QHBoxLayout, QVBoxLayout, QPushButton, QLabel, QLineEdit, QFormLayout,
     QGroupBox, QGridLayout, QComboBox, QSpinBox, QFileDialog, QColorDialog
 )
-from PyQt5.QtGui import QIcon, QPixmap, QPainter, QPalette, QColor
+from PyQt5.QtGui import QIcon, QPixmap, QPainter, QPalette, QColor, QValidator
 from PyQt5.QtSvg import QSvgRenderer
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 import subprocess
@@ -60,6 +60,39 @@ class ConnectionThread(QThread):
         self.stop_thread = True
         if self.freerdp_process:
             self.freerdp_process.terminate()  # Terminate the subprocess if running
+
+class ColorButton(QPushButton):
+    """
+    A small button that shows a color swatch; clicking opens a color dialog.
+    Use .color() to get QColor; .hex() for '#RRGGBB'.
+    """
+    colorChanged = pyqtSignal(QColor)
+
+    def __init__(self, initial="#265162", parent=None):
+        super().__init__(parent)
+        self._color = QColor(initial)
+        self.setFixedSize(48, 24)
+        self._update_style()
+        self.clicked.connect(self._pick)
+
+    def _pick(self):
+        chosen = QColorDialog.getColor(self._color, self, "Choose Color")
+        if chosen.isValid():
+            self._color = chosen
+            self._update_style()
+            self.colorChanged.emit(self._color)
+
+    def _update_style(self):
+        self.setStyleSheet(
+            f"border: 1px solid #76797C; border-radius: 4px; "
+            f"background: {self._color.name()};"
+        )
+
+    def color(self) -> QColor:
+        return self._color
+
+    def hex(self) -> str:
+        return self._color.name()
 
 class Client(QMainWindow):
 
@@ -163,7 +196,9 @@ class Client(QMainWindow):
                 "Hide Exit": False,
                 "Hide Restart": False,
                 "Hide Shutdown": False,
-                "Fullscreen": False
+                "Fullscreen": False,
+                "Gradient Start": "#265162",
+                "Gradient End":   "#002136"
             },
             "Administration": {
                 "Password": ""
@@ -256,6 +291,14 @@ class Client(QMainWindow):
         logo_file = self.config["Appearance"]["Logo File"] or self.get_path(os.path.join('img', 'logo.png'))
         self.gen_logo_button(logo_file)
 
+        # Color pickers for gradient
+        gradient_start_btn = ColorButton(self.config["Appearance"]["Gradient Start"] or "#265162")
+        gradient_end_btn   = ColorButton(self.config["Appearance"]["Gradient End"] or "#002136")
+
+        # If changed, treat as unsaved & live-preview the gradient (nice UX)
+        gradient_start_btn.colorChanged.connect(lambda _: self.on_configuration_changed())
+        gradient_end_btn.colorChanged.connect(lambda _: self.on_configuration_changed())
+
         # Initialize folder redirection
         self.folder_add_button = QPushButton("Add Folder")
         self.folder_add_button.clicked.connect(self.select_folder)
@@ -320,6 +363,8 @@ class Client(QMainWindow):
                 "Hide Restart": QCheckBox(),
                 "Hide Shutdown": QCheckBox(),
                 "Fullscreen": QCheckBox(),
+                "Gradient Start": gradient_start_btn,
+                "Gradient End": gradient_end_btn
             },
             "Administration": {
                 "Password": lockLineEdit,
@@ -364,9 +409,19 @@ class Client(QMainWindow):
         self.setWindowTitle("Client")
         self.setWindowIcon(QIcon(self.icon_path))
 
+        # Apply gradient background based on configuration
+        start = self.config["Appearance"].get("Gradient Start", "#265162")
+        end   = self.config["Appearance"].get("Gradient End", "#002136")
+        override = (
+            "\n"
+            "#clientWindow {\n"
+            f"    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {start}, stop:1 {end});\n"
+            "}\n"
+        )
+
         # Load Style Sheets
         with open(self.get_path(os.path.join('styles/style.css')), 'r') as f:
-            self.setStyleSheet(f.read())
+            self.setStyleSheet(f.read() + override)
 
         # Set the object name for the stylesheet
         self.setObjectName("clientWindow")  # Set the object name for the stylesheet
@@ -565,6 +620,8 @@ class Client(QMainWindow):
             return widget.isChecked()
         elif isinstance(widget, QSpinBox):
             return widget.value()
+        elif isinstance(widget, ColorButton):
+            return widget.hex()
         else:
             return None  # Or some default value, or raise an exception
 
@@ -587,6 +644,9 @@ class Client(QMainWindow):
             widget.setChecked(value)
         elif isinstance(widget, QSpinBox):
             widget.setValue(value)
+        elif isinstance(widget, ColorButton):
+            widget._color = QColor(value if value else "#000000")
+            widget._update_style()
 
     def set_svg_icon(self, button, svg_path, size=(18, 18)):
         # Load SVG file
@@ -938,6 +998,20 @@ class Client(QMainWindow):
         self.save_button.style().unpolish(self.save_button)  # Unpolish to clear the existing styling
         self.save_button.style().polish(self.save_button)  # Re-apply the stylesheet
         self.save_button.update()  # Update the button's appearance
+
+        # Live preview: reapply stylesheet override using the current widget values
+        try:
+            with open(self.get_path(os.path.join('styles/style.css')), 'r') as f:
+                base_css = f.read()
+            # Pull values from current widgets if they exist
+            start_widget = self.get_widget_from_config("Appearance", "Gradient Start")
+            end_widget = self.get_widget_from_config("Appearance", "Gradient End")
+            if start_widget and end_widget:
+                self.config["Appearance"]["Gradient Start"] = self.get_widget_value(start_widget)
+                self.config["Appearance"]["Gradient End"]   = self.get_widget_value(end_widget)
+            self.apply_dynamic_client_stylesheet(base_css)
+        except Exception:
+            pass
 
     def save_config(self):
 
