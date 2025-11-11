@@ -1234,19 +1234,41 @@ class Client(QMainWindow):
         else:
             return None
 
+    def get_freerdp_bin_path(self):
+        """
+        Prefer repo xfreerdp if present (matches your working CLI test),
+        else fall back to bundled (frozen) binary, else PATH.
+        """
+        # 1) repo copy
+        repo_candidate = self.get_path('freerdp/macos/xfreerdp') if self.get_os() == 'macos' else None
+        if repo_candidate and os.path.exists(repo_candidate):
+            return repo_candidate
+
+        # 2) bundled in .app
+        if getattr(sys, 'frozen', False) and self.get_os() == 'macos':
+            bundled = os.path.join(os.path.dirname(sys.executable), 'xfreerdp')
+            if os.path.exists(bundled):
+                return bundled
+
+        # 3) PATH fallback
+        return shutil.which('xfreerdp') or 'xfreerdp'
+
     def gen_command(self):
 
+        # # Get the path to the bundled xfreerdp
+        # if self.get_os() == "macos":
+        #     # if frozen, sys.executable is .../Contents/MacOS/PyRDPConnect
+        #     if getattr(sys, 'frozen', False):
+        #         freerdp_path = os.path.join(os.path.dirname(sys.executable), 'xfreerdp')
+        #     else:
+        #         # fallback to repo copy, or system xfreerdp if you want
+        #         candidate = self.get_path('freerdp/macos/xfreerdp')
+        #         freerdp_path = candidate if candidate and os.path.exists(candidate) else shutil.which('xfreerdp') or 'xfreerdp'
+        # else:
+        #     freerdp_path = "xfreerdp"
+
         # Get the path to the bundled xfreerdp
-        if self.get_os() == "macos":
-            # if frozen, sys.executable is .../Contents/MacOS/PyRDPConnect
-            if getattr(sys, 'frozen', False):
-                freerdp_path = os.path.join(os.path.dirname(sys.executable), 'xfreerdp')
-            else:
-                # fallback to repo copy, or system xfreerdp if you want
-                candidate = self.get_path('freerdp/macos/xfreerdp')
-                freerdp_path = candidate if candidate and os.path.exists(candidate) else shutil.which('xfreerdp') or 'xfreerdp'
-        else:
-            freerdp_path = "xfreerdp"
+        freerdp_path = self.get_freerdp_bin_path()
 
         # Get FreeRDP version
         freerdp_version = self.get_freerdp_version(freerdp_path)
@@ -1257,8 +1279,16 @@ class Client(QMainWindow):
         # Construct the command using the bundled xfreerdp
         command = [freerdp_path]
 
-        # enable verboose logging for debugging
-        command.append("/log-level:TRACE")
+        # ---- Safe defaults to avoid activation stalls ----
+        command += [
+            "/cert:ignore",     # ignore certificate by default
+            "/sec:nla",         # explicit security (same as most servers expect)
+            "-multitransport",  # avoid RDPEUDP weirdness through NAT/middleboxes
+            "/timeout:30000",   # 30 second connection timeout
+            # "/gdi:sw",          # use software GDI rendering for compatibility
+            # "/log-level:TRACE", # verbose logging for debugging
+            "/log-level:DEBUG", # verbose logging for debugging
+        ]
 
         # Gather the configuration values, retrieving from widgets if necessary
         general_server_address = self.config["General"]["Server Address"] or self.server_edit.text()
@@ -1366,12 +1396,6 @@ class Client(QMainWindow):
             command.append("-themes")
         if experience_disable_wallpaper:
             command.append("-wallpaper")
-
-        # Ignore Certificate
-        if major_version and major_version < 3:
-            command.append("/cert-ignore")
-        else:
-            command.append("/cert:ignore")
 
         # Debugging: Print the final command
         print(f"Generated freerdp({freerdp_version}) command:")
