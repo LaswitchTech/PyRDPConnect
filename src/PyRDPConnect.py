@@ -1237,7 +1237,13 @@ class Client(QMainWindow):
 
         # Get the path to the bundled xfreerdp
         if self.get_os() == "macos":
-            freerdp_path = self.get_path('freerdp/'+self.get_os()+'/xfreerdp')
+            # if frozen, sys.executable is .../Contents/MacOS/PyRDPConnect
+            if getattr(sys, 'frozen', False):
+                freerdp_path = os.path.join(os.path.dirname(sys.executable), 'xfreerdp')
+            else:
+                # fallback to repo copy, or system xfreerdp if you want
+                candidate = self.get_path('freerdp/macos/xfreerdp')
+                freerdp_path = candidate if candidate and os.path.exists(candidate) else shutil.which('xfreerdp') or 'xfreerdp'
         else:
             freerdp_path = "xfreerdp"
 

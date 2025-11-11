@@ -134,21 +134,60 @@ pyinstaller --noconfirm $SPEC_FILE
 
 # Copy resources into the appropriate location
 if [ "$OS" == "macos" ]; then
-    APP_BUNDLE="dist/$NAME.app/Contents/Resources"
+    APP_ROOT="dist/$NAME.app/Contents"
+    APP_MACOS="$APP_ROOT/MacOS"
+    APP_RES="$APP_ROOT/Resources"
+    APP_FRAMEWORKS="$APP_ROOT/Frameworks"
 
-    log "Copying resources into the app bundle..."
-    mkdir -p "$APP_BUNDLE/styles"
-    mkdir -p "$APP_BUNDLE/img"
-    mkdir -p "$APP_BUNDLE/icons"
+    log "Creating app resource directories..."
+    mkdir -p "$APP_RES/styles" "$APP_RES/img" "$APP_RES/icons"
+    mkdir -p "$APP_MACOS" "$APP_FRAMEWORKS/freerdp"
 
-    cp -R src/styles/* "$APP_BUNDLE/styles/"
-    cp -R src/img/* "$APP_BUNDLE/img/"
-    cp -R src/icons/* "$APP_BUNDLE/icons/"
+    log "Copying UI resources..."
+    cp -R src/styles/* "$APP_RES/styles/"
+    cp -R src/img/*    "$APP_RES/img/"
+    cp -R src/icons/*  "$APP_RES/icons/"
 
-    log "Copying FreeRDP binary into the app bundle..."
-    mkdir -p "$APP_BUNDLE/freerdp/$OS"
-    cp "src/freerdp/$OS/xfreerdp" "$APP_BUNDLE/freerdp/$OS/"
+    log "Copying FreeRDP binary..."
+    cp "src/freerdp/macos/xfreerdp" "$APP_MACOS/"
+    chmod +x "$APP_MACOS/xfreerdp"
 
+    log "Copying FreeRDP dylibs..."
+    # make sure you’ve pre-copied Homebrew’s dylibs into your repo at src/freerdp/macos/lib
+    # e.g.: cp /opt/homebrew/Cellar/freerdp/*/lib/*.dylib src/freerdp/macos/lib/
+    cp src/freerdp/macos/lib/*.dylib "$APP_FRAMEWORKS/freerdp/"
+
+    FREERDP_BIN="$APP_MACOS/xfreerdp"
+    LIB_DIR="@executable_path/../Frameworks/freerdp"
+
+    log "Patching rpaths on xfreerdp..."
+    # allow dyld to search our Frameworks/freerdp folder
+    install_name_tool -add_rpath "$LIB_DIR" "$FREERDP_BIN" || true
+
+    log "Rewriting dylib IDs to @rpath/NAME..."
+    for dylib in "$APP_FRAMEWORKS"/freerdp/*.dylib; do
+        base="$(basename "$dylib")"
+        install_name_tool -id "@rpath/$base" "$dylib"
+    done
+
+    log "Rewriting internal dylib references (libs -> @rpath/NAME)..."
+    for dylib in "$APP_FRAMEWORKS"/freerdp/*.dylib; do
+        # find any absolute /opt/homebrew/Cellar/freerdp/... refs and replace
+        while IFS= read -r dep; do
+        base="$(basename "$dep")"
+        install_name_tool -change "$dep" "@rpath/$base" "$dylib"
+        done < <(otool -L "$dylib" | awk '/\/opt\/homebrew\/Cellar\/freerdp/ {print $1}')
+    done
+
+    log "Rewriting references inside xfreerdp..."
+    while IFS= read -r dep; do
+        base="$(basename "$dep")"
+        install_name_tool -change "$dep" "@rpath/$base" "$FREERDP_BIN"
+    done < <(otool -L "$FREERDP_BIN" | awk '/\/opt\/homebrew\/Cellar\/freerdp/ {print $1}')
+
+    # (Optional) Verify:
+    log "Verifying linkage:"
+    otool -L "$FREERDP_BIN" | sed 's/^/  /'
 else
     log "Linux build does not require copying resources to a separate directory, as it is a single-file executable."
 

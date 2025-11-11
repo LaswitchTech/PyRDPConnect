@@ -362,7 +362,7 @@
 		</data>
 		<key>Resources/base_library.zip</key>
 		<data>
-		nPgBmbkVobNOpRDxhrQI27N5E5Y=
+		oP4YOyqFmO5zgCT/wr466D1X9lI=
 		</data>
 		<key>Resources/icon.icns</key>
 		<data>
@@ -769,19 +769,19 @@
 		<dict>
 			<key>cdhash</key>
 			<data>
-			RAxjL579hiXGJzST1D/Rw3eIpFA=
+			499KuqQqoojFqZLiAKZIJHfWA4g=
 			</data>
 			<key>requirement</key>
-			<string>cdhash H"440c632f9efd8625c6273493d43fd1c37788a450"</string>
+			<string>cdhash H"e3df4abaa42aa288c5a992e200a6482477d60388"</string>
 		</dict>
 		<key>Frameworks/liblzma.5.dylib</key>
 		<dict>
 			<key>cdhash</key>
 			<data>
-			5H39Fgnj/ZkBv8T5jrX5C37Q7+4=
+			u23zasvuId+vcqcHPbK47R3kEok=
 			</data>
 			<key>requirement</key>
-			<string>cdhash H"e47dfd1609e3fd9901bfc4f98eb5f90b7ed0efee"</string>
+			<string>cdhash H"bb6df36acbee21dfaf72a7073db2b8ed1de41289"</string>
 		</dict>
 		<key>Frameworks/libmpdec.4.dylib</key>
 		<dict>
@@ -796,10 +796,10 @@
 		<dict>
 			<key>cdhash</key>
 			<data>
-			K3ELrhlCERuplvJVa7LerKPa+YU=
+			btIgKtyB1/Wpa8Hs2nIbGK7uOtA=
 			</data>
 			<key>requirement</key>
-			<string>cdhash H"2b710bae1942111ba996f2556bb2deaca3daf985"</string>
+			<string>cdhash H"6ed2202adc81d7f5a96bc1ecda721b18aeee3ad0"</string>
 		</dict>
 		<key>Frameworks/python3.13</key>
 		<dict>
@@ -1920,7 +1920,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			WDxbwANru8crztYnM4q9Hga0Vy43OISjRamVQbtLQJQ=
+			TIUSaoVtzwMQoCxLT1HAEyhjPIdyDNkE+GCzHZ8kZg8=
 			</data>
 		</dict>
 		<key>Resources/icon.icns</key>
