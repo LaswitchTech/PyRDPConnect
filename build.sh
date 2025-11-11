@@ -191,81 +191,138 @@ if [ "$OS" == "macos" ]; then
 
     # Discover Homebrew prefix (Apple Silicon=/opt/homebrew; Intel=/usr/local)
     BREW_PREFIX="$(brew --prefix 2>/dev/null || echo /opt/homebrew)"
+    X11_VENDOR_DIR="src/freerdp/macos/x11"
 
     # Direct X11 deps that xfreerdp links against (seed set)
     REQUIRED_X11=(
-      "$BREW_PREFIX/opt/libx11/lib/libX11.6.dylib"
-      "$BREW_PREFIX/opt/libxext/lib/libXext.6.dylib"
-      "$BREW_PREFIX/opt/libxinerama/lib/libXinerama.1.dylib"
-      "$BREW_PREFIX/opt/libxcursor/lib/libXcursor.1.dylib"
-      "$BREW_PREFIX/opt/libxv/lib/libXv.1.dylib"
-      "$BREW_PREFIX/opt/libxi/lib/libXi.6.dylib"
-      "$BREW_PREFIX/opt/libxrender/lib/libXrender.1.dylib"
-      "$BREW_PREFIX/opt/libxrandr/lib/libXrandr.2.dylib"
-      "$BREW_PREFIX/opt/libxfixes/lib/libXfixes.3.dylib"
+      "libX11.6.dylib"
+      "libXext.6.dylib"
+      "libXinerama.1.dylib"
+      "libXcursor.1.dylib"
+      "libXv.1.dylib"
+      "libXi.6.dylib"
+      "libXrender.1.dylib"
+      "libXrandr.2.dylib"
+      "libXfixes.3.dylib"
+      "libxcb.1.dylib"
+      "libXau.6.dylib"
+      "libXdmcp.6.dylib"
     )
+
+    # Map a bare name to an actual source path:
+    resolve_x11_src() {
+        local name="$1"
+        # 1) vendored copy?
+        if [ -f "$X11_VENDOR_DIR/$name" ]; then
+            echo "$X11_VENDOR_DIR/$name"
+            return 0
+        fi
+        # 2) Homebrew "opt" locations (typical)
+        case "$name" in
+            libX11.6.dylib)      echo "$BREW_PREFIX/opt/libx11/lib/$name"; return 0;;
+            libXext.6.dylib)     echo "$BREW_PREFIX/opt/libxext/lib/$name"; return 0;;
+            libXinerama.1.dylib) echo "$BREW_PREFIX/opt/libxinerama/lib/$name"; return 0;;
+            libXcursor.1.dylib)  echo "$BREW_PREFIX/opt/libxcursor/lib/$name"; return 0;;
+            libXv.1.dylib)       echo "$BREW_PREFIX/opt/libxv/lib/$name"; return 0;;
+            libXi.6.dylib)       echo "$BREW_PREFIX/opt/libxi/lib/$name"; return 0;;
+            libXrender.1.dylib)  echo "$BREW_PREFIX/opt/libxrender/lib/$name"; return 0;;
+            libXrandr.2.dylib)   echo "$BREW_PREFIX/opt/libxrandr/lib/$name"; return 0;;
+            libXfixes.3.dylib)   echo "$BREW_PREFIX/opt/libxfixes/lib/$name"; return 0;;
+            libxcb.1.dylib)      echo "$BREW_PREFIX/opt/libxcb/lib/$name"; return 0;;
+            libXau.6.dylib)      echo "$BREW_PREFIX/opt/libxau/lib/$name"; return 0;;
+            libXdmcp.6.dylib)    echo "$BREW_PREFIX/opt/libxdmcp/lib/$name"; return 0;;
+        esac
+        echo ""  # unknown
+    }
 
     # Helper to change a reference if present
     chg_ref() {
-      local from="$1" to="$2" file="$3"
-      if otool -L "$file" | awk '{print $1}' | grep -Fq "$from"; then
-        install_name_tool -change "$from" "$to" "$file"
-      fi
+        local from="$1" to="$2" file="$3"
+        if otool -L "$file" | awk '{print $1}' | grep -Fq "$from"; then
+            install_name_tool -change "$from" "$to" "$file"
+        fi
     }
 
     # Recursively copy any Homebrew-provided dep and rewrite to @rpath/<name>
     copy_and_patch_lib() {
-      local src="$1"
-      local base="$(basename "$src")"
-      local dst="$X11_DIR/$base"
+        local src="$1"
+        local base="$(basename "$src")"
+        local dst="$X11_DIR/$base"
 
-      # Skip if already present (acts like a visited-set)
-      if [ -f "$dst" ]; then
-        return 0
-      fi
-
-      if [ ! -f "$src" ]; then
-        log "WARN: missing expected lib: $src"
-        return 0
-      fi
-
-      cp -p "$src" "$dst"
-      install_name_tool -id "@rpath/$base" "$dst"
-
-      # Walk deps; copy any from Homebrew (opt|Cellar), then rewrite to @rpath
-      # Note: first line of otool -L is the file itself; skip it.
-      otool -L "$dst" | awk 'NR>1{print $1}' | while read -r dep; do
-        # skip blank lines
-        [ -z "$dep" ] && continue
-        # ignore self and system libs
-        case "$dep" in
-          "$src") continue ;;
-          /usr/lib/*) continue ;;
-          /System/*) continue ;;
-        esac
-        if echo "$dep" | grep -Eq "^$BREW_PREFIX/(opt|Cellar)/"; then
-          local depbase="$(basename "$dep")"
-          copy_and_patch_lib "$dep"
-          chg_ref "$dep" "@rpath/$depbase" "$dst"
+        # Skip if already present (acts like a visited-set)
+        if [ -f "$dst" ]; then
+            return 0
         fi
-      done
+
+        if [ ! -f "$src" ]; then
+            log "WARN: missing expected lib: $src"
+            return 0
+        fi
+
+        cp -p "$src" "$dst"
+        chmod u+w "$dst"
+        install_name_tool -id "@rpath/$base" "$dst"
+
+        # Walk deps; copy any from Homebrew (opt|Cellar), then rewrite to @rpath
+        # Note: first line of otool -L is the file itself; skip it.
+        otool -L "$dst" | awk 'NR>1{print $1}' | while read -r dep; do
+            # skip blank lines
+            [ -z "$dep" ] && continue
+            # ignore self and system libs
+            case "$dep" in
+                "$src") continue ;;
+                /usr/lib/*) continue ;;
+                /System/*) continue ;;
+            esac
+            local depbase="$(basename "$dep")"
+            # Prefer vendored copy if present, else accept Homebrew path we discovered
+            local dep_src="$dep"
+            if [ -f "$X11_VENDOR_DIR/$depbase" ]; then
+                dep_src="$X11_VENDOR_DIR/$depbase"
+            fi
+            copy_and_patch_lib "$dep_src"
+            chg_ref "$dep" "@rpath/$depbase" "$dst"
+        done
     }
 
     log "Bundling X11 dylibs (with recursive Homebrew deps)..."
-    for lib in "${REQUIRED_X11[@]}"; do
-      copy_and_patch_lib "$lib"
+    for name in "${REQUIRED_X11[@]}"; do
+        src_path="$(resolve_x11_src "$name")"
+        if [ -n "$src_path" ]; then
+            copy_and_patch_lib "$src_path"
+        else
+            log "WARN: Unresolved X11 lib name: $name"
+        fi
     done
 
-    # Ensure xfreerdp can find both freerdp libs and x11 libs
+    # Ensure files are writable; many shipped as 444
+    find "$APP_FRAMEWORKS" -type f -name "*.dylib" -exec chmod u+w {} +
+    chmod u+w "$APP_MACOS/xfreerdp"
+
+    # Make xfreerdp find both freerdp and x11
     install_name_tool -add_rpath "@executable_path/../Frameworks/x11" "$FREERDP_BIN" 2>/dev/null || true
+
+    # Repoint any remaining Homebrew X11 refs in xfreerdp -> @rpath/<name>
+    otool -L "$FREERDP_BIN" | awk 'NR>1{print $1}' | while read -r dep; do
+        [ -z "$dep" ] && continue
+        case "$dep" in
+            "$BREW_PREFIX"/*/lib/*.dylib|"$BREW_PREFIX"/opt/*/lib/*.dylib)
+            base="$(basename "$dep")"
+            chg_ref "$dep" "@rpath/$base" "$FREERDP_BIN"
+            ;;
+        esac
+    done
+
+    # Clear quarantine early (if present), do this before codesign to avoid EPERM
+    xattr -dr com.apple.quarantine "dist/$NAME.app" || true
 
     # Rewrite any remaining X11 references in xfreerdp from Homebrew paths -> @rpath/<name>
     otool -L "$FREERDP_BIN" | awk 'NR>1{print $1}' | while read -r dep; do
-      [ -z "$dep" ] && continue
-      if echo "$dep" | grep -Eq "^$BREW_PREFIX/(opt|Cellar)/"; then
-        base="$(basename "$dep")"
-        chg_ref "$dep" "@rpath/$base" "$FREERDP_BIN"
-      fi
+        [ -z "$dep" ] && continue
+        if echo "$dep" | grep -Eq "^$BREW_PREFIX/(opt|Cellar)/"; then
+            base="$(basename "$dep")"
+            chg_ref "$dep" "@rpath/$base" "$FREERDP_BIN"
+        fi
     done
 
     # Quick verification (optional)
@@ -278,7 +335,6 @@ if [ "$OS" == "macos" ]; then
     find "$APP_FRAMEWORKS" -type f -name "*.dylib" -exec codesign --force --timestamp=none -s - {} \;
     codesign --force --timestamp=none -s - "$FREERDP_BIN"
     codesign --force --deep --timestamp=none -s - "dist/$NAME.app"
-    xattr -dr com.apple.quarantine "dist/$NAME.app" || true
     # ---- END: Bundle X11 stack + add rpath + ad-hoc sign ----
 else
     log "Linux build does not require copying resources to a separate directory, as it is a single-file executable."
