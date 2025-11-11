@@ -31,25 +31,58 @@ if [ "$OS" == "unsupported" ]; then
     exit 1
 fi
 
-# Check if the Python virtual environment is already set up
-if [ ! -f "env/bin/python" ] || [ ! -f "env/bin/python3" ] || [ ! -f "env/bin/pip" ]; then
-    log "Python virtual environment not found. Creating a new one..."
-    python3.13 -m venv env --system-site-packages
-else
-    log "Python virtual environment found."
+# --- Require python3.13 on PATH ---
+PYTHON_BIN="$(command -v python3.13 || true)"
+if [ -z "$PYTHON_BIN" ]; then
+  log "python3.13 not found. On macOS, run: brew install python@3.13"
+  exit 1
 fi
 
-# Activate the environment
+# --- (Re)create venv if missing or wrong version ---
+NEED_RECREATE=0
+if [ ! -x "env/bin/python" ]; then
+  NEED_RECREATE=1
+else
+  VENV_VER="$(env/bin/python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' || echo unknown)"
+  if [ "$VENV_VER" != "3.13" ]; then
+    NEED_RECREATE=1
+  fi
+fi
+
+if [ "$NEED_RECREATE" -eq 1 ]; then
+  log "Creating fresh Python 3.13 virtual environment..."
+  rm -rf env
+  "$PYTHON_BIN" -m venv env
+fi
+
+# --- Activate venv ---
+# shellcheck disable=SC1091
 source env/bin/activate
+
+# --- Double-check version (hard fail if not 3.13) ---
+ACTIVE_VER="$(python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+if [ "$ACTIVE_VER" != "3.13" ]; then
+  log "Active Python is $ACTIVE_VER, expected 3.13. Aborting."
+  exit 1
+fi
+log "Using Python $(python -V)"
 
 # Ensure that pip is updated
 log "Updating pip..."
-python -m pip install --upgrade pip
+python -m pip install --upgrade pip wheel
 
-# Ensure the necessary packages are installed
-log "Installing required packages..."
-pip install pyinstaller sip importlib PySide6-Addons
-pip install pyqt5 --config-settings --confirm-license= --verbose
+log "Installing build dependencies..."
+# PyInstaller 6.9+ supports 3.13 well; lock to <7 to avoid future surprizes.
+# PyQt5 5.15.x is stable for Qt5 on macOS/Linux; lock <6.
+python -m pip install "pyinstaller>=6.9,<7" "sip>=6.9,<7" "PyQt5>=5.15,<6"
+
+# Optional tools you had; keeping them only if you need them:
+python -m pip install importlib PySide6-Addons
+
+# # Ensure the necessary packages are installed
+# log "Installing required packages..."
+# pip install pyinstaller sip importlib PySide6-Addons
+# pip install pyqt5 --config-settings --confirm-license= --verbose
 
 # Check if the .spec file exists
 SPEC_FILE="$NAME.spec"
