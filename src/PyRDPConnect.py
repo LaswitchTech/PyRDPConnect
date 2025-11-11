@@ -68,7 +68,7 @@ class ColorButton(QPushButton):
     """
     colorChanged = pyqtSignal(QColor)
 
-    def __init__(self, initial="#265162", parent=None):
+    def __init__(self, initial="#ea7f30", parent=None):
         super().__init__(parent)
         self._color = QColor(initial)
         self.setFixedSize(48, 24)
@@ -197,8 +197,8 @@ class Client(QMainWindow):
                 "Hide Restart": False,
                 "Hide Shutdown": False,
                 "Fullscreen": False,
-                "Gradient Start": "#265162",
-                "Gradient End":   "#002136"
+                "Gradient Start": "#ea7f30",
+                "Gradient End":   "#393939"
             },
             "Administration": {
                 "Password": ""
@@ -292,8 +292,8 @@ class Client(QMainWindow):
         self.gen_logo_button(logo_file)
 
         # Color pickers for gradient
-        gradient_start_btn = ColorButton(self.config["Appearance"]["Gradient Start"] or "#265162")
-        gradient_end_btn   = ColorButton(self.config["Appearance"]["Gradient End"] or "#002136")
+        gradient_start_btn = ColorButton(self.config["Appearance"]["Gradient Start"] or "#ea7f30")
+        gradient_end_btn   = ColorButton(self.config["Appearance"]["Gradient End"] or "#393939")
 
         # If changed, treat as unsaved & live-preview the gradient (nice UX)
         gradient_start_btn.colorChanged.connect(lambda _: self.on_configuration_changed())
@@ -410,8 +410,8 @@ class Client(QMainWindow):
         self.setWindowIcon(QIcon(self.icon_path))
 
         # Apply gradient background based on configuration
-        start = self.config["Appearance"].get("Gradient Start", "#265162")
-        end   = self.config["Appearance"].get("Gradient End", "#002136")
+        start = self.config["Appearance"].get("Gradient Start", "#ea7f30")
+        end   = self.config["Appearance"].get("Gradient End", "#393939")
         override = (
             "\n"
             "#clientWindow {\n"
