@@ -38,7 +38,8 @@ class StepIndicator(QWidget):
         super().__init__(parent)
         self._state = 'idle'
         self.dot = QLabel()
-        self.dot.setFixedSize(14, 14)
+        self.dot.setObjectName("statusDot")
+        self.dot.setFixedSize(16, 16)
         self.label = QLabel(text)
 
         lay = QVBoxLayout(self)

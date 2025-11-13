@@ -89,3 +89,14 @@ QPushButton:pressed, QTabBar::tab:pressed, QTabBar::tab:selected {
     background-color: #1fa869;
     border-color: #1fa869;
 }
+
+/* Don't let the global QLabel rule shrink the status dot */
+#diagnosticsWindow QLabel#statusDot {
+    padding: 0;
+    margin: 0;
+    min-width: 16px;
+    min-height: 16px;
+    max-width: 16px;
+    max-height: 16px;
+    border-radius: 8px;
+}
