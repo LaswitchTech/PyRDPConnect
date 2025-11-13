@@ -27,126 +27,290 @@ class Severity(enum.Enum):
     WARNING = 2
     ERROR = 3
 
-class DiagnosticsThread(QThread):
-    log = pyqtSignal(str)         # incremental log lines
-    step = pyqtSignal(str, bool)  # ("Step name", passed True/False)
-    done = pyqtSignal(bool)       # overall status
-
-    def __init__(self, parent=None):
+class StepIndicator(QWidget):
+    """
+    A compact status lamp + label. States: 'idle', 'running', 'ok', 'fail'
+    Uses stylesheet-only colors so it renders on thin clients without emoji/fonts.
+    """
+    def __init__(self, text: str, parent=None):
         super().__init__(parent)
+        self._state = 'idle'
+        self.dot = QLabel()
+        self.dot.setFixedSize(14, 14)
+        self.label = QLabel(text)
 
-    # --- helpers ---
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(4, 4, 4, 4)
+        lay.setSpacing(6)
+        dot_wrap = QWidget()
+        dot_wrap.setFixedHeight(20)
+        dot_lay = QHBoxLayout(dot_wrap)
+        dot_lay.setContentsMargins(0,0,0,0)
+        dot_lay.addStretch(1)
+        dot_lay.addWidget(self.dot, 0, Qt.AlignCenter)
+        dot_lay.addStretch(1)
+
+        lay.addWidget(dot_wrap)
+        self.label.setAlignment(Qt.AlignCenter)
+        lay.addWidget(self.label)
+        self._apply_style()
+
+    def set_state(self, state: str):
+        self._state = state
+        self._apply_style()
+
+    def _apply_style(self):
+        colors = {
+            'idle':    '#A0A4A8',   # grey
+            'running': '#F5C542',   # amber
+            'ok':      '#2FB344',   # green
+            'fail':    '#E03131',   # red
+        }
+        c = colors.get(self._state, '#A0A4A8')
+        self.dot.setStyleSheet(f"background:{c}; border-radius:7px; border:1px solid rgba(0,0,0,.25);")
+
+class DiagnosticsWindow(QDialog):
+    def __init__(self, parent: "Client"):
+        super().__init__(parent)
+        self.client = parent
+        self.setWindowTitle("Diagnostics")
+        self.setObjectName("diagnosticsWindow")
+        self.setWindowFlags(Qt.Dialog | Qt.WindowTitleHint | Qt.CustomizeWindowHint | Qt.WindowCloseButtonHint)
+        self.setMinimumSize(700, 420)
+
+        # --- top: horizontal stepper
+        self.dev_ind   = StepIndicator("Device")
+        self.net_ind   = StepIndicator("Network")
+        self.int_ind   = StepIndicator("Internet")
+        self.svc_ind   = StepIndicator("Service")
+
+        stepper = QHBoxLayout()
+        stepper.setSpacing(24); stepper.setContentsMargins(16, 16, 16, 8)
+        for w in (self.dev_ind, self.net_ind, self.int_ind, self.svc_ind):
+            stepper.addWidget(w, 1)
+
+        # --- right: “Your network status”
+        self.status_panel = QLabel()
+        self.status_panel.setTextFormat(Qt.PlainText)
+        self.status_panel.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+        self.status_panel.setMinimumWidth(260)
+        self.status_panel.setStyleSheet("QLabel { background: rgba(255,255,255,.06); padding:12px; border:1px solid rgba(0,0,0,.15); border-radius:8px; }")
+
+        # --- left: log
+        self.log = QTextEdit(); self.log.setReadOnly(True)
+
+        mid = QHBoxLayout()
+        mid.setContentsMargins(16, 0, 16, 0)
+        mid.setSpacing(16)
+        mid.addWidget(self.log, 2)
+        mid.addWidget(self.status_panel, 1)
+
+        # --- bottom: buttons
+        self.run_btn   = QPushButton("Run Diagnostics")
+        self.close_btn = QPushButton("Close")
+        self.run_btn.clicked.connect(self.start)
+        self.close_btn.clicked.connect(self.close)
+
+        btns = QHBoxLayout()
+        btns.setContentsMargins(16, 8, 16, 16)
+        btns.addStretch(1); btns.addWidget(self.run_btn); btns.addWidget(self.close_btn)
+
+        # --- root
+        root = QVBoxLayout(self)
+        root.addLayout(stepper)
+        root.addLayout(mid)
+        root.addLayout(btns)
+
+        self._update_status_panel("Unknown", "Unknown", "Unknown")
+
+        # thread handle
+        self._thr = None
+
+    def _update_status_panel(self, network, internet, service):
+        lines = [
+            "Your network status:",
+            f"Network:  {network}",
+            f"Internet: {internet}",
+            f"Service:  {service}",
+        ]
+        self.status_panel.setText("\n".join(lines))
+
+    def _set_all(self, state='idle'):
+        self.dev_ind.set_state(state)
+        self.net_ind.set_state(state)
+        self.int_ind.set_state(state)
+        self.svc_ind.set_state(state)
+
+    def start(self):
+        self.log.clear()
+        self._set_all('idle')
+        self.run_btn.setEnabled(False)
+
+        # assemble target/port from current config
+        cfg = self.client.config
+        host = (cfg.get("General", {}).get("Server Address") or "").strip()
+        port = int(cfg.get("General", {}).get("Port") or 3389)
+
+        self._thr = DiagnosticsThread(host=host, port=port, parent=self)
+        self._thr.log.connect(self._on_log)
+        self._thr.phase.connect(self._on_phase)   # phase, state
+        self._thr.summary.connect(self._on_summary)  # network, internet, service
+        self._thr.finished.connect(lambda: self.run_btn.setEnabled(True))
+        self._thr.start()
+
+    def _on_log(self, s: str):
+        self.log.append(s)
+
+    def _on_phase(self, phase: str, state: str):
+        mapping = {
+            'device': self.dev_ind,
+            'network': self.net_ind,
+            'internet': self.int_ind,
+            'service': self.svc_ind,
+        }
+        if phase in mapping:
+            mapping[phase].set_state(state)
+
+    def _on_summary(self, network: bool, internet: bool, service: bool):
+        def t(b): return "Connected" if b else "Not connected"
+        self._update_status_panel(t(network), t(internet), t(service))
+
+class DiagnosticsThread(QThread):
+    log     = pyqtSignal(str)
+    phase   = pyqtSignal(str, str)          # ('device'|'network'|'internet'|'service', 'idle'|'running'|'ok'|'fail')
+    summary = pyqtSignal(bool, bool, bool)  # network_ok, internet_ok, service_ok
+
+    def __init__(self, host: str, port: int, parent=None):
+        super().__init__(parent)
+        self.host = host
+        self.port = port
+
+    # ---------- helpers ----------
     def _run(self, cmd):
         try:
             p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                text=True, timeout=6)
+                               text=True, timeout=6)
             return p.returncode, (p.stdout or "").strip()
         except Exception as e:
             return 1, f"{type(e).__name__}: {e}"
 
     def _ping(self, host, osname):
-        # macOS: -c 1 -t 1 ; Linux: -c 1 -W 1
         args = ["ping", "-c", "1"] + (["-t", "1"] if osname == "Darwin" else ["-W", "1"])
+        # try PATH ping if absolute not found
         return self._run(args + [host])[0] == 0
 
     def _default_gateway(self, osname):
-        if osname == "Darwin":
-            rc, out = self._run(["/sbin/route", "-n", "get", "default"])
-            if rc == 0:
-                m = re.search(r"gateway:\s+([0-9.]+)", out)
-                if m: return m.group(1)
-        else:
-            rc, out = self._run(["/sbin/ip", "route"])
+        # macOS
+        rc, out = self._run(["/sbin/route", "-n", "get", "default"]) if osname == "Darwin" else (1, "")
+        if rc == 0:
+            m = re.search(r"gateway:\s+([0-9.]+)", out);
+            if m: return m.group(1)
+        # Linux fallbacks: /sbin/ip, ip, route -n
+        for cmd in (["/sbin/ip","route"], ["ip","route"], ["route","-n"]):
+            rc, out = self._run(cmd)
             if rc == 0:
                 for line in out.splitlines():
                     if line.startswith("default via "):
                         parts = line.split()
-                        if len(parts) >= 3:
-                            return parts[2]
+                        if len(parts) >= 3: return parts[2]
+                    if line.startswith("0.0.0.0") and len(line.split()) >= 3:  # busybox route -n
+                        return line.split()[1]
         return None
 
     def _egress_ip(self):
-        # robust, no external deps: synthetic UDP connect to 8.8.8.8 to learn source IP
         import socket
         try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.settimeout(2)
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.settimeout(2)
             s.connect(("8.8.8.8", 80))
-            ip = s.getsockname()[0]
-            s.close()
+            ip = s.getsockname()[0]; s.close()
             return ip
         except Exception:
             return None
 
-    def _is_apipa(self, ip):
-        # APIPA = 169.254.0.0/16 (note: not 169.0.0.0/8)
-        return isinstance(ip, str) and ip.startswith("169.254.")
+    def _is_apipa(self, ip): return isinstance(ip, str) and ip.startswith("169.254.")
 
     def _dns_lookup(self, host):
         import socket
         try:
-            addr = socket.gethostbyname(host)
-            return True, addr
+            return True, socket.gethostbyname(host)
         except Exception as e:
             return False, str(e)
 
-    # --- main run ---
+    def _tcp_connect(self, host, port, timeout=3.0):
+        import socket
+        try:
+            ai = socket.getaddrinfo(host, port, socket.AF_UNSPEC, socket.SOCK_STREAM)
+            for fam, st, proto, canon, sa in ai:
+                s = socket.socket(fam, st, proto)
+                s.settimeout(timeout)
+                try:
+                    s.connect(sa)
+                    s.close()
+                    return True
+                except Exception:
+                    s.close()
+            return False
+        except Exception:
+            return False
+
+    # ---------- main ----------
     def run(self):
-        ok_all = True
         osname = platform.system()
 
-        # 1) Local IP
-        self.log.emit("Step 1/4: Detecting local egress IP…")
+        # DEVICE
+        self.phase.emit('device', 'running')
         ip = self._egress_ip()
         if not ip:
-            self.step.emit("Local IP detection", False)
-            self.log.emit("❌ Could not determine local IP used for egress.")
-            self.done.emit(False); return
+            self.log.emit("Device: could not determine local egress IP.")
+            self.phase.emit('device', 'fail'); self.summary.emit(False, False, False); return
         if self._is_apipa(ip):
-            self.step.emit("Local IP detection", False)
-            self.log.emit(f"❌ Local IP is APIPA ({ip}). DHCP likely failed.")
-            self.done.emit(False); return
-        self.step.emit("Local IP detection", True)
-        self.log.emit(f"✅ Local IP: {ip}")
+            self.log.emit(f"Device: APIPA address {ip} (DHCP failure).")
+            self.phase.emit('device', 'fail'); self.summary.emit(False, False, False); return
+        self.log.emit(f"Device: local IP is {ip}")
+        self.phase.emit('device', 'ok')
 
-        # 2) Default gateway ping
-        self.log.emit("Step 2/4: Finding and pinging default gateway…")
+        # NETWORK (gateway)
+        self.phase.emit('network', 'running')
         gw = self._default_gateway(osname)
         if not gw:
-            self.step.emit("Gateway discovery", False)
-            self.log.emit("❌ Could not find default gateway.")
-            self.done.emit(False); return
-        self.log.emit(f"Gateway: {gw}")
-        if self._ping(gw, osname):
-            self.step.emit("Gateway ping", True)
-            self.log.emit("✅ Gateway reachable")
-        else:
-            ok_all = False
-            self.step.emit("Gateway ping", False)
-            self.log.emit("❌ Gateway not reachable")
+            self.log.emit("Network: default gateway not found.")
+            self.phase.emit('network', 'fail'); self.summary.emit(False, False, False); return
+        self.log.emit(f"Network: default gateway {gw}")
+        gw_ok = self._ping(gw, osname)
+        self.log.emit("Network: gateway reachable." if gw_ok else "Network: gateway not reachable.")
+        self.phase.emit('network', 'ok' if gw_ok else 'fail')
+        network_ok = gw_ok
 
-        # 3) Public ping
-        self.log.emit("Step 3/4: Pinging 8.8.8.8…")
-        if self._ping("8.8.8.8", osname):
-            self.step.emit("Public ping (8.8.8.8)", True)
-            self.log.emit("✅ Public internet reachable")
-        else:
-            ok_all = False
-            self.step.emit("Public ping (8.8.8.8)", False)
-            self.log.emit("❌ Could not reach 8.8.8.8")
-
-        # 4) DNS lookup
-        self.log.emit("Step 4/4: Resolving google.com…")
+        # INTERNET (public ping + DNS)
+        self.phase.emit('internet', 'running')
+        pub_ok = self._ping("8.8.8.8", osname)
+        self.log.emit("Internet: 8.8.8.8 reachable." if pub_ok else "Internet: cannot reach 8.8.8.8.")
         dns_ok, detail = self._dns_lookup("google.com")
-        if dns_ok:
-            self.step.emit("DNS lookup (google.com)", True)
-            self.log.emit(f"✅ DNS OK → {detail}")
-        else:
-            ok_all = False
-            self.step.emit("DNS lookup (google.com)", False)
-            self.log.emit(f"❌ DNS failed: {detail}")
+        self.log.emit(f"Internet: DNS {'OK → '+detail if dns_ok else 'failed: '+detail}")
+        internet_ok = pub_ok and dns_ok
+        self.phase.emit('internet', 'ok' if internet_ok else 'fail')
 
-        self.done.emit(ok_all)
+        # SERVICE (resolve + ping + TCP port)
+        self.phase.emit('service', 'running')
+        svc_ok = False
+        if not self.host:
+            self.log.emit("Service: no host configured.")
+        else:
+            res_ok, addr = self._dns_lookup(self.host) if not re.match(r'^\d+\.\d+\.\d+\.\d+$', self.host) else (True, self.host)
+            if not res_ok:
+                self.log.emit(f"Service: cannot resolve {self.host}: {addr}")
+            else:
+                self.log.emit(f"Service: target {self.host} -> {addr}:{self.port}")
+                p_ok = self._ping(addr, osname)
+                self.log.emit("Service: ping reachable." if p_ok else "Service: ping failed.")
+                t_ok = self._tcp_connect(addr, self.port, timeout=3.0)
+                self.log.emit("Service: TCP port open." if t_ok else "Service: TCP connect failed.")
+                svc_ok = p_ok and t_ok
+
+        self.phase.emit('service', 'ok' if svc_ok else 'fail')
+
+        # Summary back to window
+        self.summary.emit(network_ok, internet_ok, svc_ok)
 
 class FreerdpEvent:
     def __init__(self, severity: Severity, code: str, message: str, hint: str = ""):
@@ -463,6 +627,7 @@ class Client(QMainWindow):
                 "Logo Position": "top-center",
                 "Login Position": "center-center",
                 "Hide Exit": False,
+                "Hide Diagnostics": False,
                 "Hide Restart": False,
                 "Hide Shutdown": False,
                 "Fullscreen": False,
@@ -639,6 +804,7 @@ class Client(QMainWindow):
                 "Logo Position": logoPositionComboBox,
                 "Login Position": loginPositionComboBox,
                 "Hide Exit": QCheckBox(),
+                "Hide Diagnostics": QCheckBox(),
                 "Hide Restart": QCheckBox(),
                 "Hide Shutdown": QCheckBox(),
                 "Fullscreen": QCheckBox(),
@@ -847,6 +1013,14 @@ class Client(QMainWindow):
         self.config_button.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
         self.config_button.clicked.connect(self.launch_prompt)
         buttons_layout.addWidget(self.config_button)
+
+        if not self.config['Appearance']['Hide Diagnostics']:
+            self.diagnostics_button = QPushButton("", self)
+            self.diagnostics_button.setObjectName("DiagnosticsBTN")
+            self.set_svg_icon(self.diagnostics_button, self.get_path(os.path.join("icons/activity.svg")))
+            self.diagnostics_button.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+            self.diagnostics_button.clicked.connect(self.launch_diagnostics)
+            buttons_layout.addWidget(self.diagnostics_button)
 
         if not self.config['Appearance']['Hide Exit']:
             self.exit_button = QPushButton("", central_widget)
@@ -1260,23 +1434,6 @@ class Client(QMainWindow):
 
             self.configurations_tab_widget.addTab(tab, category)
 
-        # --- Diagnostics tab ---
-        diag_tab = QWidget()
-        diag_layout = QVBoxLayout(diag_tab)
-
-        # A simple summary/status line
-        diag_layout.addWidget(self.diag_status_label)
-
-        # Run button
-        self.diag_run_button.clicked.disconnect() if self.diag_run_button.receivers(self.diag_run_button.clicked) else None
-        self.diag_run_button.clicked.connect(self.start_diagnostics)
-        diag_layout.addWidget(self.diag_run_button)
-
-        # Log box
-        diag_layout.addWidget(self.diag_log)
-
-        self.configurations_tab_widget.addTab(diag_tab, "Diagnostics")
-
         # Save Button
         self.save_button = QPushButton("Save")
         self.save_button.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
@@ -1290,6 +1447,12 @@ class Client(QMainWindow):
 
         # show the dialog
         self.configurations_dialog.show()
+
+    def launch_diagnostics(self):
+        self.diag_window = DiagnosticsWindow(self)
+        self.diag_window.show()
+        # optionally auto-run:
+        self.diag_window.start()
 
     def on_configuration_changed(self):
 
@@ -1766,29 +1929,6 @@ class Client(QMainWindow):
 
         self.connection_dialog.reject()  # Close the dialog
         self.reset_ui()  # Reset the UI
-
-    def start_diagnostics(self):
-        # clear old
-        self.diag_log.clear()
-        self.diag_status_label.setText("Running…")
-        self.diag_run_button.setEnabled(False)
-
-        self._diag_thread = DiagnosticsThread(self)
-        self._diag_thread.log.connect(self._on_diag_log)
-        self._diag_thread.step.connect(self._on_diag_step)
-        self._diag_thread.done.connect(self._on_diag_done)
-        self._diag_thread.start()
-
-    def _on_diag_log(self, line: str):
-        self.diag_log.append(line)
-
-    def _on_diag_step(self, name: str, passed: bool):
-        prefix = "✅" if passed else "❌"
-        self.diag_log.append(f"{prefix} {name}")
-
-    def _on_diag_done(self, ok: bool):
-        self.diag_status_label.setText("All checks passed." if ok else "Some checks failed.")
-        self.diag_run_button.setEnabled(True)
 
 if __name__ == "__main__":
     app = QApplication([])
