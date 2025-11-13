@@ -7,9 +7,13 @@ QDialog, QMessageBox, QProgressDialog, QTabWidget, QTabWidget::pane {
 
 QTabWidget::pane {
     background-color: #414141;
+    border: 1px solid #76797C;
+    border-radius: 5px;
+    position: absolute;
+    top: -1px;
 }
 
-QLineEdit, QCheckBox, QTextEdit, QComboBox, QSpinBox, QPushButton {
+QLabel, QLineEdit, QCheckBox, QTextEdit, QComboBox, QSpinBox, QPushButton, QTabBar::tab {
     font-size: 14px;
     border: 1px solid #76797C;
     border-radius: 5px;
@@ -17,23 +21,42 @@ QLineEdit, QCheckBox, QTextEdit, QComboBox, QSpinBox, QPushButton {
     margin: 5px 0px;
 }
 
-QLineEdit, QCheckBox, QTextEdit, QComboBox, QSpinBox {
+QLineEdit, QTextEdit, QComboBox, QSpinBox {
     background-color: #212121;
     color: #FFFFFF;
     width: 300px;
 }
 
-QPushButton {
+QLabel, QCheckBox {
+    color: #FFFFFF;
+    border: none;
+}
+
+QPushButton, QTabBar::tab {
     background-color: #414344;
     color: #FFFFFF;
 }
 
-QPushButton:hover {
+QTabBar::tab {
+    border-radius: 0px;
+}
+
+QTabBar::tab:first {
+    border-top-left-radius: 5px;
+    border-bottom-left-radius: 5px;
+}
+
+QTabBar::tab:last {
+    border-top-right-radius: 5px;
+    border-bottom-right-radius: 5px;
+}
+
+QPushButton:hover, QTabBar::tab:hover {
     background-color: #5f6263;
     border-color: #5f6263;
 }
 
-QPushButton:pressed {
+QPushButton:pressed, QTabBar::tab:pressed, QTabBar::tab:selected {
     background-color: #0d6efd;
     border-color: #0d6efd;
 }
@@ -50,59 +73,6 @@ QPushButton:pressed {
 #configurationsWidget {
     margin: 0;
     padding: 0;
-}
-
-/* Adjust the QTabWidget's internal layout */
-#configurationsWindow QTabWidget::pane {
-    /* border: 0; */
-    position: absolute;
-    top: -1px;
-}
-
-/* Remove the border and margin from QTabBar */
-#configurationsWindow QTabBar::tab {
-    border: 1px solid #76797C;
-    margin: 0;
-    padding: 5px;
-    border-radius: 0;
-    border-right: 0;
-    margin-bottom:10px;
-}
-
-/* Style the first tab from QTabBar */
-#configurationsWindow QTabBar::tab:first {
-    border-top-left-radius: 5px;
-    border-bottom-left-radius: 5px;
-}
-
-/* Style the last tab from QTabBar */
-#configurationsWindow QTabBar::tab:last {
-    border-top-right-radius: 5px;
-    border-bottom-right-radius: 5px;
-    border-right: 1px solid #76797C;
-}
-
-/* Style the selected tab */
-#configurationsWindow QTabBar::tab:selected {
-    background-color: #0d6efd;
-    border-color: #0d6efd;
-}
-
-/* Style the selected tab while hovering */
-#configurationsWindow QTabBar::tab:selected:hover {
-    background-color: #3485fd;
-    border-color: #3485fd;
-}
-
-/* Style the hovering tabs */
-#configurationsWindow QTabBar::tab:hover {
-    background-color: rgba(255, 255, 255, 50);
-    border-color: rgba(255, 255, 255, 50);
-}
-
-#configurationsWindow QTabBar::tab:pressed {
-    background-color: #0d6efd;
-    border-color: #0d6efd;
 }
 
 /* Style for the individual tabs */
