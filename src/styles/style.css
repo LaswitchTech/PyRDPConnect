@@ -1,4 +1,4 @@
-QDialog {
+QDialog, QMessageBox, QProgressDialog, QTabWidget, QTabWidget::pane {
     background-color: #393939;
     color: #FFFFFF;
     font-family: Arial, sans-serif;
@@ -7,9 +7,6 @@ QDialog {
 
 QTabWidget::pane {
     background-color: #414141;
-    color: #FFFFFF;
-    font-family: Arial, sans-serif;
-    font-size: 14px;
 }
 
 QLineEdit, QCheckBox, QTextEdit, QComboBox, QSpinBox, QPushButton {
