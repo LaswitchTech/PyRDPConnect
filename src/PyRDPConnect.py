@@ -10,7 +10,7 @@ from PyQt5.QtGui import (
     QIcon, QPixmap, QPainter, QPalette, QColor, QValidator, QTextCharFormat
 )
 from PyQt5.QtSvg import QSvgRenderer
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QRegExp
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QRegExp, QSize
 import subprocess
 import platform
 import shutil
@@ -1292,34 +1292,26 @@ class Client(QMainWindow):
             central_widget.deleteLater()
 
     def restart_system(self):
-        # Confirm with the user
-        reply = QMessageBox.question(self, 'System Restart',
-                                     'Are you sure you want to restart the system?',
-                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-
-        if reply == QMessageBox.Yes:
+        choice = self._msgbox("System Restart", "Are you sure you want to restart the system?", icon_key="question", buttons=("Yes","No"), default="No")
+        if choice == "Yes":
             try:
                 if sys.platform == "win32":
                     subprocess.run(["shutdown", "/r", "/t", "0"], check=True)
                 else:
                     subprocess.run(["sudo", "shutdown", "-r", "now"], check=True)
             except subprocess.CalledProcessError as e:
-                QMessageBox.critical(self, "Error", f"Failed to restart the system: {e}")
+                self._msgbox("Error", f"Failed to restart the system: {e}", icon_key="error")
 
     def shutdown_system(self):
-        # Confirm with the user
-        reply = QMessageBox.question(self, 'System Shutdown',
-                                     'Are you sure you want to shutdown the system?',
-                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-
-        if reply == QMessageBox.Yes:
+        choice = self._msgbox("System Shutdown", "Are you sure you want to shutdown the system?", icon_key="question", buttons=("Yes","No"), default="No")
+        if choice == "Yes":
             try:
                 if sys.platform == "win32":
                     subprocess.run(["shutdown", "/s", "/t", "0"], check=True)
                 else:
                     subprocess.run(["sudo", "shutdown", "-h", "now"], check=True)
             except subprocess.CalledProcessError as e:
-                QMessageBox.critical(self, "Error", f"Failed to shutdown the system: {e}")
+                self._msgbox("Error", f"Failed to shutdown the system: {e}", icon_key="error")
 
     def launch_prompt(self):
 
@@ -1508,11 +1500,11 @@ class Client(QMainWindow):
     def update_application(self):
         try:
             subprocess.run(['git', 'pull'], check=True, cwd=self.root_dir)
-            QMessageBox.information(self, "Update", "Application updated successfully. Restarting...")
+            self._msgbox("Update", "Application updated successfully. Restarting...", icon_key="success")
             QApplication.quit()
             subprocess.run([sys.executable] + sys.argv)
         except subprocess.CalledProcessError as e:
-            QMessageBox.critical(self, "Error", f"Failed to update the application: {e}")
+            self._msgbox("Error", f"Failed to update the application: {e}", icon_key="error")
 
     def launch_configurations(self):
 
@@ -1996,6 +1988,89 @@ class Client(QMainWindow):
 
         return command
 
+    def _svg_to_pixmap(self, svg_path: str, size: QSize = QSize(42, 42)) -> QPixmap:
+        """
+        Render an SVG to a hi-DPI-aware QPixmap for use in QMessageBox.
+        """
+        renderer = QSvgRenderer(svg_path)
+        dpr = self.devicePixelRatioF() if hasattr(self, "devicePixelRatioF") else 1.0
+        w = max(1, int(size.width()  * dpr))
+        h = max(1, int(size.height() * dpr))
+        pm = QPixmap(w, h)
+        pm.fill(Qt.transparent)
+        painter = QPainter(pm)
+        renderer.render(painter)
+        painter.end()
+        if dpr != 1.0:
+            pm.setDevicePixelRatio(dpr)
+        return pm
+
+    def _msgbox(self, title: str, text: str, icon_key: str = "info", buttons: tuple = ("OK",), default: str | None = None, parent=None) -> str:
+        parent = parent or self
+        m = QMessageBox(parent)
+        m.setWindowTitle(title)
+        m.setText(text)
+        m.setObjectName("customMsgBox")  # lets your QSS style it
+
+        # map logical keys to your Bootstrap-ish icon file names (adjust to your set)
+        icon_map = {
+            "info":     "info-circle.svg",
+            "success":  "check-circle.svg",
+            "warning":  "exclamation-triangle.svg",
+            "error":    "x-octagon.svg",
+            "question": "question-circle.svg",
+        }
+        svg = self.get_path(os.path.join("icons", icon_map.get(icon_key, icon_map["info"])))
+        if svg and os.path.exists(svg):
+            m.setIconPixmap(self._svg_to_pixmap(svg, QSize(42, 42)))
+        else:
+            # graceful fallback to a built-in icon
+            builtins = {
+                "info": QMessageBox.Information,
+                "success": QMessageBox.Information,
+                "warning": QMessageBox.Warning,
+                "error": QMessageBox.Critical,
+                "question": QMessageBox.Question,
+            }
+            m.setIcon(builtins.get(icon_key, QMessageBox.Information))
+
+        # buttons
+        label_to_std = {
+            "OK": QMessageBox.Ok,
+            "Cancel": QMessageBox.Cancel,
+            "Yes": QMessageBox.Yes,
+            "No": QMessageBox.No,
+            "Retry": QMessageBox.Retry,
+            "Ignore": QMessageBox.Ignore,
+            "Close": QMessageBox.Close,
+            "Open log": QMessageBox.ActionRole,  # special, will add as an action button
+        }
+        clicked_label = None
+        added = []
+        for b in buttons:
+            if b == "Open log":
+                btn = m.addButton("Open log", QMessageBox.ActionRole)
+            else:
+                btn = m.addButton(label_to_std.get(b, QMessageBox.Ok))
+            added.append((b, btn))
+
+        if default:
+            for lbl, btn in added:
+                if lbl == default:
+                    m.setDefaultButton(btn if isinstance(btn, QMessageBox.StandardButton) else None)
+                    try:
+                        m.setEscapeButton(btn)
+                    except Exception:
+                        pass
+
+        m.exec_()
+        which = m.clickedButton()
+        for lbl, btn in added:
+            if btn is which:
+                clicked_label = lbl
+                break
+        return clicked_label or ""
+
     def show_log(self, text: str, focus: str = None):
         # focus becomes initial filter; lines not matching are hidden; matches are yellow
         self.log_window = LogWindow(self, text=text, filter_text=focus)
@@ -2004,17 +2079,12 @@ class Client(QMainWindow):
         self.log_window.activateWindow()
 
     def open_last_log(self):
-        """
-        Open the most recent connection log in the LogWindow.
-        If there is no log yet, let the user know.
-        """
         text = self.last_log_text or ""
         if not text.strip():
-            QMessageBox.information(self, "No log available",
-                                    "There is no connection log yet. Try connecting first.")
+            self._msgbox("No log available",
+                        "There is no connection log yet. Try connecting first.",
+                        icon_key="info")
             return
-
-        # You can show the whole thing, or extract a relevant snippet like in on_connection_failed.
         self.show_log(text, focus="ERROR")
 
     def connect_to_server(self):
@@ -2060,47 +2130,23 @@ class Client(QMainWindow):
 
     def on_connection_success(self):
         self.connection_dialog.hide()
-        QMessageBox.information(self, "Connected", "Connection to the server was successful.")
+        self._msgbox("Connected", "Connection to the server was successful.", icon_key="success")
         self.reset_ui()
 
     def on_connection_failed(self, title: str, details: str, raw_log: str):
         self.last_log_text = raw_log or ""
         self.connection_dialog.hide()
         debug_enabled = self.config.get("Administration", {}).get("Debug logging", False)
-        # If the server reported a user-initiated logoff, show as information
-        icon = QMessageBox.Critical if title.lower().startswith("connection") else QMessageBox.Information
-        m = QMessageBox(icon, title, details, parent=self)
-        open_btn = None
-        if debug_enabled and self.last_log_text.strip():
-            open_btn = m.addButton("Open log", QMessageBox.ActionRole)
-        m.addButton(QMessageBox.Ok)
-        m.exec_()
-        # If "Open log" was pressed, show the log window now
-        if open_btn and m.clickedButton() is open_btn:
-            # try to pre-focus a relevant token if we classified one
-            focus_token = None
-            # simple heuristics: look for a known code in details
-            for token in ("ERRINFO_LOGOFF_BY_USER","ERRINFO_IDLE_TIMEOUT","ACCESS_DENIED",
-                          "LOGON_FAILURE","CANNOT_CONNECT","DNS_FAIL","GATEWAY_DENIED",
-                          "ERRCONNECT_ACTIVATION_TIMEOUT"):
-                if token in details:
-                    focus_token = token
-                    break
 
-            def _extract_relevant_snippet(full:str) -> str:
-                lines = full.splitlines()
-                # prioritize ERROR/WARN lines
-                idxs = [i for i,l in enumerate(lines) if re.search(r'\b(ERROR|ERR|WARN|FAIL)\b', l, re.I)]
-                if not idxs:
-                    return full
-                i = idxs[0]
-                start = max(0, i-15)
-                end   = min(len(lines), i+25)
-                return "\n".join(lines[start:end])
+        # choose icon
+        icon_key = "info" if title.lower().startswith("disconnected") else "error"
+        # include Open log when debugging
+        btns = ("Open log","OK") if debug_enabled and self.last_log_text.strip() else ("OK",)
+        choice = self._msgbox(title, details, icon_key=icon_key, buttons=btns, default="OK")
 
-            snippet = _extract_relevant_snippet(self.last_log_text)
-            self.show_log(snippet, focus="ERROR")
-            # self.show_log(self.last_log_text, focus=focus_token)
+        if choice == "Open log":
+            self.show_log(self.last_log_text, focus="ERROR")
+
         self.reset_ui()
 
     def connection_timeout(self):

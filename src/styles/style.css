@@ -100,3 +100,13 @@ QPushButton:pressed, QTabBar::tab:pressed, QTabBar::tab:selected {
     max-height: 16px;
     border-radius: 8px;
 }
+
+/* only your custom boxes */
+#customMsgBox QLabel {
+    /* keep your existing font/colors */
+}
+
+/* make sure icon column has a bit of room */
+#customMsgBox {
+    min-width: 360px;
+}
