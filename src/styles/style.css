@@ -1,70 +1,28 @@
-/* Style for the client window */
-#clientWindow {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #265162, stop:1 #002136);
+QLineEdit, QTextEdit, QComboBox, QSpinBox, QFileDialog, QPushButton {
+    font-size: 14px;
+    border: 1px solid #76797C;
+    border-radius: 5px;
+    padding: 10px;
+    margin: 5px 0px;
 }
 
-/* Style for the input fields */
-#clientWindow QLineEdit {
-    padding: 10px;
-    height: 20px;
-    width: 300px;
-    margin: 0px; /* Remove margins */
-    border: 1px solid #76797C;
-    border-bottom: 0; /* Remove border bottom */
-    border-radius: 0px; /* Rounded corners */
+QLineEdit, QTextEdit, QComboBox, QSpinBox, QFileDialog {
     background-color: #212121;
+    color: #FFFFFF;
+    width: 300px;
+}
+
+QPushButton {
+    background-color: #414344;
     color: #FFFFFF;
 }
 
-/* Style for the first input fields */
-#clientWindow QLineEdit#firstLineEdit {
-    border-top-right-radius: 5px;
-    border-top-left-radius: 5px;
+QPushButton:hover {
+    background-color: #5f6263;
+    border-color: #5f6263;
 }
 
-/* Style for the last input fields */
-#clientWindow QLineEdit#lastLineEdit {
-    border-bottom-right-radius: 5px;
-    border-bottom-left-radius: 5px;
-    border-bottom: 1px solid #76797C; /* Add a border bottom */
-}
-
-/* Style for the buttons */
-#clientWindow QPushButton {
-    padding: 10px;
-    height: 20px;
-    margin: 0px;
-    margin-top: 10px;
-    border: 1px solid #76797C;
-    border-radius: 5px;
-}
-
-#clientWindow QPushButton:hover {
-    background-color: rgba(255, 255, 255, 50);
-    border-color: rgba(255, 255, 255, 50);
-}
-
-#clientWindow QPushButton:pressed {
-    background-color: #0d6efd;
-    border-color: #0d6efd;
-}
-
-/* Style for the buttons */
-#clientWindow QPushButton#CancelBTN {
-    padding: 5px;
-    height: 20px;
-    margin: 0px;
-    margin-top: 5px;
-    border: 1px solid #76797C;
-    border-radius: 5px;
-}
-
-#clientWindow QPushButton#CancelBTN:hover {
-    background-color: rgba(255, 255, 255, 50);
-    border-color: rgba(255, 255, 255, 50);
-}
-
-#clientWindow QPushButton#CancelBTN:pressed {
+QPushButton:pressed {
     background-color: #0d6efd;
     border-color: #0d6efd;
 }
@@ -76,53 +34,11 @@
     padding: 0;
 }
 
-/* Style for the buttons */
-#promptWindow QPushButton {
-    padding: 5px;
-    border-radius: 5px;
-    border: 1px solid #76797C;
-    width: 100%;
-    text-align: center;
-}
-
-/* Style for the hovering button */
-#promptWindow QPushButton:hover {
-    background-color: rgba(255, 255, 255, 50);
-    border-color: rgba(255, 255, 255, 50);
-}
-
-/* Style for the selected button */
-#promptWindow QPushButton:pressed {
-    background-color: #0d6efd;
-    border-color: #0d6efd;
-}
-
-/* Style for the input fields */
-#promptWindow QLineEdit {
-    padding: 10px;
-    height: 20px;
-    width: 300px;
-    margin: 0px; /* Remove margins */
-    border: 1px solid #76797C;
-    border-radius: 5px; /* Rounded corners */
-}
 /* Apply margin and padding to the main window container */
 #configurationsWindow,
 #configurationsWidget {
     margin: 0;
     padding: 0;
-}
-
-/* Style for the input fields */
-#configurationsWindow QComboBox,
-#configurationsWindow QSpinBox,
-#configurationsWindow QLineEdit {
-    padding: 10px;
-    height: 20px;
-    width: 300px;
-    margin: 0px; /* Remove margins */
-    border: 1px solid #76797C;
-    border-radius: 5px; /* Rounded corners */
 }
 
 /* Adjust the QTabWidget's internal layout */
@@ -183,28 +99,7 @@
     margin-top: 0; /* Use a negative value if needed */
 }
 
-/* Style for the buttons */
-#configurationsWindow QPushButton {
-    padding: 5px;
-    border-radius: 5px;
-    border: 1px solid #76797C;
-    width: 100%;
-    text-align: center;
-}
-
-#configurationsWindow QPushButton:hover {
-    background-color: rgba(255, 255, 255, 50);
-    border-color: rgba(255, 255, 255, 50);
-}
-
-#configurationsWindow QPushButton:pressed {
-    background-color: #0d6efd;
-    border-color: #0d6efd;
-}
-
 #configurationsWindow QPushButton#unsavedChanges {
-    padding: 5px;
-    border-radius: 5px;
     border: 1px solid #198754;
     background-color: #198754;
 }
@@ -212,9 +107,4 @@
 #configurationsWindow QPushButton#unsavedChanges:hover {
     background-color: #1fa869;
     border-color: #1fa869;
-}
-
-#configurationsWindow QPushButton#unsavedChanges:pressed {
-    background-color: #0d6efd;
-    border-color: #0d6efd;
 }
