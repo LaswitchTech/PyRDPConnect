@@ -1,4 +1,18 @@
-QLineEdit, QTextEdit, QComboBox, QSpinBox, QFileDialog, QPushButton {
+QDialog {
+    background-color: #393939;
+    color: #FFFFFF;
+    font-family: Arial, sans-serif;
+    font-size: 14px;
+}
+
+QTabWidget::pane {
+    background-color: #414141;
+    color: #FFFFFF;
+    font-family: Arial, sans-serif;
+    font-size: 14px;
+}
+
+QLineEdit, QCheckBox, QTextEdit, QComboBox, QSpinBox, QPushButton {
     font-size: 14px;
     border: 1px solid #76797C;
     border-radius: 5px;
@@ -6,7 +20,7 @@ QLineEdit, QTextEdit, QComboBox, QSpinBox, QFileDialog, QPushButton {
     margin: 5px 0px;
 }
 
-QLineEdit, QTextEdit, QComboBox, QSpinBox, QFileDialog {
+QLineEdit, QCheckBox, QTextEdit, QComboBox, QSpinBox {
     background-color: #212121;
     color: #FFFFFF;
     width: 300px;
