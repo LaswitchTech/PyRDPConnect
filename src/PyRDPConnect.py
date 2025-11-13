@@ -332,6 +332,18 @@ class FreerdpLogInterpreter:
         (r'ERRINFO_IDLE_TIMEOUT', (Severity.INFO, 'ERRINFO_IDLE_TIMEOUT',
             'Disconnected due to inactivity.', 'Reconnect to continue.')),
 
+        # --- Common alternate lines seen on some FreeRDP builds/platforms ---
+        (r'ERRINFO_RPC_INITIATED_DISCONNECT', (Severity.INFO, 'ERRINFO_LOGOFF_BY_USER',
+            'You were disconnected by the server.',
+            'This can be normal if you signed out or the admin ended the session.')),
+        (r'freerdp_disconnect: closing connection', (Severity.INFO, 'ERRINFO_LOGOFF_BY_USER',
+            'The session was closed.',
+            'If you clicked Disconnect/Sign out, this is expected.')),
+
+        # --- Idle timeout ---
+        (r'ERRINFO_IDLE_TIMEOUT', (Severity.INFO, 'ERRINFO_IDLE_TIMEOUT',
+            'Disconnected due to inactivity.', 'Reconnect to continue.')),
+
         # --- Connect/handshake timeouts ---
         (r'ERRCONNECT_ACTIVATION_TIMEOUT', (Severity.ERROR, 'ERRCONNECT_ACTIVATION_TIMEOUT',
             'The server took too long to activate the session.',
@@ -382,9 +394,59 @@ class FreerdpLogInterpreter:
         events.sort(key=lambda e: priority[e.severity], reverse=True)
         return events[0]
 
+class LogWindow(QDialog):
+    def __init__(self, parent=None, text:str=""):
+        super().__init__(parent)
+        self.setWindowTitle("Connection Log")
+        self.setObjectName("logWindow")
+        self.setMinimumSize(720, 420)
+
+        self.text = QTextEdit(self)
+        self.text.setReadOnly(True)
+        self.text.setPlainText(text or "")
+
+        self.find_box = QLineEdit(self)
+        self.find_box.setPlaceholderText("Find… (press Enter)")
+        self.find_box.returnPressed.connect(self.find_next)
+
+        self.copy_btn = QPushButton("Copy all")
+        self.copy_btn.clicked.connect(lambda: QApplication.clipboard().setText(self.text.toPlainText()))
+        self.save_btn = QPushButton("Save as…")
+        self.save_btn.clicked.connect(self.save_as)
+
+        top = QHBoxLayout()
+        top.addWidget(self.find_box)
+        top.addWidget(self.copy_btn)
+        top.addWidget(self.save_btn)
+
+        root = QVBoxLayout(self)
+        root.addLayout(top)
+        root.addWidget(self.text)
+
+    def set_text(self, text:str):
+        self.text.setPlainText(text or "")
+
+    def find_next(self):
+        needle = self.find_box.text()
+        if not needle:
+            return
+        # simple forward search
+        if not self.text.find(needle):
+            # wrap once
+            cursor = self.text.textCursor()
+            cursor.movePosition(cursor.Start)
+            self.text.setTextCursor(cursor)
+            self.text.find(needle)
+
+    def save_as(self):
+        path, _ = QFileDialog.getSaveFileName(self, "Save log", "connection.log", "Log Files (*.log);;Text Files (*.txt);;All Files (*)")
+        if path:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(self.text.toPlainText())
+
 class ConnectionThread(QThread):
     connection_success = pyqtSignal()
-    connection_failed = pyqtSignal(str, str)   # (title, details)
+    connection_failed = pyqtSignal(str, str, str)   # (title, details)
     connection_info   = pyqtSignal(str)        # live status text (optional)
     stop_thread = False
 
@@ -468,23 +530,30 @@ class ConnectionThread(QThread):
 
             # Special case: treat user logoff as INFO, not an error
             if top and top.code == 'ERRINFO_LOGOFF_BY_USER':
-                self.connection_failed.emit("Disconnected", top.message + (f"\n\nHint: {top.hint}" if top.hint else ""))
+                # self.connection_failed.emit("Disconnected", top.message + (f"\n\nHint: {top.hint}" if top.hint else ""))
+                # return
+                details = top.message + (f"\n\nHint: {top.hint}" if top.hint else "")
+                self.connection_failed.emit("Disconnected", details, text)
                 return
 
             # Build a friendly message
             if top:
                 title = "Connection problem" if top.severity != Severity.INFO else "Information"
-                details = top.message
-                if top.hint:
-                    details += f"\n\nHint: {top.hint}"
+                details = top.message + (f"\n\nHint: {top.hint}" if top.hint else "")
             else:
                 title = "Connection failed"
                 details = "The connection ended unexpectedly.\n\nOpen the detailed log for more information."
 
-            self.connection_failed.emit(title, details)
+            self.connection_failed.emit(title, details, text)
 
         except Exception as e:
-            self.connection_failed.emit("Unexpected error", str(e))
+            # make sure we still forward whatever we collected
+            if not text:
+                try:
+                    text = "\n".join(collected)
+                except Exception:
+                    text = ""
+            self.connection_failed.emit("Unexpected error", f"{type(e).__name__}: {e}", text)
 
     def stop(self):
         self.stop_thread = True
@@ -531,6 +600,9 @@ class Client(QMainWindow):
 
     def __init__(self):
         super().__init__()
+
+        # Initialize the last log text
+        self.last_log_text = ""
 
         # Initialize properties
         self.init_properties()
@@ -1865,6 +1937,13 @@ class Client(QMainWindow):
 
         return command
 
+    def show_log(self, text:str, focus:str=None):
+        self.log_window = LogWindow(self, text=text)
+        self.log_window.show()
+        if focus:
+            self.log_window.find_box.setText(focus)
+            self.log_window.find_next()
+
     def connect_to_server(self):
 
         # Create a "connecting" message and a spinner
@@ -1911,13 +1990,44 @@ class Client(QMainWindow):
         QMessageBox.information(self, "Connected", "Connection to the server was successful.")
         self.reset_ui()
 
-    def on_connection_failed(self, title: str, details: str):
+    def on_connection_failed(self, title: str, details: str, raw_log: str):
+        self.last_log_text = raw_log or ""
         self.connection_dialog.hide()
+        debug_enabled = self.config.get("Administration", {}).get("Debug logging", False)
         # If the server reported a user-initiated logoff, show as information
         icon = QMessageBox.Critical if title.lower().startswith("connection") else QMessageBox.Information
         m = QMessageBox(icon, title, details, parent=self)
-        m.setDetailedText("")  # (Optionally add the raw log buffer if you keep it)
+        open_btn = None
+        if debug_enabled and self.last_log_text.strip():
+            open_btn = m.addButton("Open log", QMessageBox.ActionRole)
+        m.addButton(QMessageBox.Ok)
         m.exec_()
+        # If "Open log" was pressed, show the log window now
+        if open_btn and m.clickedButton() is open_btn:
+            # try to pre-focus a relevant token if we classified one
+            focus_token = None
+            # simple heuristics: look for a known code in details
+            for token in ("ERRINFO_LOGOFF_BY_USER","ERRINFO_IDLE_TIMEOUT","ACCESS_DENIED",
+                          "LOGON_FAILURE","CANNOT_CONNECT","DNS_FAIL","GATEWAY_DENIED",
+                          "ERRCONNECT_ACTIVATION_TIMEOUT"):
+                if token in details:
+                    focus_token = token
+                    break
+
+            def _extract_relevant_snippet(full:str) -> str:
+                lines = full.splitlines()
+                # prioritize ERROR/WARN lines
+                idxs = [i for i,l in enumerate(lines) if re.search(r'\b(ERROR|ERR|WARN|FAIL)\b', l, re.I)]
+                if not idxs:
+                    return full
+                i = idxs[0]
+                start = max(0, i-15)
+                end   = min(len(lines), i+25)
+                return "\n".join(lines[start:end])
+
+            snippet = _extract_relevant_snippet(self.last_log_text)
+            self.show_log(snippet, focus="ERROR")
+            # self.show_log(self.last_log_text, focus=focus_token)
         self.reset_ui()
 
     def connection_timeout(self):
