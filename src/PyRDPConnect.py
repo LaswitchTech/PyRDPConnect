@@ -738,11 +738,9 @@ class Client(QMainWindow):
                 "Start session in fullscreen": False,
                 "Fit session to window": False
             },
-            "Audio": {
+            "Devices": {
                 "Play sound": "",
                 "Record sound": "",
-            },
-            "Devices": {
                 "Printers": False,
                 "Smart Cards": False,
                 "Ports": False,
@@ -761,6 +759,7 @@ class Client(QMainWindow):
                 "Menu Animations": False,
                 "Disable Themes": False,
                 "Disable Wallpaper": False,
+                "Show certificate warning": False
             },
             "Appearance": {
                 "Logo File": "",
@@ -773,9 +772,6 @@ class Client(QMainWindow):
                 "Fullscreen": False,
                 "Gradient Start": "#265162",
                 "Gradient End":   "#002136"
-            },
-            "Security": {
-                "Show certificate warning": False
             },
             "Administration": {
                 "Password": "",
@@ -847,13 +843,13 @@ class Client(QMainWindow):
         playSoundComboBox = QComboBox()
         playSoundOptions = ["Never", "On this computer", "On the remote computer"]
         playSoundComboBox.addItems(playSoundOptions)
-        playSoundComboBox.setCurrentText(self.config["Audio"]["Play sound"])
+        playSoundComboBox.setCurrentText(self.config["Devices"]["Play sound"])
 
         # Initialize sound options combo box
         recordSoundComboBox = QComboBox()
         recordSoundOptions = ["Never", "On this computer", "On the remote computer"]
         recordSoundComboBox.addItems(recordSoundOptions)
-        recordSoundComboBox.setCurrentText(self.config["Audio"]["Record sound"])
+        recordSoundComboBox.setCurrentText(self.config["Devices"]["Record sound"])
 
         # Initialize login and logo positions
         positionsOptions = ["top-left", "top-center", "top-right", "center-left", "center-center", "center-right", "bottom-left", "bottom-center", "bottom-right"]
@@ -913,11 +909,9 @@ class Client(QMainWindow):
                 "Start session in fullscreen": QCheckBox(),
                 "Fit session to window": QCheckBox(),
             },
-            "Audio": {
+            "Devices": {
                 "Play sound": playSoundComboBox,
                 "Record sound": recordSoundComboBox,
-            },
-            "Devices": {
                 "Printers": QCheckBox(),
                 "Smart Cards": QCheckBox(),
                 "Ports": QCheckBox(),
@@ -936,6 +930,7 @@ class Client(QMainWindow):
                 "Menu Animations": QCheckBox(),
                 "Disable Themes": QCheckBox(),
                 "Disable Wallpaper": QCheckBox(),
+                "Show certificate warning": QCheckBox(),
             },
             "Appearance": {
                 "Logo File": self.logo_file_button,
@@ -948,9 +943,6 @@ class Client(QMainWindow):
                 "Fullscreen": QCheckBox(),
                 "Gradient Start": gradient_start_btn,
                 "Gradient End": gradient_end_btn
-            },
-            "Security": {
-                "Show certificate warning": QCheckBox(),
             },
             "Administration": {
                 "Password": lockLineEdit,
@@ -1892,8 +1884,8 @@ class Client(QMainWindow):
         display_use_all_monitors = self.config["Display"]["Use all monitors"]
         display_fullscreen = self.config["Display"]["Start session in fullscreen"]
         display_fit_window = self.config["Display"]["Fit session to window"]
-        audio_play_sound = self.config["Audio"]["Play sound"]
-        audio_record_sound = self.config["Audio"]["Record sound"]
+        audio_play_sound = self.config["Devices"]["Play sound"]
+        audio_record_sound = self.config["Devices"]["Record sound"]
         devices_printers = self.config["Devices"]["Printers"]
         devices_smart_cards = self.config["Devices"]["Smart Cards"]
         devices_ports = self.config["Devices"]["Ports"]
@@ -2049,7 +2041,7 @@ class Client(QMainWindow):
 
     def connect(self):
         command = self.gen_command()
-        show_cert_warning = self.config.get("Security", {}).get("Show certificate warning", False)
+        show_cert_warning = self.config.get("Experience", {}).get("Show certificate warning", False)
         debug_enabled = self.config.get("Administration", {}).get("Debug logging", False)
         general_password = self.config["General"]["Password"] or getattr(self, "password_edit", QLineEdit()).text()
         stdin_password = general_password if any(arg.startswith("/from-stdin") for arg in command) else None
