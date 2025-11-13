@@ -6,9 +6,11 @@ from PyQt5.QtWidgets import (
     QGroupBox, QGridLayout, QComboBox, QSpinBox, QFileDialog, QColorDialog,
     QTextEdit, QListWidget, QListWidgetItem
 )
-from PyQt5.QtGui import QIcon, QPixmap, QPainter, QPalette, QColor, QValidator
+from PyQt5.QtGui import (
+    QIcon, QPixmap, QPainter, QPalette, QColor, QValidator, QTextCharFormat
+)
 from PyQt5.QtSvg import QSvgRenderer
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QRegExp
 import subprocess
 import platform
 import shutil
@@ -395,23 +397,27 @@ class FreerdpLogInterpreter:
         return events[0]
 
 class LogWindow(QDialog):
-    def __init__(self, parent=None, text:str=""):
+    def __init__(self, parent=None, text: str = "", filter_text: str = None):
         super().__init__(parent)
         self.setWindowTitle("Connection Log")
         self.setObjectName("logWindow")
         self.setMinimumSize(720, 420)
 
+        # keep the full log intact; we render a filtered view into the QTextEdit
+        self._full_text = text or ""
+
         self.text = QTextEdit(self)
         self.text.setReadOnly(True)
-        self.text.setPlainText(text or "")
+        self.text.setPlainText(self._full_text)
 
         self.find_box = QLineEdit(self)
-        self.find_box.setPlaceholderText("Find… (press Enter)")
-        self.find_box.returnPressed.connect(self.find_next)
+        self.find_box.setPlaceholderText("Filter...")
+        # live filtering as the user types
+        self.find_box.textChanged.connect(self.apply_filter)
 
         self.copy_btn = QPushButton("Copy all")
         self.copy_btn.clicked.connect(lambda: QApplication.clipboard().setText(self.text.toPlainText()))
-        self.save_btn = QPushButton("Save as…")
+        self.save_btn = QPushButton("Save as...")
         self.save_btn.clicked.connect(self.save_as)
 
         top = QHBoxLayout()
@@ -423,26 +429,88 @@ class LogWindow(QDialog):
         root.addLayout(top)
         root.addWidget(self.text)
 
-    def set_text(self, text:str):
-        self.text.setPlainText(text or "")
+        # if the window is opened with a filter, apply it immediately
+        if filter_text:
+            self.find_box.setText(filter_text)
+        else:
+            self.apply_filter()  # renders full text (no highlight) on open
 
-    def find_next(self):
-        needle = self.find_box.text()
-        if not needle:
-            return
-        # simple forward search
-        if not self.text.find(needle):
-            # wrap once
-            cursor = self.text.textCursor()
-            cursor.movePosition(cursor.Start)
-            self.text.setTextCursor(cursor)
-            self.text.find(needle)
+    def set_text(self, text: str):
+        self._full_text = text or ""
+        self.apply_filter()
 
     def save_as(self):
-        path, _ = QFileDialog.getSaveFileName(self, "Save log", "connection.log", "Log Files (*.log);;Text Files (*.txt);;All Files (*)")
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save log", "connection.log",
+            "Log Files (*.log);;Text Files (*.txt);;All Files (*)"
+        )
         if path:
             with open(path, "w", encoding="utf-8") as f:
                 f.write(self.text.toPlainText())
+
+    # ---- filtering + highlighting ----
+    def apply_filter(self):
+        needle = self.find_box.text().strip()
+        if not needle:
+            # show everything, no highlights
+            self._set_view_text(self._full_text)
+            return
+
+        # keep only lines containing the needle (case-insensitive)
+        filtered_lines = [ln for ln in self._full_text.splitlines()
+                          if needle.lower() in ln.lower()]
+        self._set_view_text("\n".join(filtered_lines))
+
+        # highlight all occurrences of the needle in yellow
+        self._highlight_all(needle)
+
+    def _set_view_text(self, s: str):
+        # avoid recursive textChanged signals while replacing the whole buffer
+        self.text.blockSignals(True)
+        self.text.setPlainText(s)
+        self.text.blockSignals(False)
+
+    def _highlight_all(self, needle: str):
+        if not needle:
+            return
+        doc = self.text.document()
+        cursor = self.text.textCursor()
+        cursor.beginEditBlock()
+
+        # clear previous formats
+        clear = QTextCharFormat()
+        rng = self.text.textCursor()
+        rng.movePosition(rng.Start)
+        rng.movePosition(rng.End, rng.KeepAnchor)
+        rng.setCharFormat(clear)
+
+        # yellow background for matches
+        fmt = QTextCharFormat()
+        fmt.setBackground(QColor("yellow"))
+        fmt.setForeground(QColor("black"))
+
+        # case-insensitive search with QRegExp
+        rx = QRegExp(needle)
+        rx.setCaseSensitivity(Qt.CaseInsensitive)
+
+        pos = 0
+        while True:
+            pos = rx.indexIn(doc.toPlainText(), pos)
+            if pos < 0:
+                break
+            # select the match and apply format
+            match_cursor = self.text.textCursor()
+            match_cursor.setPosition(pos)
+            match_cursor.setPosition(pos + rx.matchedLength(), match_cursor.KeepAnchor)
+            match_cursor.mergeCharFormat(fmt)
+            pos += max(1, rx.matchedLength())
+
+        cursor.endEditBlock()
+
+    # keep these around for compatibility (optional)
+    def find_next(self):
+        # not needed anymore (live filter), but kept if you call it elsewhere
+        self.apply_filter()
 
 class ConnectionThread(QThread):
     connection_success = pyqtSignal()
@@ -814,6 +882,10 @@ class Client(QMainWindow):
         self.folder_add_button.clicked.connect(self.select_folder)
         self.folder_list_layout = QVBoxLayout()
 
+        # Add "Open Log" button in the Administration tab
+        self.open_log_button = QPushButton("Open log")
+        self.open_log_button.clicked.connect(self.open_last_log)
+
         # Add "Update" button in the Administration tab
         self.update_button = QPushButton("Update")
         self.update_button.clicked.connect(self.update_application)
@@ -825,12 +897,6 @@ class Client(QMainWindow):
         # Add "Export" button in the Administration tab
         self.export_button = QPushButton("Export")
         self.export_button.clicked.connect(self.export_settings)
-
-        # --- Diagnostics UI pieces (created once) ---
-        self.diag_run_button = QPushButton("Run Diagnostics")
-        self.diag_log = QTextEdit()
-        self.diag_log.setReadOnly(True)
-        self.diag_status_label = QLabel("")  # will show a summary result
 
         # Initialize widgets dictionary
         self.widgets = {
@@ -889,6 +955,7 @@ class Client(QMainWindow):
             "Administration": {
                 "Password": lockLineEdit,
                 "Debug logging": QCheckBox(),
+                "Open log": self.open_log_button,
                 "Update": self.update_button,
                 "Import": self.import_button,
                 "Export": self.export_button,
@@ -1458,7 +1525,6 @@ class Client(QMainWindow):
 
         # Create a password prompt
         self.configurations_dialog = QDialog(self)
-        self.configurations_dialog.setWindowModality(Qt.WindowModal)
         self.configurations_dialog.setWindowFlags(Qt.Dialog | Qt.WindowTitleHint | Qt.CustomizeWindowHint | Qt.WindowCloseButtonHint)
         self.configurations_dialog.setObjectName("configurationsWindow")
 
@@ -1937,12 +2003,26 @@ class Client(QMainWindow):
 
         return command
 
-    def show_log(self, text:str, focus:str=None):
-        self.log_window = LogWindow(self, text=text)
+    def show_log(self, text: str, focus: str = None):
+        # focus becomes initial filter; lines not matching are hidden; matches are yellow
+        self.log_window = LogWindow(self, text=text, filter_text=focus)
         self.log_window.show()
-        if focus:
-            self.log_window.find_box.setText(focus)
-            self.log_window.find_next()
+        self.log_window.raise_()
+        self.log_window.activateWindow()
+
+    def open_last_log(self):
+        """
+        Open the most recent connection log in the LogWindow.
+        If there is no log yet, let the user know.
+        """
+        text = self.last_log_text or ""
+        if not text.strip():
+            QMessageBox.information(self, "No log available",
+                                    "There is no connection log yet. Try connecting first.")
+            return
+
+        # You can show the whole thing, or extract a relevant snippet like in on_connection_failed.
+        self.show_log(text, focus="ERROR")
 
     def connect_to_server(self):
 
