@@ -39,10 +39,10 @@ if [ -d "$FINAL_DIR" ]; then
 fi
 mkdir -p "$FINAL_DIR"
 
-# Require python3.13 on PATH
-PYTHON_BIN="$(command -v python3.13 || true)"
+# Require python3.11 on PATH
+PYTHON_BIN="$(command -v python3.11 || true)"
 if [ -z "$PYTHON_BIN" ]; then
-  log "python3.13 not found. On macOS, run: brew install python@3.13"
+  log "python3.11 not found. On macOS, run: brew install python@3.11"
   exit 1
 fi
 
@@ -52,13 +52,13 @@ if [ ! -x "env/bin/python" ]; then
   NEED_RECREATE=1
 else
   VENV_VER="$(env/bin/python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' || echo unknown)"
-  if [ "$VENV_VER" != "3.13" ]; then
+  if [ "$VENV_VER" != "3.11" ]; then
     NEED_RECREATE=1
   fi
 fi
 
 if [ "$NEED_RECREATE" -eq 1 ]; then
-  log "Creating fresh Python 3.13 virtual environment..."
+  log "Creating fresh Python 3.11 virtual environment..."
   rm -rf env
   "$PYTHON_BIN" -m venv env
 fi
@@ -67,10 +67,10 @@ fi
 # shellcheck disable=SC1091
 source env/bin/activate
 
-# --- Double-check version (hard fail if not 3.13) ---
+# --- Double-check version (hard fail if not 3.11) ---
 ACTIVE_VER="$(python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
-if [ "$ACTIVE_VER" != "3.13" ]; then
-  log "Active Python is $ACTIVE_VER, expected 3.13. Aborting."
+if [ "$ACTIVE_VER" != "3.11" ]; then
+  log "Active Python is $ACTIVE_VER, expected 3.11. Aborting."
   exit 1
 fi
 log "Using Python $(python -V)"
@@ -80,7 +80,7 @@ log "Updating pip..."
 python -m pip install --upgrade pip wheel
 
 log "Installing build dependencies..."
-# PyInstaller 6.9+ supports 3.13 well; lock to <7 to avoid future surprizes.
+# PyInstaller 6.9+ supports 3.11 well; lock to <7 to avoid future surprizes.
 # PyQt5 5.15.x is stable for Qt5 on macOS/Linux; lock <6.
 python -m pip install "pyinstaller>=6.9,<7" "sip>=6.9,<7" "PyQt5>=5.15,<6"
 
