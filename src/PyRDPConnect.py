@@ -567,10 +567,6 @@ class ConnectionThread(QThread):
                         break
                     ln = line.rstrip()
                     collected.append(ln)
-                    if self._debug_enabled:
-                        # Optionally show a short live status (trim spammy lines)
-                        if 'NEGO' in ln or 'NLA' in ln or 'connect' in ln.lower():
-                            self.connection_info.emit(ln)
                 stream.close()
 
             # Read both streams
@@ -2215,7 +2211,7 @@ class Client(QMainWindow):
         choice = self._msgbox(title, details, icon_key=icon_key, buttons=btns, default="OK")
 
         if choice == "Open log":
-            self.show_log(self.last_log_text, focus="ERROR")
+            self.show_log(self.last_log_text)
 
         self.reset_ui()
 
