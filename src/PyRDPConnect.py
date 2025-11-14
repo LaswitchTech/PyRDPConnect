@@ -531,11 +531,27 @@ class ConnectionThread(QThread):
         try:
             env = os.environ.copy()
             freerdp_bin = self.command[0]
-            maybe_lib = os.path.join(os.path.dirname(freerdp_bin), 'lib')
-            if os.path.isdir(maybe_lib):
-                env['DYLD_LIBRARY_PATH'] = maybe_lib
+            base_dir = os.path.dirname(freerdp_bin)
 
-            # Stream stdout/stderr so we can classify in real time
+            # Look for adjacent 'lib' and 'plugins' folders in the bundle
+            lib_dir = os.path.join(base_dir, 'lib')
+            plugins_dir = os.path.join(base_dir, 'plugins')
+
+            # Per-OS runtime search paths
+            if sys.platform == 'darwin':
+                if os.path.isdir(lib_dir):
+                    env['DYLD_LIBRARY_PATH'] = lib_dir + (':' + env.get('DYLD_LIBRARY_PATH','') if env.get('DYLD_LIBRARY_PATH') else '')
+            elif sys.platform.startswith('linux'):
+                if os.path.isdir(lib_dir):
+                    env['LD_LIBRARY_PATH'] = lib_dir + (':' + env.get('LD_LIBRARY_PATH','') if env.get('LD_LIBRARY_PATH') else '')
+
+            # Channel plugins (cliprdr, drdynvc, rdpsnd, etc.)
+            if os.path.isdir(plugins_dir):
+                env['FREERDP_PLUGIN_PATH'] = plugins_dir
+
+            # (Optional) make certificates resolvable in restricted environments
+            # env.setdefault('SSL_CERT_DIR', '/etc/ssl/certs')
+
             self.freerdp_process = subprocess.Popen(
                 self.command,
                 stdout=subprocess.PIPE,
@@ -547,16 +563,13 @@ class ConnectionThread(QThread):
                 universal_newlines=True
             )
 
-            # If we're using stdin-based credentials, send the password once.
-            # FreeRDP expects the password followed by newline.
+            # Send password via stdin (compatible with v2 and v3)
             try:
                 if any(arg.startswith("/from-stdin") for arg in self.command) and self._stdin_password is not None:
                     self.freerdp_process.stdin.write(self._stdin_password + "\n")
                     self.freerdp_process.stdin.flush()
-                    # optional: close to signal EOF if you don't expect further prompts
-                    self.freerdp_process.stdin.close()
+                    # keep stdin open; some builds may read again
             except Exception:
-                # Don't fail the connection solely because of stdin close timing
                 pass
 
             collected = []
@@ -1890,21 +1903,30 @@ class Client(QMainWindow):
 
     def get_freerdp_bin_path(self):
         """
-        Prefer repo xfreerdp if present (matches your working CLI test),
-        else fall back to bundled (frozen) binary, else PATH.
+        Prefer the repo-bundled xfreerdp for the current OS/arch, then PATH.
         """
-        # 1) repo copy
-        repo_candidate = self.get_path('freerdp/macos/xfreerdp') if self.get_os() == 'macos' else None
-        if repo_candidate and os.path.exists(repo_candidate):
-            return repo_candidate
+        osname = self.get_os()
 
-        # 2) bundled in .app
-        if getattr(sys, 'frozen', False) and self.get_os() == 'macos':
-            bundled = os.path.join(os.path.dirname(sys.executable), 'xfreerdp')
-            if os.path.exists(bundled):
-                return bundled
+        # Map OS -> bundled path
+        if osname == 'macos':
+            cand = self.get_path('freerdp/macos/xfreerdp')
+        elif osname == 'linux':
+            cand = self.get_path('freerdp/linux/xfreerdp')
+        else:
+            cand = None
 
-        # 3) PATH fallback
+        if cand and os.path.exists(cand) and os.access(cand, os.X_OK):
+            return cand
+
+        # If present but not executable, try to make it so
+        if cand and os.path.exists(cand) and not os.access(cand, os.X_OK):
+            try:
+                os.chmod(cand, 0o755)
+                return cand
+            except Exception:
+                pass
+
+        # Fallback to PATH
         return shutil.which('xfreerdp') or 'xfreerdp'
 
     def gen_command(self):
@@ -1974,8 +1996,10 @@ class Client(QMainWindow):
 
         # Add password securely
         if general_password:
-            command.append("/from-stdin:force")
-            # command.append(f"/p:{general_password}")
+            if major_version and major_version >= 3:
+                command.append("/from-stdin:force")
+            else:
+                command.append("/from-stdin")
 
         # Add display settings
         if display_resolution:
@@ -2178,7 +2202,7 @@ class Client(QMainWindow):
 
     def connect(self):
         command = self.gen_command()
-        show_cert_warning = self.config.get("Experience", {}).get("Show certificate warning", False)
+        show_cert_warning = self.config["FreeRDP"]["Experience"].get("Show certificate warning", False)
         debug_enabled = self.config.get("Administration", {}).get("Debug logging", False)
         general_password = self.config["General"]["Password"] or getattr(self, "password_edit", QLineEdit()).text()
         stdin_password = general_password if any(arg.startswith("/from-stdin") for arg in command) else None
