@@ -1038,11 +1038,19 @@ class Client(QMainWindow):
         # Apply gradient background based on configuration
         start = self.config["Appearance"].get("Gradient Start", "#265162")
         end   = self.config["Appearance"].get("Gradient End", "#002136")
+
+        # Retrieve the path of the icons directory
+        icons_path = self.get_path('icons')
+
+        # Create stylesheet overrides
         override = (
             "\n"
             "#clientWindow {\n"
             f"    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {start}, stop:1 {end});\n"
             "}\n"
+            "QCheckBox::indicator:checked { "
+            f"image: url({icons_path}/check.svg);"
+            " }\n"
         )
 
         # Load Style Sheets
@@ -2223,6 +2231,7 @@ class Client(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication([])
+    QApplication.setStyle('Fusion')
     client_window = Client()
     client_window.show()
     sys.exit(app.exec_())

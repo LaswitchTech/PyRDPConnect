@@ -54,8 +54,6 @@ QCheckBox::indicator:pressed {
 QCheckBox::indicator:checked {
     background: #0d6efd;
     border-color: #0d6efd;
-    image: url(icons/check.svg);
-    image: url(src/icons/check.svg);
 }
 QCheckBox:disabled {
     color: #8c8c8c;
@@ -76,7 +74,7 @@ QPushButton, QTabBar::tab {
     color: #FFFFFF;
 }
 
-QTabBar {
+QTabWidget::tab-bar, QTabBar {
     alignment: center;
 }
 QTabBar::tab {
