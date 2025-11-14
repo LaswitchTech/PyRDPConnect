@@ -32,30 +32,68 @@ QLabel, QCheckBox {
     border: none;
 }
 
+QCheckBox {
+    spacing: 8px;
+}
+
+QCheckBox::indicator {
+    width: 18px;
+    height: 18px;
+    border: 1px solid #76797C;
+    border-radius: 5px;
+    background: #212121;
+    margin-right: 6px;
+}
+QCheckBox::indicator:hover {
+    border-color: #5f6263;
+}
+QCheckBox::indicator:pressed {
+    background: #5f6263;
+    border-color: #5f6263;
+}
+QCheckBox::indicator:checked {
+    background: #0d6efd;
+    border-color: #0d6efd;
+    image: url(icons/check.svg);
+    image: url(src/icons/check.svg);
+}
+QCheckBox:disabled {
+    color: #8c8c8c;
+}
+QCheckBox::indicator:disabled {
+    background: #2b2b2b;
+    border-color: #555555;
+}
+QCheckBox:focus {
+    outline: none;
+}
+QCheckBox::indicator:focus {
+    border-color: #0d6efd;
+}
+
 QPushButton, QTabBar::tab {
     background-color: #414344;
     color: #FFFFFF;
 }
 
+QTabBar {
+    alignment: center;
+}
 QTabBar::tab {
     border-radius: 0px;
 }
-
 QTabBar::tab:first {
     border-top-left-radius: 5px;
     border-bottom-left-radius: 5px;
 }
-
 QTabBar::tab:last {
     border-top-right-radius: 5px;
     border-bottom-right-radius: 5px;
 }
-
 QPushButton:hover, QTabBar::tab:hover {
     background-color: #5f6263;
     border-color: #5f6263;
 }
-
 QPushButton:pressed, QTabBar::tab:pressed, QTabBar::tab:selected {
     background-color: #0d6efd;
     border-color: #0d6efd;
