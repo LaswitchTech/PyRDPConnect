@@ -1489,13 +1489,13 @@ class Client(QMainWindow):
         self.config["FreeRDP"]["Folders"]["Folders"].remove(folder_data)
         self.on_configuration_changed()
 
-    def find_widget_index(layout, widget):
+    def find_widget_index(self, layout, widget):
         for row in range(layout.rowCount()):
             if layout.itemAt(row, QFormLayout.FieldRole).widget() == widget:
                 return row
         return None
 
-    def qss_url(p: str | None) -> str:
+    def qss_url(self, p: str | None) -> str:
         """
         Return a quoted url("...") suitable for Qt stylesheets, or empty string.
         """
@@ -1504,7 +1504,7 @@ class Client(QMainWindow):
         # Qt accepts forward slashes
         return f'url("{p.replace(os.sep, "/")}")'
 
-    def file_exists(p: str | None) -> bool:
+    def file_exists(self, p: str | None) -> bool:
         return isinstance(p, str) and os.path.isfile(p)
 
     def gen_logo_button(self, logo_file):
