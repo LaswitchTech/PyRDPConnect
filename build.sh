@@ -106,35 +106,33 @@ if [ "$USE_SYSTEM_PYQT" -eq 1 ]; then
         log "ERROR: APT not found; cannot install system PyQt5. Install PyQt5 manually or switch to a distro with APT."
         exit 1
     fi
+
     # ensure system dist-packages are visible inside the venv
-    # Path to system "purelib" (usually /usr/lib/python3/dist-packages on Debian)
     SYS_PYTHON="$(command -v python3)"
     SYS_DIST_PKGS="$("$SYS_PYTHON" - <<'PY'
 import sysconfig
 print(sysconfig.get_paths()["purelib"])
 PY
     )"
-
-    # Path to *this venv's* site-packages
-    VENV_SITE_PKGS="$(python - <<'PY'
-import site
-# take first site-packages path for this venv
-print(next(p for p in site.getsitepackages() if p.endswith("site-packages")))
-PY
-    )"
-
-    # Drop a .pth file to add system dist-packages into the venv import path
-    echo "$SYS_DIST_PKGS" > "$VENV_SITE_PKGS/_system_dist_packages.pth"
-
-    # Include system "platlib" if it differs
     SYS_PLAT_PKGS="$("$SYS_PYTHON" - <<'PY'
 import sysconfig
 print(sysconfig.get_paths()["platlib"])
 PY
     )"
-    if [ "$SYS_PLAT_PKGS" != "$SYS_DIST_PKGS" ]; then
-        echo "$SYS_PLAT_PKGS" >> "$VENV_SITE_PKGS/_system_dist_packages.pth"
-    fi
+
+    # Path to *this venv's* site-packages (use sysconfig to avoid odd returns)
+    VENV_SITE_PKGS="$(python - <<'PY'
+import sysconfig
+print(sysconfig.get_paths()["purelib"])
+PY
+    )"
+
+    # Drop a .pth file to add system dist/plat-packages into the venv import path
+    echo "$SYS_DIST_PKGS" >  "$VENV_SITE_PKGS/_system_dist_packages.pth"
+    [ "$SYS_PLAT_PKGS" != "$SYS_DIST_PKGS" ] && echo "$SYS_PLAT_PKGS" >> "$VENV_SITE_PKGS/_system_dist_packages.pth"
+
+    # Also export PYTHONPATH so subprocesses (PyInstaller) see them for sure
+    export PYTHONPATH="${SYS_DIST_PKGS}:${SYS_PLAT_PKGS}:${PYTHONPATH-}"
 
     # Sanity check
     python - <<'PY'
