@@ -120,21 +120,27 @@ print(sysconfig.get_paths()["platlib"])
 PY
     )"
 
-    # Path to *this venv's* site-packages (use sysconfig to avoid odd returns)
+    # Path to *this venv's* site-packages
     VENV_SITE_PKGS="$(python - <<'PY'
 import sysconfig
 print(sysconfig.get_paths()["purelib"])
 PY
     )"
 
-    # Drop a .pth file to add system dist/plat-packages into the venv import path
+    # 1) .pth fallback (kept)
     echo "$SYS_DIST_PKGS" >  "$VENV_SITE_PKGS/_system_dist_packages.pth"
     [ "$SYS_PLAT_PKGS" != "$SYS_DIST_PKGS" ] && echo "$SYS_PLAT_PKGS" >> "$VENV_SITE_PKGS/_system_dist_packages.pth"
 
-    # Also export PYTHONPATH so subprocesses (PyInstaller) see them for sure
-    export PYTHONPATH="${SYS_DIST_PKGS}:${SYS_PLAT_PKGS}:${PYTHONPATH-}"
+    # 2) Hard guarantee via sitecustomize.py
+    cat > "$VENV_SITE_PKGS/sitecustomize.py" <<PY
+import sys
+need = [r"${SYS_DIST_PKGS}", r"${SYS_PLAT_PKGS}"]
+for p in need:
+    if p and p not in sys.path:
+        sys.path.append(p)
+PY
 
-    # Sanity check
+    # Sanity check (now should succeed)
     python - <<'PY'
 import sys
 try:
