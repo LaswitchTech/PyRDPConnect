@@ -75,11 +75,11 @@ if [ "$NEED_RECREATE" -eq 1 ]; then
     fi
 fi
 
-# --- Activate venv ---
+# Activate venv
 # shellcheck disable=SC1091
 source env/bin/activate
 
-# --- Double-check version (hard fail if not 3.11) ---
+# Double-check version (hard fail if not 3.11)
 ACTIVE_VER="$(python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
 if [ "$ACTIVE_VER" != "3.11" ]; then
   log "Active Python is $ACTIVE_VER, expected 3.11. Aborting."
@@ -136,11 +136,13 @@ PY
 
     # Sanity check
     python - <<'PY'
+import sys
 try:
-    import PyQt5.QtCore, PyQt5.QtWidgets, PyQt5.QtSvg
-    print("OK: System PyQt5 detected.")
+    import PyQt5, PyQt5.QtCore, PyQt5.QtWidgets, PyQt5.QtSvg
+    print("OK: System PyQt5 detected at:", PyQt5.__file__)
 except Exception as e:
-    raise SystemExit(f"PyQt5 missing after APT install: {e}")
+    print("sys.path =", sys.path)
+    raise SystemExit(f"PyQt5 missing after setup: {e}")
 PY
 else
     # Non-ARM / macOS etc: keep using PyPI wheels
@@ -148,7 +150,8 @@ else
 fi
 
 # Optional tools you had; keeping them only if you need them:
-python -m pip install importlib PySide6-Addons
+python -m pip install PySide6-Addons
+# python -m pip install importlib PySide6-Addons
 
 # Check if the .spec file exists
 SPEC_FILE="$NAME.spec"
