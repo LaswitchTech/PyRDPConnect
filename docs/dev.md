@@ -21,7 +21,17 @@ brew install freerdp
 Ensure you have the following packages installed:
 
 ```sh
-sudo apt-get install -y build-essential libssl-dev libffi-dev libqt5svg5 python3-dev qt5-* qtbase5-dev qtchooser qtbase5-dev-tools qttools5-dev-tools python3-pyqt5 python3-pyqt5.*
+sudo apt-get update && sudo apt-get upgrade -y && sudo apt-get dist-upgrade -y && sudo apt full-upgrade -y && sudo apt autoremove -y
+sudo apt-get install -y libssl-dev libffi-dev libqt5svg5 python3-dev qt5-* qtbase5-dev qtchooser qtbase5-dev-tools qttools5-dev-tools python3-pyqt5 python3-pyqt5.*
+
+sudo apt-get install -y git build-essential cmake ninja-build pkg-config devscripts equivs fakeroot ca-certificates libxkbcommon-dev libxrender-dev libxi-dev libxfixes-dev libkrb5-dev libfuse3-dev
+
+sudo apt build-dep -y freerdp2-x11
+git clone --depth=1 https://github.com/FreeRDP/FreeRDP.git
+cd FreeRDP
+ln -s packaging/deb debian
+cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DWITH_CLIENT=ON -DWITH_SERVER=OFF -DWITH_X11=ON -DWITH_PULSE=ON -DWITH_ALSA=ON
+ninja -C build
 ```
 
 ### Dependency Overview
