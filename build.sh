@@ -202,7 +202,8 @@ log ".spec file not found. Generating a new one with PyInstaller..."
 if [ "$OS" == "macos" ]; then
     pyinstaller --windowed --name "$NAME" src/PyRDPConnect.py
 elif [ "$OS" == "linux" ]; then
-    pyinstaller --onefile --name "$NAME" src/PyRDPConnect.py
+    # Linux build: bundle data and hidden import directly
+    pyinstaller --onefile --name "$NAME" --hidden-import PyQt5.QtSvg --add-data "src/styles:styles" --add-data "src/icons:icons" --add-data "src/img:img" src/PyRDPConnect.py
 fi
 
 # Ensure the spec file now exists
@@ -383,9 +384,6 @@ if [ "$OS" == "macos" ]; then
     hdiutil create "$DMG_NAME" -volname "$NAME" -srcfolder "$FINAL_DIR/$NAME.app" -ov -format UDZO
 
     log "DMG image created at $DMG_NAME"
-# else
-#     log "Moving the executable to the $FINAL_DIR directory..."
-#     mv "dist/$NAME" "$FINAL_DIR/"
 fi
 
 # Cleanup: Remove the leftover dist/$NAME directory on macOS
