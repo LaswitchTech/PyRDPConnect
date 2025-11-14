@@ -39,6 +39,9 @@ if [ "$OS" = "linux" ] && { [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "armv7l" ] ||
     USE_SYSTEM_PYQT=1
 fi
 
+# Path to a vendored FreeRDP binary (set on macOS; Linux uses --add-data and resolves at runtime)
+FREERDP_BIN=""
+
 # Create a directory to store the final output based on the OS
 FINAL_DIR="dist/$OS"
 if [ -d "$FINAL_DIR" ]; then
@@ -333,7 +336,7 @@ fi
 
 # Verify the vendored version (macOS and linux)
 expect_major="3"   # adjust if you vendor 2.x
-if [ -x "$FREERDP_BIN" ]; then
+if [ -x "${FREERDP_BIN:-}" ]; then
     vend_ver="$("$FREERDP_BIN" +version 2>/dev/null | head -n1 | grep -Eo '[0-9]+\.[0-9]+(\.[0-9]+)?' || true)"
     if [ -z "$vend_ver" ]; then
         log "WARN: Could not detect vendored FreeRDP version from +version"
