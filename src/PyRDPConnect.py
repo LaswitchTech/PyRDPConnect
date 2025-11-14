@@ -698,26 +698,41 @@ class Client(QMainWindow):
         self.init_ui()
 
     def get_path(self,path):
-
         """
-        Returns the full path to a file if it exists in either the 'src' or 'Resources' directory.
-        Prints a debug message if the file is not found.
-
-        :param path: Relative path to the file
-        :return: Full path to the file if found, None otherwise
+        Return an absolute path to a data file bundled either:
+        - in a PyInstaller onefile (sys._MEIPASS),
+        - in a macOS .app (Contents/Resources),
+        - in the repo (src/),
+        and gracefully return None if not found.
         """
-        # Check the 'src' directory
-        src_path = os.path.join(self.root_dir, 'src', path)
-        if os.path.exists(src_path):
-            return src_path
+        # Normalize input (accept "icons/foo.svg" or os.path.join(...))
+        rel = path.replace("\\", "/")
 
-        # Check the 'Resources' directory
-        resources_path = os.path.join(self.root_dir, 'Resources', path)
-        if os.path.exists(resources_path):
-            return resources_path
+        # 1) PyInstaller onefile temp dir
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            p = os.path.join(meipass, rel)
+            if os.path.exists(p):
+                return p
 
-        # Debugging message if file is not found
-        print(f"Could not find: [{self.root_dir}] {path}")
+        # 2) Next to the frozen executable (one-folder or manual copies)
+        if getattr(sys, 'frozen', False):
+            p = os.path.join(self.script_dir, rel)
+            if os.path.exists(p):
+                return p
+
+        # 3) macOS .app Resources (…/Contents/Resources/<rel>)
+        res = os.path.join(self.root_dir, 'Resources', rel)
+        if os.path.exists(res):
+            return res
+
+        # 4) Repo layout (…/<root>/src/<rel>)
+        src = os.path.join(self.root_dir, 'src', rel)
+        if os.path.exists(src):
+            return src
+
+        # Debug
+        print(f"Could not find: [{self.root_dir}] {rel}")
         return None
 
     def get_os(self):
@@ -862,7 +877,7 @@ class Client(QMainWindow):
         if os.path.exists(logo_path):
             self.config["Appearance"]["Logo File"] = logo_path
         else:
-            self.config["Appearance"]["Logo File"] = self.get_path(os.path.join('img', 'logo.png'))
+            self.config["Appearance"]["Logo File"] = self.get_path(os.path.join('img', 'logo.png')) or ""
 
     def load_widgets(self):
         """
@@ -1042,14 +1057,15 @@ class Client(QMainWindow):
 
         # Set window title and icon
         self.setWindowTitle("Client")
-        self.setWindowIcon(QIcon(self.icon_path))
+        self.setWindowIcon(QIcon(self.icon_path) if self.file_exists(self.icon_path) else QIcon())
 
         # Apply gradient background based on configuration
         start = self.config["Appearance"].get("Gradient Start", "#265162")
         end   = self.config["Appearance"].get("Gradient End", "#002136")
 
         # Retrieve the path of the icons directory
-        icons_path = self.get_path('icons')
+        icons_dir = self.get_path('icons')
+        check_svg = os.path.join(icons_dir, 'check.svg') if icons_dir else None
 
         # Create stylesheet overrides
         override = (
@@ -1058,13 +1074,18 @@ class Client(QMainWindow):
             f"    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {start}, stop:1 {end});\n"
             "}\n"
             "QCheckBox::indicator:checked { "
-            f"image: url({icons_path}/check.svg);"
+            f"image: {self.qss_url(check_svg)};"
             " }\n"
         )
 
         # Load Style Sheets
-        with open(self.get_path(os.path.join('styles/style.css')), 'r') as f:
-            self.setStyleSheet(f.read() + override)
+        style_path = self.get_path(os.path.join('styles', 'style.css'))
+        base_css = ""
+        if style_path and os.path.isfile(style_path):
+            with open(style_path, "r", encoding="utf-8") as f:
+                base_css = f.read()
+
+        self.setStyleSheet(base_css + override)
 
         # Set the object name for the stylesheet
         self.setObjectName("clientWindow")  # Set the object name for the stylesheet
@@ -1098,7 +1119,7 @@ class Client(QMainWindow):
         logo_grid_pos = self.calculate_position(logo_pos)
 
         # Load and place the logo image
-        logo_file = self.config['Appearance']['Logo File']
+        logo_file = self.config['Appearance'].get('Logo File') or self.get_path(os.path.join('img', 'logo.png'))
         if logo_file and os.path.isfile(logo_file):
             logo_label = QLabel(central_widget)
             pixmap = QPixmap(logo_file)
@@ -1300,6 +1321,12 @@ class Client(QMainWindow):
             widget._update_style()
 
     def set_svg_icon(self, button, svg_path, size=(18, 18)):
+
+        # Check if the SVG file exists
+        if not self.file_exists(svg_path):
+            button.setIcon(QIcon())  # no icon, still functional
+            return
+
         # Load SVG file
         renderer = QSvgRenderer(svg_path)
 
@@ -1468,6 +1495,18 @@ class Client(QMainWindow):
                 return row
         return None
 
+    def qss_url(p: str | None) -> str:
+        """
+        Return a quoted url("...") suitable for Qt stylesheets, or empty string.
+        """
+        if not p:
+            return 'url("")'
+        # Qt accepts forward slashes
+        return f'url("{p.replace(os.sep, "/")}")'
+
+    def file_exists(p: str | None) -> bool:
+        return isinstance(p, str) and os.path.isfile(p)
+
     def gen_logo_button(self, logo_file):
 
         """
@@ -1505,24 +1544,29 @@ class Client(QMainWindow):
 
     def update_logo_button(self, logo_file):
         """
-        Update the logo file button with the current logo path and a small 72px preview.
+        Update the logo button with a 72px preview, falling back to bundled img/logo.png.
         """
+        # Resolve fallback if needed
+        candidate = logo_file if isinstance(logo_file, str) else None
+        if not (candidate and os.path.isfile(candidate)):
+            candidate = self.get_path(os.path.join('img', 'logo.png'))
 
-        if os.path.isfile(logo_file):
-            pixmap = QPixmap(logo_file)
-            if not pixmap.isNull():  # Check if the pixmap is valid
-                scaled_pixmap = pixmap.scaled(72, 72, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                self.logo_file_button.setIcon(QIcon(scaled_pixmap))
-                self.logo_file_button.setIconSize(scaled_pixmap.size())
-                self.logo_file_button.setText("")  # Clear text, only show image
+        if candidate and os.path.isfile(candidate):
+            pixmap = QPixmap(candidate)
+            if not pixmap.isNull():
+                scaled = pixmap.scaled(72, 72, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                self.logo_file_button.setIcon(QIcon(scaled))
+                self.logo_file_button.setIconSize(scaled.size())
+                self.logo_file_button.setText("")
             else:
-                print(f"Failed to load logo: {logo_file}")
+                print(f"Failed to load logo: {candidate}")
+                self.logo_file_button.setIcon(QIcon())
                 self.logo_file_button.setText("Invalid Logo File")
         else:
-            print(f"File not found: {logo_file}")
-            self.logo_file_button.setText("Select Logo File")  # Fallback if no valid file
+            print(f"File not found: {candidate}")
+            self.logo_file_button.setIcon(QIcon())
+            self.logo_file_button.setText("Select Logo File")
 
-        # Force repaint
         self.logo_file_button.update()
         self.logo_file_button.repaint()
 
