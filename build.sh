@@ -106,14 +106,14 @@ if [ "$USE_SYSTEM_PYQT" -eq 1 ]; then
         log "ERROR: APT not found; cannot install system PyQt5. Install PyQt5 manually or switch to a distro with APT."
         exit 1
     fi
-#     # Sanity check
-#     python - <<'PY'
-# try:
-#     import PyQt5.QtCore, PyQt5.QtWidgets, PyQt5.QtSvg
-#     print("OK: System PyQt5 detected.")
-# except Exception as e:
-#     raise SystemExit(f"PyQt5 missing after APT install: {e}")
-# PY
+    # Sanity check
+    python - <<'PY'
+try:
+    import PyQt5.QtCore, PyQt5.QtWidgets, PyQt5.QtSvg
+    print("OK: System PyQt5 detected.")
+except Exception as e:
+    raise SystemExit(f"PyQt5 missing after APT install: {e}")
+PY
 else
     # Non-ARM / macOS etc: keep using PyPI wheels
     python -m pip install "PyQt5>=5.15,<6"
