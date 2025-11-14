@@ -362,11 +362,15 @@
 		</data>
 		<key>Resources/base_library.zip</key>
 		<data>
-		sVr8rzon0u9P95ehe9Ncp7l0YMw=
+		0sH089KRNyPnYoKz3Qa/WEXCAjs=
 		</data>
 		<key>Resources/icon.icns</key>
 		<data>
 		KVAG9bgFQXB/wOIpi833kDUo6Ok=
+		</data>
+		<key>Resources/icons/activity.svg</key>
+		<data>
+		Uu38Ooiaysodz6TjdMEUYK9xh6g=
 		</data>
 		<key>Resources/icons/arrow-clockwise.svg</key>
 		<data>
@@ -384,9 +388,21 @@
 		<data>
 		2JdU5/tXw1Lg9jfDXNzbDeN+ZkM=
 		</data>
+		<key>Resources/icons/check-circle.svg</key>
+		<data>
+		DQsie8aUD+NYodI1dqlJbaTh3oQ=
+		</data>
+		<key>Resources/icons/check.svg</key>
+		<data>
+		rHIq7QF+he86SEaMwj2Z6rvNL9Y=
+		</data>
 		<key>Resources/icons/door-closed.svg</key>
 		<data>
 		CNImdpABOCfVecbP9PHEJQe/sZM=
+		</data>
+		<key>Resources/icons/exclamation-triangle.svg</key>
+		<data>
+		6HQQdShpxA1vUa8X/vg/Fwuu+lw=
 		</data>
 		<key>Resources/icons/eye-slash.svg</key>
 		<data>
@@ -412,6 +428,10 @@
 		<data>
 		P8w/Ie0+FAMafIcVp3f55c385KQ=
 		</data>
+		<key>Resources/icons/info-circle.svg</key>
+		<data>
+		sS5xi9yDPZ0uGPXVoiaj0QODTIg=
+		</data>
 		<key>Resources/icons/play-fill.ico</key>
 		<data>
 		IHWwNGKjRg1Ggc+oKv2KJLs1Ro4=
@@ -423,6 +443,10 @@
 		<key>Resources/icons/power.svg</key>
 		<data>
 		9rZH7ayehdPlDbFkNgQDqBAi8jo=
+		</data>
+		<key>Resources/icons/question-circle.svg</key>
+		<data>
+		Kpl5rzYr7NQLAQUC6FdX7met66Y=
 		</data>
 		<key>Resources/icons/reception-0.svg</key>
 		<data>
@@ -454,7 +478,7 @@
 		</data>
 		<key>Resources/styles/style.css</key>
 		<data>
-		tRd51bW7Sn9GzZyU+bVI/Ljsabk=
+		WkzhBNLBryyZU176YO1qLjZ5t24=
 		</data>
 	</dict>
 	<key>files2</key>
@@ -2323,7 +2347,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			qeX0imSg5rbgjvrNNF4x2zyxQyfjQFxsGYGyNpvynJI=
+			GjEaU2ljPvOaq08DHtRkI38tL9XpQl9UbqeyRy5CTDA=
 			</data>
 		</dict>
 		<key>Resources/icon.icns</key>
@@ -2331,6 +2355,13 @@
 			<key>hash2</key>
 			<data>
 			OOy/WAPn3hlwK1ZqVjL+XvcI/+TeV3l+/HC1Pw7JV30=
+			</data>
+		</dict>
+		<key>Resources/icons/activity.svg</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			J/wsj6j9+gRP91mdyZReIH0CobhCx49ChAi/mlBl0Lg=
 			</data>
 		</dict>
 		<key>Resources/icons/arrow-clockwise.svg</key>
@@ -2361,11 +2392,32 @@
 			omBOi25ir1b1+62GN8PpU64f+7y0Bd3RwZ31I4v5e1I=
 			</data>
 		</dict>
+		<key>Resources/icons/check-circle.svg</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			cjogFT4faoEB73311eOfpCrCLY9fkhkyF6D/URfJ5k0=
+			</data>
+		</dict>
+		<key>Resources/icons/check.svg</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			3b72S/Pqmg1SIz63U2KWTiX74BwUYXH2u/qvQ2nG52o=
+			</data>
+		</dict>
 		<key>Resources/icons/door-closed.svg</key>
 		<dict>
 			<key>hash2</key>
 			<data>
 			5Op5ODmP2MC7fTCRZBBKJcIFmFJMkF/iq2kmK4PgdUk=
+			</data>
+		</dict>
+		<key>Resources/icons/exclamation-triangle.svg</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			w4baJG5Td0kYV7Xw22+k8l+4KLlVzBmUh37jPJhxrgU=
 			</data>
 		</dict>
 		<key>Resources/icons/eye-slash.svg</key>
@@ -2410,6 +2462,13 @@
 			IdC2xcwm+c2aSuHQPMvLp12ZCGx+kVx0H4/ph3JcM/U=
 			</data>
 		</dict>
+		<key>Resources/icons/info-circle.svg</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			SPyxbmxefVVVtiTByzqb+OfiXHyKRxrtABI3qwGJz4E=
+			</data>
+		</dict>
 		<key>Resources/icons/play-fill.ico</key>
 		<dict>
 			<key>hash2</key>
@@ -2429,6 +2488,13 @@
 			<key>hash2</key>
 			<data>
 			bYt9IKSEyef+6v0Qg5/FokKg1u2mwaqIFd/4wHxdxyU=
+			</data>
+		</dict>
+		<key>Resources/icons/question-circle.svg</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			iNkIqNAW3pGOZm7FOWt4q+V2XhXxwbKLjQ42Zh1mioA=
 			</data>
 		</dict>
 		<key>Resources/icons/reception-0.svg</key>
@@ -2509,7 +2575,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			ZFse6XRnKxb06f9XrM2sLHOzhhn3e93oFo2kp5hmMJE=
+			wJCPlRCaS078DYQmLPhUK2Lhi0O+0Iz2YWkeQdqmzjQ=
 			</data>
 		</dict>
 	</dict>
