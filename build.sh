@@ -203,7 +203,7 @@ if [ "$OS" == "macos" ]; then
     pyinstaller --windowed --name "$NAME" src/PyRDPConnect.py
 elif [ "$OS" == "linux" ]; then
     # Linux build: bundle data and hidden import directly
-    pyinstaller --onefile --name "$NAME" --hidden-import PyQt5.QtSvg --add-data "src/styles:styles" --add-data "src/icons:icons" --add-data "src/img:img" src/PyRDPConnect.py
+    pyinstaller --onefile --name "$NAME" --hidden-import PyQt5.QtSvg --add-data "src/styles:styles" --add-data "src/icons:icons" --add-data "src/img:img" --add-data "src/freerdp/linux:freerdp/linux" src/PyRDPConnect.py
 fi
 
 # Ensure the spec file now exists
@@ -329,19 +329,6 @@ if [ "$OS" == "macos" ]; then
 else
     log "Moving the executable to the $FINAL_DIR directory..."
     mv "dist/$NAME" "$FINAL_DIR/"
-
-    # ---- Place bundled FreeRDP under dist/linux/src/freerdp/linux/... ----
-    LNX_VENDOR_SRC="src/freerdp/linux"
-    LNX_VENDOR_DST="$FINAL_DIR/src/freerdp/linux"
-    if [ -d "$LNX_VENDOR_SRC" ]; then
-      log "Copying FreeRDP tree to $LNX_VENDOR_DST ..."
-      mkdir -p "$(dirname "$LNX_VENDOR_DST")"
-      rsync -a "$LNX_VENDOR_SRC/" "$LNX_VENDOR_DST/"
-      chmod +x "$LNX_VENDOR_DST/xfreerdp" || true
-      FREERDP_BIN="$LNX_VENDOR_DST/xfreerdp"    # <— ADD THIS LINE
-    else
-      log "WARN: $LNX_VENDOR_SRC not found; build will fall back to system xfreerdp at runtime."
-    fi
 fi
 
 # Verify the vendored version (macOS and linux)
