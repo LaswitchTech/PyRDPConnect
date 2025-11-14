@@ -107,16 +107,28 @@ if [ "$USE_SYSTEM_PYQT" -eq 1 ]; then
         exit 1
     fi
 
-    # ensure system dist-packages are visible inside the venv
+    # ensure system dist-packages are visible inside the venv (Debian/RPi)
     SYS_PYTHON="$(command -v python3)"
-    SYS_DIST_PKGS="$("$SYS_PYTHON" - <<'PY'
-import sysconfig
-print(sysconfig.get_paths()["purelib"])
-PY
-    )"
-    SYS_PLAT_PKGS="$("$SYS_PYTHON" - <<'PY'
-import sysconfig
-print(sysconfig.get_paths()["platlib"])
+
+    # Collect all system "dist-packages" dirs that might contain APT's PyQt5
+    SYS_DIST_DIRS="$("$SYS_PYTHON" - <<'PY'
+import site, sys
+paths=set()
+
+# Prefer entries that actually end with dist-packages
+for p in getattr(site, 'getsitepackages', lambda: [])() or []:
+    if p.endswith('dist-packages'):
+        paths.add(p)
+
+up = getattr(site, 'getusersitepackages', lambda: None)()
+if up and str(up).endswith('dist-packages'):
+    paths.add(up)
+
+# Common Debian/RPi locations
+for c in ('/usr/lib/python3/dist-packages', '/usr/local/lib/python3/dist-packages'):
+    paths.add(c)
+
+print('\\n'.join(sorted(paths)))
 PY
     )"
 
@@ -127,16 +139,21 @@ print(sysconfig.get_paths()["purelib"])
 PY
     )"
 
-    # 1) .pth fallback (kept)
-    echo "$SYS_DIST_PKGS" >  "$VENV_SITE_PKGS/_system_dist_packages.pth"
-    [ "$SYS_PLAT_PKGS" != "$SYS_DIST_PKGS" ] && echo "$SYS_PLAT_PKGS" >> "$VENV_SITE_PKGS/_system_dist_packages.pth"
+    # Write a .pth pointing to each system dist-packages dir
+    : > "$VENV_SITE_PKGS/_system_dist_packages.pth"
+    while IFS= read -r d; do
+    [ -n "$d" ] && echo "$d" >> "$VENV_SITE_PKGS/_system_dist_packages.pth"
+    done <<< "$SYS_DIST_DIRS"
 
-    # 2) Hard guarantee via sitecustomize.py
-    cat > "$VENV_SITE_PKGS/sitecustomize.py" <<PY
+    # Hard guarantee via sitecustomize.py
+    cat > "$VENV_SITE_PKGS/sitecustomize.py" <<'PY'
 import sys
-need = [r"${SYS_DIST_PKGS}", r"${SYS_PLAT_PKGS}"]
-for p in need:
-    if p and p not in sys.path:
+NEED = [
+    '/usr/lib/python3/dist-packages',
+    '/usr/local/lib/python3/dist-packages',
+]
+for p in NEED:
+    if p not in sys.path:
         sys.path.append(p)
 PY
 
