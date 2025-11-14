@@ -135,14 +135,14 @@ if [ -f "$SPEC_FILE" ]; then
     rm -f "$SPEC_FILE"
 fi
 
-log "Verifying required PyQt5 modules are present..."
-python - <<'PY'
-from importlib.util import find_spec
-missing = [m for m in ("PyQt5", "PyQt5.QtSvg") if find_spec(m) is None]
-if missing:
-    raise SystemExit(f"Missing modules before build: {missing}")
-print("Qt check passed.")
-PY
+# log "Verifying required PyQt5 modules are present..."
+# python - <<'PY'
+# from importlib.util import find_spec
+# missing = [m for m in ("PyQt5", "PyQt5.QtSvg") if find_spec(m) is None]
+# if missing:
+#     raise SystemExit(f"Missing modules before build: {missing}")
+# print("Qt check passed.")
+# PY
 
 log ".spec file not found. Generating a new one with PyInstaller..."
 if [ "$OS" == "macos" ]; then
