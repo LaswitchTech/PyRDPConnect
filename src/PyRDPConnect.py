@@ -733,34 +733,52 @@ class Client(QMainWindow):
                 "Password": "",
                 "Domain": ""
             },
-            "Display": {
-                "Resolution": "",
-                "Use all monitors": False,
-                "Start session in fullscreen": False,
-                "Fit session to window": False
+            "FreeRDP": {
+                "Display": {
+                    "Resolution": "",
+                    "Use all monitors": False,
+                    "Start session in fullscreen": False,
+                    "Fit session to window": False
+                },
+                "Devices": {
+                    "Play sound": "",
+                    "Record sound": "",
+                    "Printers": False,
+                    "Smart Cards": False,
+                    "Ports": False,
+                    "Drives": False
+                },
+                "Folders": {
+                    "Redirect": False,
+                    "Folders": []
+                },
+                "Experience": {
+                    "Clipboard": False,
+                    "RemoteFX": False,
+                    "Smooth Fonts": False,
+                    "Desktop Composition": False,
+                    "Full Window Drag": False,
+                    "Menu Animations": False,
+                    "Disable Themes": False,
+                    "Disable Wallpaper": False,
+                    "Show certificate warning": False
+                }
             },
-            "Devices": {
-                "Play sound": "",
-                "Record sound": "",
-                "Printers": False,
-                "Smart Cards": False,
-                "Ports": False,
-                "Drives": False
-            },
-            "Folders": {
-                "Redirect": False,
-                "Folders": []
-            },
-            "Experience": {
-                "Clipboard": False,
-                "RemoteFX": False,
-                "Smooth Fonts": False,
-                "Desktop Composition": False,
-                "Full Window Drag": False,
-                "Menu Animations": False,
-                "Disable Themes": False,
-                "Disable Wallpaper": False,
-                "Show certificate warning": False
+            "Networking": {
+                "WiFi": {
+                    "Interface": "",
+                    "SSID": "",
+                    "Password": "",
+                    "Auto connect": False
+                },
+                "OpenVPN": {
+                    "Config File": "",
+                    "Auto connect": False
+                },
+                "WireGuard": {
+                    "Config File": "",
+                    "Auto connect": False
+                }
             },
             "Appearance": {
                 "Logo File": "",
@@ -783,119 +801,125 @@ class Client(QMainWindow):
         # Load config from file
         config_dir = os.path.join(self.root_dir, 'config')
 
-        for category in self.config.keys():
-            config_path = os.path.join(config_dir, f'{category.lower()}.cfg')
-            if os.path.exists(config_path):
-                with open(config_path, 'r') as f:
-                    category_config = json.load(f)
+        # --- load new-style cfgs if present ---
+        def _merge_into(dst, src):
+            for k, v in src.items():
+                if isinstance(v, dict) and isinstance(dst.get(k), dict):
+                    _merge_into(dst[k], v)
+                else:
+                    # keep lists non-None
+                    if isinstance(dst.get(k), list) and v is None:
+                        dst[k] = []
+                    else:
+                        dst[k] = v
 
-                    # Loop through each config item and set the config value
-                    for name, value in category_config.items():
+        for fname, topkey in [("general.cfg","General"),
+                            ("freerdp.cfg","FreeRDP"),
+                            ("networking.cfg","Networking"),
+                            ("appearance.cfg","Appearance"),
+                            ("administration.cfg","Administration")]:
+            p = os.path.join(config_dir, fname)
+            if os.path.exists(p):
+                try:
+                    with open(p, "r") as f:
+                        data = json.load(f)
+                    if topkey in self.config and isinstance(self.config[topkey], dict) and isinstance(data, dict):
+                        _merge_into(self.config[topkey], data)
+                    elif topkey in self.config:
+                        self.config[topkey] = data
+                except Exception as e:
+                    print(f"Failed loading {fname}: {e}")
 
-                        # Check if the config item exists in the config
-                        if name in self.config[category]:
-                            if isinstance(self.config[category][name], list) and value is None:
-                                # Make sure lists like Folders are not set to None
-                                self.config[category][name] = []
-                            else:
-                                self.config[category][name] = value
+        # --- LEGACY migration (display.cfg / devices.cfg / folders.cfg / experience.cfg) ---
+        legacy_map = {
+            "display.cfg": ("FreeRDP", "Display"),
+            "devices.cfg": ("FreeRDP", "Devices"),
+            "folders.cfg": ("FreeRDP", "Folders"),
+            "experience.cfg": ("FreeRDP", "Experience"),
+        }
+        for legacy_fname, (top, sub) in legacy_map.items():
+            p = os.path.join(config_dir, legacy_fname)
+            if os.path.exists(p):
+                try:
+                    with open(p, "r") as f:
+                        data = json.load(f)
+                    if isinstance(data, dict):
+                        _merge_into(self.config[top][sub], data)
+                except Exception as e:
+                    print(f"Failed migrating {legacy_fname}: {e}")
 
-        # Check if the custom logo exists in the 'config/' directory
+        # Logo path resolution (same behavior)
         logo_path = os.path.join(self.root_dir, 'config', 'logo.png')
         if os.path.exists(logo_path):
             self.config["Appearance"]["Logo File"] = logo_path
         else:
-            # Fallback to default logo in 'src/img/logo.png'
             self.config["Appearance"]["Logo File"] = self.get_path(os.path.join('img', 'logo.png'))
 
     def load_widgets(self):
-
         """
-        Load all the widgets including logo selection and preview.
+        Build self.widgets as a nested map that mirrors self.config for categories
+        with sub-tabs (FreeRDP, Networking).
         """
 
-        # Initialize QLineEdit for password with echo mode set to Password
-        passwordLineEdit = QLineEdit()
-        passwordLineEdit.setEchoMode(QLineEdit.Password)
+        # password edits
+        passwordLineEdit = QLineEdit(); passwordLineEdit.setEchoMode(QLineEdit.Password)
+        lockLineEdit = QLineEdit();     lockLineEdit.setEchoMode(QLineEdit.Password)
 
-        # Initialize QLineEdit for lock password with echo mode set to Password
-        lockLineEdit = QLineEdit()
-        lockLineEdit.setEchoMode(QLineEdit.Password)
-
-        # Initialize QSpinBox for port with default value and range
-        portSpinBox = QSpinBox()
-        portSpinBox.setRange(1, 65535)
+        # Port
+        portSpinBox = QSpinBox(); portSpinBox.setRange(1, 65535)
         portSpinBox.setValue(self.config["General"]["Port"])
 
-        # Get current screen resolution
+        # Resolution (detect)
         screenResolution = QApplication.desktop().screenGeometry()
         currentResolution = f"{screenResolution.width()}x{screenResolution.height()}"
-        self.config["Display"]["Resolution"] = currentResolution
+        self.config["FreeRDP"]["Display"]["Resolution"] = currentResolution
 
-        # Initialize resolution combo box with common resolutions
         resolutionComboBox = QComboBox()
-        commonResolutions = ["800x600", "1024x768", "1280x720", "1366x768", "1920x1080", "3840x2160"]
-        if currentResolution not in commonResolutions:
-            commonResolutions.insert(0, currentResolution)
-        resolutionComboBox.addItems(commonResolutions)
-        resolutionComboBox.setCurrentText(currentResolution)
+        commonRes = ["800x600","1024x768","1280x720","1366x768","1920x1080","3840x2160"]
+        if currentResolution not in commonRes:
+            commonRes.insert(0, currentResolution)
+        resolutionComboBox.addItems(commonRes)
+        resolutionComboBox.setCurrentText(self.config["FreeRDP"]["Display"]["Resolution"])
 
-        # Initialize sound options combo box
-        playSoundComboBox = QComboBox()
-        playSoundOptions = ["Never", "On this computer", "On the remote computer"]
-        playSoundComboBox.addItems(playSoundOptions)
-        playSoundComboBox.setCurrentText(self.config["Devices"]["Play sound"])
+        # Sound combos
+        playSoundCombo = QComboBox(); playSoundCombo.addItems(["Never","On this computer","On the remote computer"])
+        playSoundCombo.setCurrentText(self.config["FreeRDP"]["Devices"]["Play sound"])
+        recordSoundCombo = QComboBox(); recordSoundCombo.addItems(["Never","On this computer","On the remote computer"])
+        recordSoundCombo.setCurrentText(self.config["FreeRDP"]["Devices"]["Record sound"])
 
-        # Initialize sound options combo box
-        recordSoundComboBox = QComboBox()
-        recordSoundOptions = ["Never", "On this computer", "On the remote computer"]
-        recordSoundComboBox.addItems(recordSoundOptions)
-        recordSoundComboBox.setCurrentText(self.config["Devices"]["Record sound"])
+        # Positions
+        positionsOptions = ["top-left","top-center","top-right","center-left","center-center","center-right","bottom-left","bottom-center","bottom-right"]
+        loginPosCombo = QComboBox(); loginPosCombo.addItems(positionsOptions)
+        loginPosCombo.setCurrentText(self.config["Appearance"]["Login Position"])
+        logoPosCombo  = QComboBox(); logoPosCombo.addItems(positionsOptions)
+        logoPosCombo.setCurrentText(self.config["Appearance"]["Logo Position"])
 
-        # Initialize login and logo positions
-        positionsOptions = ["top-left", "top-center", "top-right", "center-left", "center-center", "center-right", "bottom-left", "bottom-center", "bottom-right"]
-        loginPositionComboBox = QComboBox()
-        loginPositionComboBox.addItems(positionsOptions)
-        loginPositionComboBox.setCurrentText(self.config["Appearance"]["Login Position"])
-
-        logoPositionComboBox = QComboBox()
-        logoPositionComboBox.addItems(positionsOptions)
-        logoPositionComboBox.setCurrentText(self.config["Appearance"]["Logo Position"])
-
-        # Replace logo file text field with a button for file selection and preview
+        # Logo
         logo_file = self.config["Appearance"]["Logo File"] or self.get_path(os.path.join('img', 'logo.png'))
         self.gen_logo_button(logo_file)
 
-        # Color pickers for gradient
+        # Gradient
         gradient_start_btn = ColorButton(self.config["Appearance"]["Gradient Start"] or "#265162")
         gradient_end_btn   = ColorButton(self.config["Appearance"]["Gradient End"] or "#002136")
-
-        # If changed, treat as unsaved & live-preview the gradient (nice UX)
         gradient_start_btn.colorChanged.connect(lambda _: self.on_configuration_changed())
         gradient_end_btn.colorChanged.connect(lambda _: self.on_configuration_changed())
 
-        # Initialize folder redirection
+        # Folder redirection controls
         self.folder_add_button = QPushButton("Add Folder")
         self.folder_add_button.clicked.connect(self.select_folder)
         self.folder_list_layout = QVBoxLayout()
 
-        # Add "Open Log" button in the Administration tab
+        # Admin buttons
         self.open_log_button = QPushButton("Open log")
         self.open_log_button.clicked.connect(self.open_last_log)
-
-        # Add "Update" button in the Administration tab
         self.update_button = QPushButton("Update")
         self.update_button.clicked.connect(self.update_application)
-
-        # Add "Import" button in the Administration tab
         self.import_button = QPushButton("Import")
         self.import_button.clicked.connect(self.import_settings)
-
-        # Add "Export" button in the Administration tab
         self.export_button = QPushButton("Export")
         self.export_button.clicked.connect(self.export_settings)
 
-        # Initialize widgets dictionary
+        # --- Build widgets map mirroring new config structure ---
         self.widgets = {
             "General": {
                 "Server Address": QLineEdit(),
@@ -904,68 +928,89 @@ class Client(QMainWindow):
                 "Password": passwordLineEdit,
                 "Domain": QLineEdit(),
             },
-            "Display": {
-                "Resolution": resolutionComboBox,
-                "Use all monitors": QCheckBox(),
-                "Start session in fullscreen": QCheckBox(),
-                "Fit session to window": QCheckBox(),
+            "FreeRDP": {
+                "Display": {
+                    "Resolution": resolutionComboBox,
+                    "Use all monitors": QCheckBox(),
+                    "Start session in fullscreen": QCheckBox(),
+                    "Fit session to window": QCheckBox(),
+                },
+                "Devices": {
+                    "Play sound":   playSoundCombo,
+                    "Record sound": recordSoundCombo,
+                    "Printers":     QCheckBox(),
+                    "Smart Cards":  QCheckBox(),
+                    "Ports":        QCheckBox(),
+                    "Drives":       QCheckBox(),
+                },
+                "Folders": {
+                    "Redirect": QCheckBox(),
+                    "Folders":  [],  # list UI handled separately
+                },
+                "Experience": {
+                    "Clipboard":             QCheckBox(),
+                    "RemoteFX":              QCheckBox(),
+                    "Smooth Fonts":          QCheckBox(),
+                    "Desktop Composition":   QCheckBox(),
+                    "Full Window Drag":      QCheckBox(),
+                    "Menu Animations":       QCheckBox(),
+                    "Disable Themes":        QCheckBox(),
+                    "Disable Wallpaper":     QCheckBox(),
+                    "Show certificate warning": QCheckBox(),
+                },
             },
-            "Devices": {
-                "Play sound": playSoundComboBox,
-                "Record sound": recordSoundComboBox,
-                "Printers": QCheckBox(),
-                "Smart Cards": QCheckBox(),
-                "Ports": QCheckBox(),
-                "Drives": QCheckBox(),
-            },
-            "Folders": {
-                "Redirect": QCheckBox(),
-                "Folders": [],
-            },
-            "Experience": {
-                "Clipboard": QCheckBox(),
-                "RemoteFX": QCheckBox(),
-                "Smooth Fonts": QCheckBox(),
-                "Desktop Composition": QCheckBox(),
-                "Full Window Drag": QCheckBox(),
-                "Menu Animations": QCheckBox(),
-                "Disable Themes": QCheckBox(),
-                "Disable Wallpaper": QCheckBox(),
-                "Show certificate warning": QCheckBox(),
+            "Networking": {
+                # WiFi tab only shown on Linux in launch_configurations, but we still keep widgets here
+                "WiFi": {
+                    "Interface":    QLineEdit(),
+                    "SSID":         QLineEdit(),
+                    "Password":     QLineEdit(),
+                    "Auto connect": QCheckBox(),
+                },
+                "OpenVPN": {
+                    "Config File":  QLineEdit(),
+                    "Auto connect": QCheckBox(),
+                },
+                "WireGuard": {
+                    "Config File":  QLineEdit(),
+                    "Auto connect": QCheckBox(),
+                }
             },
             "Appearance": {
-                "Logo File": self.logo_file_button,
-                "Logo Position": logoPositionComboBox,
-                "Login Position": loginPositionComboBox,
-                "Hide Exit": QCheckBox(),
+                "Logo File":      self.logo_file_button,
+                "Logo Position":  logoPosCombo,
+                "Login Position": loginPosCombo,
+                "Hide Exit":      QCheckBox(),
                 "Hide Diagnostics": QCheckBox(),
-                "Hide Restart": QCheckBox(),
-                "Hide Shutdown": QCheckBox(),
-                "Fullscreen": QCheckBox(),
+                "Hide Restart":   QCheckBox(),
+                "Hide Shutdown":  QCheckBox(),
+                "Fullscreen":     QCheckBox(),
                 "Gradient Start": gradient_start_btn,
-                "Gradient End": gradient_end_btn
+                "Gradient End":   gradient_end_btn,
             },
             "Administration": {
-                "Password": lockLineEdit,
-                "Debug logging": QCheckBox(),
-                "Open log": self.open_log_button,
-                "Update": self.update_button,
-                "Import": self.import_button,
-                "Export": self.export_button,
+                "Password":       lockLineEdit,
+                "Debug logging":  QCheckBox(),
+                "Open log":       self.open_log_button,
+                "Update":         self.update_button,
+                "Import":         self.import_button,
+                "Export":         self.export_button,
             },
         }
 
-        # Load configuration files and set widget values
-        config_dir = os.path.join(self.root_dir, 'config')
-        for category in self.widgets.keys():
-            config_path = os.path.join(config_dir, f'{category.lower()}.cfg')
-            if os.path.exists(config_path):
-                with open(config_path, 'r') as f:
-                    category_config = json.load(f)
-                    for name, value in category_config.items():
-                        widget = self.get_widget_from_config(category, name)
-                        if widget:
-                            self.set_widget_value(widget, value)
+        # --- Apply current config values into widgets (supports nested dicts) ---
+        def _apply_values(widget_map, cfg):
+            for key, w in widget_map.items():
+                if isinstance(w, dict) and isinstance(cfg.get(key, None), dict):
+                    _apply_values(w, cfg[key])
+                elif isinstance(w, list):
+                    # folders list handled in launch_configurations (we only keep data here)
+                    pass
+                else:
+                    if w is not None and key in cfg:
+                        self.set_widget_value(w, cfg[key])
+
+        _apply_values(self.widgets, self.config)
 
     def init_properties(self):
 
@@ -1364,56 +1409,40 @@ class Client(QMainWindow):
     def select_folder(self):
         folder_dialog = QFileDialog(self)
         folder_dialog.setFileMode(QFileDialog.Directory)
-
         if folder_dialog.exec_():
             selected_folder = folder_dialog.selectedFiles()[0]
             folder_data = {"path": selected_folder, "enabled": True}
-            self.config["Folders"]["Folders"].append(folder_data)
+            self.config["FreeRDP"]["Folders"]["Folders"].append(folder_data)
             self.add_folder_to_list(folder_data)
-
-            # Call on_configuration_changed to highlight the Save button
             self.on_configuration_changed()
 
     def add_folder_to_list(self, folder_data):
         folder_widget = QWidget()
         folder_layout = QHBoxLayout(folder_widget)
 
-        # Add the folder path label
         folder_label = QLabel(folder_data["path"])
         folder_layout.addWidget(folder_label)
 
-        # Add the enable/disable checkbox
         folder_checkbox = QCheckBox("Enabled")
         folder_checkbox.setChecked(folder_data["enabled"])
         folder_layout.addWidget(folder_checkbox)
-
-        # Connect the checkbox to update folder_data["enabled"]
         folder_checkbox.stateChanged.connect(lambda state, fd=folder_data: self.update_folder_enabled(fd, state))
 
-        # Add a delete button
         delete_button = QPushButton("Delete")
         delete_button.clicked.connect(lambda: self.remove_folder(folder_widget, folder_data))
         folder_layout.addWidget(delete_button)
 
-        # Add the folder widget to the list layout
         self.folder_list_layout.addWidget(folder_widget)
-
-        # Call on_configuration_changed to highlight the Save button
         self.on_configuration_changed()
 
     def update_folder_enabled(self, folder_data, state):
         folder_data["enabled"] = bool(state)
-        # Call on_configuration_changed to highlight the Save button
         self.on_configuration_changed()
 
     def remove_folder(self, folder_widget, folder_data):
-
-        # Remove the folder from the list
         self.folder_list_layout.removeWidget(folder_widget)
         folder_widget.deleteLater()
-        self.config["Folders"]["Folders"].remove(folder_data)
-
-        # Call on_configuration_changed to highlight the Save button
+        self.config["FreeRDP"]["Folders"]["Folders"].remove(folder_data)
         self.on_configuration_changed()
 
     def find_widget_index(layout, widget):
@@ -1507,68 +1536,98 @@ class Client(QMainWindow):
             self._msgbox("Error", f"Failed to update the application: {e}", icon_key="error")
 
     def launch_configurations(self):
-
-        # Create a password prompt
         self.configurations_dialog = QDialog(self)
         self.configurations_dialog.setWindowFlags(Qt.Dialog | Qt.WindowTitleHint | Qt.CustomizeWindowHint | Qt.WindowCloseButtonHint)
         self.configurations_dialog.setObjectName("configurationsWindow")
 
-        # Set the layout to the configurations dialog
         self.configurations_layout = QVBoxLayout(self.configurations_dialog)
-        self.configurations_layout.setSpacing(0)  # Set spacing to 0 to remove space between rows
+        self.configurations_layout.setSpacing(0)
 
-        # Create a tab widget
         self.configurations_tab_widget = QTabWidget()
         self.configurations_layout.addWidget(self.configurations_tab_widget)
 
-        # Create tabs for each category
-        for category, settings in self.widgets.items():
-            tab = QWidget()
-            layout = QFormLayout()
-            tab.setLayout(layout)
+        def bind_change_signals(w):
+            if isinstance(w, QLineEdit):
+                w.textChanged.connect(self.on_configuration_changed)
+            elif isinstance(w, QCheckBox):
+                w.stateChanged.connect(self.on_configuration_changed)
+            elif isinstance(w, QComboBox):
+                w.currentTextChanged.connect(self.on_configuration_changed)
+            elif isinstance(w, QSpinBox):
+                w.valueChanged.connect(self.on_configuration_changed)
 
-            for name, widget in settings.items():
-                if category == "Appearance" and name == "Logo File":
-                    self.logo_layout = layout
-                    self.logo_row = layout.addRow(QLabel(name), widget)
-                elif isinstance(widget, dict):
-                    # For nested settings like in "Redirect" under "Devices"
-                    for sub_name, sub_widget in widget.items():
-                        layout.addRow(QLabel(f"{sub_name}"), sub_widget)
-                elif isinstance(widget, list):
-                    # Handle lists for folder redirection
-                    if name == "Folders":
-                        layout.addRow(QLabel(name), self.folder_add_button)  # Folder selection button
-                        for folder in self.config["Folders"]["Folders"]:
+        def add_simple_form_tab(title, mapping):
+            tab = QWidget()
+            layout = QFormLayout(); tab.setLayout(layout)
+            for name, widget in mapping.items():
+                if isinstance(widget, dict):
+                    # shouldn't happen in simple tab
+                    continue
+                if isinstance(widget, list):
+                    # Folders list special case
+                    if title == "Folders" and name == "Folders":
+                        layout.addRow(QLabel(name), self.folder_add_button)
+                        for folder in self.config["FreeRDP"]["Folders"]["Folders"]:
                             self.add_folder_to_list(folder)
                         layout.addRow(self.folder_list_layout)
-                else:
-                    layout.addRow(QLabel(name), widget)
+                    continue
+                layout.addRow(QLabel(name), widget)
+                bind_change_signals(widget)
+            return tab
 
-                # Connect signals for widget changes
-                if isinstance(widget, QLineEdit):
-                    widget.textChanged.connect(self.on_configuration_changed)
-                elif isinstance(widget, QCheckBox):
-                    widget.stateChanged.connect(self.on_configuration_changed)
-                elif isinstance(widget, QComboBox):
-                    widget.currentTextChanged.connect(self.on_configuration_changed)
-                elif isinstance(widget, QSpinBox):
-                    widget.valueChanged.connect(self.on_configuration_changed)
+        def add_subtabbed_category(title, submaps, show_filter=None):
+            """
+            Creates a top-level tab that contains a QTabWidget with sub-tabs.
+            show_filter: optional callable(subname:str) -> bool to conditionally include a sub-tab.
+            """
+            top = QWidget()
+            v = QVBoxLayout(top)
+            sub = QTabWidget()
+            v.addWidget(sub)
 
-            self.configurations_tab_widget.addTab(tab, category)
+            for subname, submap in submaps.items():
+                if callable(show_filter) and not show_filter(subname):
+                    continue
+                subtab = add_simple_form_tab(subname, submap)
+                sub.addTab(subtab, subname)
+            return top
 
-        # Save Button
+        # ---- Top-level tabs ----
+        # General (simple form)
+        general_tab = add_simple_form_tab("General", self.widgets["General"])
+        self.configurations_tab_widget.addTab(general_tab, "General")
+
+        # FreeRDP (subtabs: Display, Devices, Folders, Experience)
+        freerdp_tab = add_subtabbed_category("FreeRDP", self.widgets["FreeRDP"])
+        self.configurations_tab_widget.addTab(freerdp_tab, "FreeRDP")
+
+        # Networking (subtabs: WiFi (only Linux), OpenVPN, WireGuard)
+        def _net_filter(name: str) -> bool:
+            if name == "WiFi":
+                return self.get_os() == "linux"
+            return True
+        networking_tab = add_subtabbed_category("Networking", self.widgets["Networking"], show_filter=_net_filter)
+        self.configurations_tab_widget.addTab(networking_tab, "Networking")
+
+        # Appearance (simple form)
+        appearance_tab = add_simple_form_tab("Appearance", self.widgets["Appearance"])
+        self.configurations_tab_widget.addTab(appearance_tab, "Appearance")
+
+        # Administration (simple form)
+        admin_tab = add_simple_form_tab("Administration", self.widgets["Administration"])
+        self.configurations_tab_widget.addTab(admin_tab, "Administration")
+
+        # Save button
         self.save_button = QPushButton("Save")
         self.save_button.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
         self.configurations_layout.addWidget(self.save_button)
         self.save_button.clicked.connect(self.save_config)
 
-        # Initialize palettes for save button
+        # palettes for Save
         self.originalPalette = self.save_button.palette()
         self.highlightedPalette = QPalette(self.originalPalette)
         self.highlightedPalette.setColor(QPalette.Button, QColor("#198754"))
 
-        # show the dialog
         self.configurations_dialog.show()
 
     def launch_diagnostics(self):
@@ -1600,109 +1659,112 @@ class Client(QMainWindow):
             pass
 
     def save_config(self):
-
         """
-        Save the current configuration, including the logo file path.
+        Persist all settings to config/*.cfg (supports nested categories).
         """
-
-        # Ensure the configuration directory exists
         config_dir = os.path.join(self.root_dir, 'config')
-        if not os.path.exists(config_dir):
-            os.makedirs(config_dir)
+        os.makedirs(config_dir, exist_ok=True)
 
-        # Iterate over the widgets to save settings
-        for category, settings in self.widgets.items():
-            category_config = {}
-            for name, value in settings.items():
-                if name == "Folders":
-                    # Save the folders list from self.config
-                    category_config[name] = self.config["Folders"]["Folders"]
-                elif isinstance(value, dict):
-                    # For nested settings like in "Redirect" under "Devices"
-                    category_config[name] = {sub_name: self.get_widget_value(sub_widget) for sub_name, sub_widget in value.items()}
+        def _gather_values(mapping, cfg_ref):
+            out = {}
+            for name, w in mapping.items():
+                if isinstance(w, dict):
+                    out[name] = _gather_values(w, cfg_ref.get(name, {}))
+                elif isinstance(w, list):
+                    # only used for Folders list
+                    if "Folders" in cfg_ref:
+                        out[name] = cfg_ref["Folders"]
+                    else:
+                        out[name] = []
                 else:
-                    category_config[name] = self.get_widget_value(value)
+                    out[name] = self.get_widget_value(w)
+            return out
 
-            # Ensure the default logo is saved if no file is selected
-            if category == "Appearance" and "Logo File" in category_config:
-                if hasattr(self, 'selected_logo_file'):
-                    if os.path.isfile(self.selected_logo_file):
-                        shutil.copyfile(self.selected_logo_file, os.path.join(config_dir, 'logo.png'))
-                        category_config["Logo File"] = os.path.join(config_dir, 'logo.png')
+        # Collect per top-category
+        to_write = {}
+        for topcat, mapping in self.widgets.items():
+            if topcat in ("FreeRDP","Networking"):
+                to_write[topcat] = _gather_values(mapping, self.config.get(topcat, {}))
+            else:
+                to_write[topcat] = _gather_values(mapping, self.config.get(topcat, {}))
 
-            config_path = os.path.join(config_dir, f'{category.lower()}.cfg')
-            with open(config_path, 'w') as f:
-                json.dump(category_config, f)
+        # Handle logo copy (same behavior as before)
+        if "Appearance" in to_write and "Logo File" in to_write["Appearance"]:
+            if hasattr(self, 'selected_logo_file') and os.path.isfile(self.selected_logo_file):
+                shutil.copyfile(self.selected_logo_file, os.path.join(config_dir, 'logo.png'))
+                to_write["Appearance"]["Logo File"] = os.path.join(config_dir, 'logo.png')
 
-        # Reset background color of the save button to default
-        self.save_button.setObjectName("saveButton")  # Change object name back to default
-        self.save_button.style().unpolish(self.save_button)  # Unpolish to clear the unsaved styling
-        self.save_button.style().polish(self.save_button)  # Re-apply the stylesheet
-        self.save_button.update()  # Update the button's appearance
+        # Write new style files
+        file_map = {
+            "General": "general.cfg",
+            "FreeRDP": "freerdp.cfg",
+            "Networking": "networking.cfg",
+            "Appearance": "appearance.cfg",
+            "Administration": "administration.cfg",
+        }
+        for top, fname in file_map.items():
+            p = os.path.join(config_dir, fname)
+            with open(p, "w") as f:
+                json.dump(to_write[top], f, indent=2)
 
-        # Reset the UI
+        # Update in-memory config
+        self.config = to_write
+
+        # Reset Save button styling + refresh UI
+        self.save_button.setObjectName("saveButton")
+        self.save_button.style().unpolish(self.save_button)
+        self.save_button.style().polish(self.save_button)
+        self.save_button.update()
+
         self.reset_ui()
-
-        # hide the dialog
         self.configurations_dialog.hide()
 
     def import_settings(self):
         try:
-
-            # Ensure the configuration directory exists
             config_dir = os.path.join(self.root_dir, 'config')
-            if not os.path.exists(config_dir):
-                os.makedirs(config_dir)
+            os.makedirs(config_dir, exist_ok=True)
 
-            # Open a file dialog to select the import file
-            file_dialog = QFileDialog(self)
-            file_dialog.setAcceptMode(QFileDialog.AcceptOpen)
-            file_dialog.setNameFilter("JSON Files (*.json)")
+            dlg = QFileDialog(self)
+            dlg.setAcceptMode(QFileDialog.AcceptOpen)
+            dlg.setNameFilter("JSON Files (*.json)")
 
-            if file_dialog.exec_():
-                import_file = file_dialog.selectedFiles()[0]
+            if not dlg.exec_():
+                return
 
-                # Load the imported JSON file
-                with open(import_file, "r") as f:
-                    imported_data = json.load(f)
+            import_file = dlg.selectedFiles()[0]
+            with open(import_file, "r") as f:
+                imported = json.load(f)
 
-                # Fill the fields with imported data, but don't save yet
-                for category, settings in imported_data.items():
-                    if category in self.config:
-                        for name, value in settings.items():
-                            widget = self.get_widget_from_config(category, name)
-                            if widget:
-                                self.set_widget_value(widget, value)
-                            else:
-                                # Update config dictionary for non-UI items like logo, folders, etc.
-                                self.config[category][name] = value
+            def _apply(imported_dict, widgets_dict, config_ref):
+                for k, v in imported_dict.items():
+                    if isinstance(v, dict) and isinstance(widgets_dict.get(k), dict):
+                        # recurse
+                        _apply(v, widgets_dict[k], config_ref.setdefault(k, {}))
+                    else:
+                        w = widgets_dict.get(k)
+                        if w is not None and not isinstance(w, dict):
+                            self.set_widget_value(w, v)
+                        else:
+                            config_ref[k] = v
 
-                # Handle the imported logo if it exists (base64 encoded)
-                logo_data = imported_data["Appearance"]["Logo File"]
+            _apply(imported, self.widgets, self.config)
+
+            # handle logo (base64) if present
+            try:
+                logo_data = imported.get("Appearance", {}).get("Logo File")
                 if isinstance(logo_data, dict) and "content" in logo_data and "filename" in logo_data:
-                    logo_content = base64.b64decode(logo_data["content"])
+                    logo_bytes = base64.b64decode(logo_data["content"])
                     logo_path = os.path.join(config_dir, "import.png")
-
-                    # Save the decoded logo to the config directory as import.png
-                    with open(logo_path, "wb") as logo_file:
-                        logo_file.write(logo_content)
-
-                    # Update the path to the newly imported logo
+                    with open(logo_path, "wb") as out:
+                        out.write(logo_bytes)
                     self.config["Appearance"]["Logo File"] = logo_path
-
-                    # Store the selected logo file path but don't save it yet
-                    self.selected_logo_file = os.path.join(logo_path)
-
-                    # Update the button to reflect the imported logo preview
-                    print("FILE:",logo_path)
+                    self.selected_logo_file = logo_path
                     self.gen_logo_button(logo_path)
+            except Exception as e:
+                print(f"Logo import warning: {e}")
 
-                # Mark as configuration changed
-                self.on_configuration_changed()
-
-                # Notify the user to save the changes
-                QMessageBox.information(self, "Import Complete", "Settings successfully imported. Press 'Save' to apply changes.")
-
+            self.on_configuration_changed()
+            QMessageBox.information(self, "Import Complete", "Settings successfully imported. Press 'Save' to apply changes.")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to import settings: {e}")
 
@@ -1873,26 +1935,26 @@ class Client(QMainWindow):
         general_username = self.config["General"]["Username"] or self.username_edit.text()
         general_password = self.config["General"]["Password"] or self.password_edit.text()
         general_domain = self.config["General"]["Domain"] or self.domain_edit.text()
-        display_resolution = self.config["Display"]["Resolution"]
-        display_use_all_monitors = self.config["Display"]["Use all monitors"]
-        display_fullscreen = self.config["Display"]["Start session in fullscreen"]
-        display_fit_window = self.config["Display"]["Fit session to window"]
-        audio_play_sound = self.config["Devices"]["Play sound"]
-        audio_record_sound = self.config["Devices"]["Record sound"]
-        devices_printers = self.config["Devices"]["Printers"]
-        devices_smart_cards = self.config["Devices"]["Smart Cards"]
-        devices_ports = self.config["Devices"]["Ports"]
-        devices_drives = self.config["Devices"]["Drives"]
-        folders_redirect = self.config["Folders"]["Redirect"]
-        folders_folders = self.config["Folders"]["Folders"]
-        experience_clipboard = self.config["Experience"]["Clipboard"]
-        experience_remotefx = self.config["Experience"]["RemoteFX"]
-        experience_smooth_fonts = self.config["Experience"]["Smooth Fonts"]
-        experience_desktop_composition = self.config["Experience"]["Desktop Composition"]
-        experience_full_window_drag = self.config["Experience"]["Full Window Drag"]
-        experience_menu_animations = self.config["Experience"]["Menu Animations"]
-        experience_disable_themes = self.config["Experience"]["Disable Themes"]
-        experience_disable_wallpaper = self.config["Experience"]["Disable Wallpaper"]
+        display_resolution = self.config["FreeRDP"]["Display"]["Resolution"]
+        display_use_all_monitors = self.config["FreeRDP"]["Display"]["Use all monitors"]
+        display_fullscreen = self.config["FreeRDP"]["Display"]["Start session in fullscreen"]
+        display_fit_window = self.config["FreeRDP"]["Display"]["Fit session to window"]
+        audio_play_sound = self.config["FreeRDP"]["Devices"]["Play sound"]
+        audio_record_sound = self.config["FreeRDP"]["Devices"]["Record sound"]
+        devices_printers = self.config["FreeRDP"]["Devices"]["Printers"]
+        devices_smart_cards = self.config["FreeRDP"]["Devices"]["Smart Cards"]
+        devices_ports = self.config["FreeRDP"]["Devices"]["Ports"]
+        devices_drives = self.config["FreeRDP"]["Devices"]["Drives"]
+        folders_redirect = self.config["FreeRDP"]["Folders"]["Redirect"]
+        folders_folders = self.config["FreeRDP"]["Folders"]["Folders"]
+        experience_clipboard = self.config["FreeRDP"]["Experience"]["Clipboard"]
+        experience_remotefx = self.config["FreeRDP"]["Experience"]["RemoteFX"]
+        experience_smooth_fonts = self.config["FreeRDP"]["Experience"]["Smooth Fonts"]
+        experience_desktop_composition = self.config["FreeRDP"]["Experience"]["Desktop Composition"]
+        experience_full_window_drag = self.config["FreeRDP"]["Experience"]["Full Window Drag"]
+        experience_menu_animations = self.config["FreeRDP"]["Experience"]["Menu Animations"]
+        experience_disable_themes = self.config["FreeRDP"]["Experience"]["Disable Themes"]
+        experience_disable_wallpaper = self.config["FreeRDP"]["Experience"]["Disable Wallpaper"]
 
         # Add server address and port
         if general_port:
