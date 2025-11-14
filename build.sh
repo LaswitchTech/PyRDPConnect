@@ -32,14 +32,21 @@ if [ "$OS" == "unsupported" ]; then
     exit 1
 fi
 
-# --- Require python3.13 on PATH ---
+# Create a directory to store the final output based on the OS
+FINAL_DIR="dist/$OS"
+if [ -d "$FINAL_DIR" ]; then
+    rm -rf "$FINAL_DIR"
+fi
+mkdir -p "$FINAL_DIR"
+
+# Require python3.13 on PATH
 PYTHON_BIN="$(command -v python3.13 || true)"
 if [ -z "$PYTHON_BIN" ]; then
   log "python3.13 not found. On macOS, run: brew install python@3.13"
   exit 1
 fi
 
-# --- (Re)create venv if missing or wrong version ---
+# (Re)create venv if missing or wrong version
 NEED_RECREATE=0
 if [ ! -x "env/bin/python" ]; then
   NEED_RECREATE=1
@@ -114,13 +121,13 @@ if [ "$OS" == "macos" ]; then
     sed -i '' "s|icon=None|icon='$ICON_FILE'|g" $SPEC_FILE
     sed -i '' "/Analysis/s/(.*)/\0, hiddenimports=['PyQt5.QtSvg']/" $SPEC_FILE
     sed -i '' "/a.datas +=/a \\
-        datas=[('src/styles', 'styles'), ('src/icons', 'icons'), ('src/img', 'img'), ('src/freerdp/$OS/xfreerdp', 'xfreerdp')],
+        datas=[('src/styles', 'styles'), ('src/icons', 'icons'), ('src/img', 'img')],
     " $SPEC_FILE
 elif [ "$OS" == "linux" ]; then
     sed -i "s|icon=None|icon='$ICON_FILE'|g" $SPEC_FILE
     sed -i "/Analysis/s/(.*)/\0, hiddenimports=['PyQt5.QtSvg']/" $SPEC_FILE
     sed -i "/a.datas +=/a \\
-        datas=[('src/styles', 'styles'), ('src/icons', 'icons'), ('src/img', 'img'), ('src/freerdp/$OS/xfreerdp', 'xfreerdp')],
+        datas=[('src/styles', 'styles'), ('src/icons', 'icons'), ('src/img', 'img')],
     " $SPEC_FILE
 fi
 
@@ -133,221 +140,139 @@ if [ "$OS" == "macos" ]; then
     APP_ROOT="dist/$NAME.app/Contents"
     APP_MACOS="$APP_ROOT/MacOS"
     APP_RES="$APP_ROOT/Resources"
-    APP_FRAMEWORKS="$APP_ROOT/Frameworks"
 
     log "Creating app resource directories..."
     mkdir -p "$APP_RES/styles" "$APP_RES/img" "$APP_RES/icons"
-    mkdir -p "$APP_MACOS" "$APP_FRAMEWORKS/freerdp"
-
-    log "Copying UI resources..."
     cp -R src/styles/* "$APP_RES/styles/"
     cp -R src/img/*    "$APP_RES/img/"
     cp -R src/icons/*  "$APP_RES/icons/"
 
-    log "Copying FreeRDP binary..."
-    cp "src/freerdp/macos/xfreerdp" "$APP_MACOS/"
-    chmod +x "$APP_MACOS/xfreerdp"
+    # ---- Bundle FreeRDP as PyRDPConnect expects (Resources/freerdp/macos/...) ----
+    VENDOR_DIR_SRC="src/freerdp/macos"
+    VENDOR_DIR_DST="$APP_RES/freerdp/macos"
+    mkdir -p "$VENDOR_DIR_DST"
+    log "Copying FreeRDP tree to Resources..."
+    rsync -a "$VENDOR_DIR_SRC/" "$VENDOR_DIR_DST/"
 
-    log "Copying FreeRDP dylibs..."
-    # make sure you’ve pre-copied Homebrew’s dylibs into your repo at src/freerdp/macos/lib
-    # e.g.: cp /opt/homebrew/Cellar/freerdp/*/lib/*.dylib src/freerdp/macos/lib/
-    cp src/freerdp/macos/lib/*.dylib "$APP_FRAMEWORKS/freerdp/"
+    FREERDP_BIN="$VENDOR_DIR_DST/xfreerdp"
+    LIB_DIR="$VENDOR_DIR_DST/lib"
+    X11_DIR="$VENDOR_DIR_DST/x11"        # optional (if you vendored X11 libs)
+    PLUGINS_DIR="$VENDOR_DIR_DST/plugins" # optional
 
-    FREERDP_BIN="$APP_MACOS/xfreerdp"
-    LIB_DIR="@executable_path/../Frameworks/freerdp"
+    chmod +x "$FREERDP_BIN"
 
-    log "Patching rpaths on xfreerdp..."
-    # allow dyld to search our Frameworks/freerdp folder
-    install_name_tool -add_rpath "$LIB_DIR" "$FREERDP_BIN" || true
-
-    log "Rewriting dylib IDs to @rpath/NAME..."
-    for dylib in "$APP_FRAMEWORKS"/freerdp/*.dylib; do
-        base="$(basename "$dylib")"
-        install_name_tool -id "@rpath/$base" "$dylib"
-    done
-
-    log "Rewriting internal dylib references (libs -> @rpath/NAME)..."
-    for dylib in "$APP_FRAMEWORKS"/freerdp/*.dylib; do
-        # find any absolute /opt/homebrew/Cellar/freerdp/... refs and replace
-        while IFS= read -r dep; do
-        base="$(basename "$dep")"
-        install_name_tool -change "$dep" "@rpath/$base" "$dylib"
-        done < <(otool -L "$dylib" | awk '/\/opt\/homebrew\/Cellar\/freerdp/ {print $1}')
-    done
-
-    log "Rewriting references inside xfreerdp..."
-    while IFS= read -r dep; do
-        base="$(basename "$dep")"
-        install_name_tool -change "$dep" "@rpath/$base" "$FREERDP_BIN"
-    done < <(otool -L "$FREERDP_BIN" | awk '/\/opt\/homebrew\/Cellar\/freerdp/ {print $1}')
-
-    # (Optional) Verify:
-    log "Verifying linkage:"
-    otool -L "$FREERDP_BIN" | sed 's/^/  /'
-
-    # ---- BEGIN: Bundle X11 stack + add rpath + ad-hoc sign (Bash 3.2-safe) ----
-    X11_DIR="$APP_FRAMEWORKS/x11"
-    mkdir -p "$X11_DIR"
-
-    # Discover Homebrew prefix (Apple Silicon=/opt/homebrew; Intel=/usr/local)
+    # ---- Patch rpaths + rewrite absolute Homebrew refs -> @rpath/<name> ----
     BREW_PREFIX="$(brew --prefix 2>/dev/null || echo /opt/homebrew)"
-    X11_VENDOR_DIR="src/freerdp/macos/x11"
 
-    # Direct X11 deps that xfreerdp links against (seed set)
-    REQUIRED_X11=(
-      "libX11.6.dylib"
-      "libXext.6.dylib"
-      "libXinerama.1.dylib"
-      "libXcursor.1.dylib"
-      "libXv.1.dylib"
-      "libXi.6.dylib"
-      "libXrender.1.dylib"
-      "libXrandr.2.dylib"
-      "libXfixes.3.dylib"
-      "libxcb.1.dylib"
-      "libXau.6.dylib"
-      "libXdmcp.6.dylib"
-    )
-
-    # Map a bare name to an actual source path:
-    resolve_x11_src() {
-        local name="$1"
-        # 1) vendored copy?
-        if [ -f "$X11_VENDOR_DIR/$name" ]; then
-            echo "$X11_VENDOR_DIR/$name"
-            return 0
-        fi
-        # 2) Homebrew "opt" locations (typical)
-        case "$name" in
-            libX11.6.dylib)      echo "$BREW_PREFIX/opt/libx11/lib/$name"; return 0;;
-            libXext.6.dylib)     echo "$BREW_PREFIX/opt/libxext/lib/$name"; return 0;;
-            libXinerama.1.dylib) echo "$BREW_PREFIX/opt/libxinerama/lib/$name"; return 0;;
-            libXcursor.1.dylib)  echo "$BREW_PREFIX/opt/libxcursor/lib/$name"; return 0;;
-            libXv.1.dylib)       echo "$BREW_PREFIX/opt/libxv/lib/$name"; return 0;;
-            libXi.6.dylib)       echo "$BREW_PREFIX/opt/libxi/lib/$name"; return 0;;
-            libXrender.1.dylib)  echo "$BREW_PREFIX/opt/libxrender/lib/$name"; return 0;;
-            libXrandr.2.dylib)   echo "$BREW_PREFIX/opt/libxrandr/lib/$name"; return 0;;
-            libXfixes.3.dylib)   echo "$BREW_PREFIX/opt/libxfixes/lib/$name"; return 0;;
-            libxcb.1.dylib)      echo "$BREW_PREFIX/opt/libxcb/lib/$name"; return 0;;
-            libXau.6.dylib)      echo "$BREW_PREFIX/opt/libxau/lib/$name"; return 0;;
-            libXdmcp.6.dylib)    echo "$BREW_PREFIX/opt/libxdmcp/lib/$name"; return 0;;
-        esac
-        echo ""  # unknown
+    add_rpath_if_missing() {
+      local bin="$1" r="$2"
+      if ! otool -l "$bin" | awk '/LC_RPATH/{getline; print $2}' | grep -qx "$r"; then
+        install_name_tool -add_rpath "$r" "$bin" 2>/dev/null || true
+      fi
     }
 
-    # Helper to change a reference if present
-    chg_ref() {
-        local from="$1" to="$2" file="$3"
-        if otool -L "$file" | awk '{print $1}' | grep -Fq "$from"; then
-            install_name_tool -change "$from" "$to" "$file"
-        fi
-    }
+    # We want dyld to look inside ../lib and ../x11 relative to xfreerdp
+    add_rpath_if_missing "$FREERDP_BIN" "@loader_path/../lib"
+    if [ -d "$X11_DIR" ]; then
+      add_rpath_if_missing "$FREERDP_BIN" "@loader_path/../x11"
+    fi
 
-    # Recursively copy any Homebrew-provided dep and rewrite to @rpath/<name>
-    copy_and_patch_lib() {
-        local src="$1"
-        local base="$(basename "$src")"
-        local dst="$X11_DIR/$base"
-
-        # Skip if already present (acts like a visited-set)
-        if [ -f "$dst" ]; then
-            return 0
-        fi
-
-        if [ ! -f "$src" ]; then
-            log "WARN: missing expected lib: $src"
-            return 0
-        fi
-
-        cp -p "$src" "$dst"
-        chmod u+w "$dst"
-        install_name_tool -id "@rpath/$base" "$dst"
-
-        # Walk deps; copy any from Homebrew (opt|Cellar), then rewrite to @rpath
-        # Note: first line of otool -L is the file itself; skip it.
-        otool -L "$dst" | awk 'NR>1{print $1}' | while read -r dep; do
-            # skip blank lines
-            [ -z "$dep" ] && continue
-            # ignore self and system libs
-            case "$dep" in
-                "$src") continue ;;
-                /usr/lib/*) continue ;;
-                /System/*) continue ;;
-            esac
-            local depbase="$(basename "$dep")"
-            # Prefer vendored copy if present, else accept Homebrew path we discovered
-            local dep_src="$dep"
-            if [ -f "$X11_VENDOR_DIR/$depbase" ]; then
-                dep_src="$X11_VENDOR_DIR/$depbase"
-            fi
-            copy_and_patch_lib "$dep_src"
-            chg_ref "$dep" "@rpath/$depbase" "$dst"
-        done
-    }
-
-    log "Bundling X11 dylibs (with recursive Homebrew deps)..."
-    for name in "${REQUIRED_X11[@]}"; do
-        src_path="$(resolve_x11_src "$name")"
-        if [ -n "$src_path" ]; then
-            copy_and_patch_lib "$src_path"
-        else
-            log "WARN: Unresolved X11 lib name: $name"
-        fi
-    done
-
-    # Ensure files are writable; many shipped as 444
-    find "$APP_FRAMEWORKS" -type f -name "*.dylib" -exec chmod u+w {} +
-    chmod u+w "$APP_MACOS/xfreerdp"
-
-    # Make xfreerdp find both freerdp and x11
-    install_name_tool -add_rpath "@executable_path/../Frameworks/x11" "$FREERDP_BIN" 2>/dev/null || true
-
-    # Repoint any remaining Homebrew X11 refs in xfreerdp -> @rpath/<name>
-    otool -L "$FREERDP_BIN" | awk 'NR>1{print $1}' | while read -r dep; do
+    # For each lib we ship, set id to @rpath/<base> and rewrite any Homebrew absolute deps to @rpath/<base>
+    patch_one_file() {
+      local file="$1"
+      # set its own id (for dylibs)
+      if [[ "$file" == *.dylib ]]; then
+        install_name_tool -id "@rpath/$(basename "$file")" "$file" 2>/dev/null || true
+      fi
+      # rewrite deps
+      otool -L "$file" | awk 'NR>1{print $1}' | while read -r dep; do
         [ -z "$dep" ] && continue
         case "$dep" in
-            "$BREW_PREFIX"/*/lib/*.dylib|"$BREW_PREFIX"/opt/*/lib/*.dylib)
-            base="$(basename "$dep")"
-            chg_ref "$dep" "@rpath/$base" "$FREERDP_BIN"
-            ;;
+          /System/*|/usr/lib/*) continue ;;             # keep system libs
         esac
-    done
-
-    # Clear quarantine early (if present), do this before codesign to avoid EPERM
-    xattr -dr com.apple.quarantine "dist/$NAME.app" || true
-
-    # Rewrite any remaining X11 references in xfreerdp from Homebrew paths -> @rpath/<name>
-    otool -L "$FREERDP_BIN" | awk 'NR>1{print $1}' | while read -r dep; do
-        [ -z "$dep" ] && continue
         if echo "$dep" | grep -Eq "^$BREW_PREFIX/(opt|Cellar)/"; then
-            base="$(basename "$dep")"
-            chg_ref "$dep" "@rpath/$base" "$FREERDP_BIN"
+          base="$(basename "$dep")"
+          install_name_tool -change "$dep" "@rpath/$base" "$file" 2>/dev/null || true
         fi
-    done
+      done
+    }
 
-    # Quick verification (optional)
-    log "Verifying X11 + rpaths on xfreerdp:"
-    otool -L "$FREERDP_BIN" | sed 's/^/  /'
-    otool -l "$FREERDP_BIN" | awk '/LC_RPATH/{flag=1;print;next}/cmd /{flag=0}flag' | sed 's/^/  /'
+    log "Patching bundled dylibs..."
+    if [ -d "$LIB_DIR" ]; then
+      find "$LIB_DIR" -type f -name "*.dylib" -print0 | while IFS= read -r -d '' f; do
+        chmod u+w "$f"
+        patch_one_file "$f"
+      done
+    fi
+    if [ -d "$X11_DIR" ]; then
+      find "$X11_DIR" -type f -name "*.dylib" -print0 | while IFS= read -r -d '' f; do
+        chmod u+w "$f"
+        patch_one_file "$f"
+      done
+    fi
 
-    # Ad-hoc sign libraries and the app so macOS doesn’t kill the process
+    log "Patching xfreerdp to use @rpath for Homebrew deps..."
+    patch_one_file "$FREERDP_BIN"
+
+    # Ad-hoc sign so dyld doesn’t complain
     log "Ad-hoc codesigning bundled libs and app..."
-    find "$APP_FRAMEWORKS" -type f -name "*.dylib" -exec codesign --force --timestamp=none -s - {} \;
-    codesign --force --timestamp=none -s - "$FREERDP_BIN"
+    if [ -d "$LIB_DIR" ]; then
+      find "$LIB_DIR" -type f -name "*.dylib" -exec codesign --force --timestamp=none -s - {} \;
+    fi
+    if [ -d "$X11_DIR" ]; then
+      find "$X11_DIR" -type f -name "*.dylib" -exec codesign --force --timestamp=none -s - {} \;
+    fi
+    [ -f "$FREERDP_BIN" ] && codesign --force --timestamp=none -s - "$FREERDP_BIN"
     codesign --force --deep --timestamp=none -s - "dist/$NAME.app"
-    # ---- END: Bundle X11 stack + add rpath + ad-hoc sign ----
+
+    log "Verify xfreerdp linkage (should show @rpath -> ../lib and ../x11):"
+    otool -L "$FREERDP_BIN" | sed 's/^/  /'
 else
-    log "Linux build does not require copying resources to a separate directory, as it is a single-file executable."
+    log "Moving the executable to the $FINAL_DIR directory..."
+    mv "dist/$NAME" "$FINAL_DIR/"
 
-    # Note: If you need to bundle resources within the executable, adjust the PyInstaller options to include those resources
+    # ---- Place bundled FreeRDP under dist/linux/src/freerdp/linux/... ----
+    LNX_VENDOR_SRC="src/freerdp/linux"
+    LNX_VENDOR_DST="$FINAL_DIR/src/freerdp/linux"
+    if [ -d "$LNX_VENDOR_SRC" ]; then
+      log "Copying FreeRDP tree to $LNX_VENDOR_DST ..."
+      mkdir -p "$(dirname "$LNX_VENDOR_DST")"
+      rsync -a "$LNX_VENDOR_SRC/" "$LNX_VENDOR_DST/"
+      chmod +x "$LNX_VENDOR_DST/xfreerdp" || true
+      FREERDP_BIN="$LNX_VENDOR_DST/xfreerdp"    # <— ADD THIS LINE
+    else
+      log "WARN: $LNX_VENDOR_SRC not found; build will fall back to system xfreerdp at runtime."
+    fi
 fi
 
-# Create a directory to store the final output based on the OS
-FINAL_DIR="dist/$OS"
-if [ -d "$FINAL_DIR" ]; then
-    rm -rf "$FINAL_DIR"
+# Verify the vendored version (macOS and linux)
+expect_major="3"   # adjust if you vendor 2.x
+if [ -x "$FREERDP_BIN" ]; then
+    vend_ver="$("$FREERDP_BIN" +version 2>/dev/null | head -n1 | grep -Eo '[0-9]+\.[0-9]+(\.[0-9]+)?' || true)"
+    if [ -z "$vend_ver" ]; then
+        log "WARN: Could not detect vendored FreeRDP version from +version"
+    else
+        vmaj="${vend_ver%%.*}"
+        if [ "$vmaj" != "$expect_major" ]; then
+            log "ERROR: Vendored FreeRDP major version is $vmaj, expected $expect_major"
+            exit 1
+        fi
+        log "Vendored FreeRDP version: $vend_ver"
+    fi
 fi
-mkdir -p "$FINAL_DIR"
+
+# On Linux, fail fast if vendored xfreerdp has unresolved deps
+if [ "$OS" = "linux" ] && [ -x "${FREERDP_BIN:-}" ]; then
+  if command -v ldd >/dev/null 2>&1; then
+    if ldd "$FREERDP_BIN" | grep -q "not found"; then
+      log "ERROR: Missing shared libraries for vendored xfreerdp:"
+      ldd "$FREERDP_BIN" | grep "not found" || true
+      exit 1
+    fi
+  else
+    log "WARN: ldd not available; skipping shared-library check."
+  fi
+fi
 
 # Move the built application or executable to the appropriate directory
 if [ "$OS" == "macos" ]; then

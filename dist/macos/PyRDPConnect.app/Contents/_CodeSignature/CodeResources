@@ -364,6 +364,94 @@
 		<data>
 		0sH089KRNyPnYoKz3Qa/WEXCAjs=
 		</data>
+		<key>Resources/freerdp/macos/lib/libfreerdp-client3.3.17.2.dylib</key>
+		<data>
+		DqllPWwLW7pvh3xf4NUoFqk0nj0=
+		</data>
+		<key>Resources/freerdp/macos/lib/libfreerdp-client3.3.dylib</key>
+		<data>
+		K8H9ffs++TKYfcZgvpuEdp30HCg=
+		</data>
+		<key>Resources/freerdp/macos/lib/libfreerdp-client3.dylib</key>
+		<data>
+		F0ab8wIXDyRVvPikmOriHa0nmRM=
+		</data>
+		<key>Resources/freerdp/macos/lib/libfreerdp-server-proxy3.3.17.2.dylib</key>
+		<data>
+		YZCvvv92Ep4pcammuw57bjz4TDU=
+		</data>
+		<key>Resources/freerdp/macos/lib/libfreerdp-server-proxy3.3.dylib</key>
+		<data>
+		Exl/t7Pg1Qa3HqSRR4ZUQfrHc/o=
+		</data>
+		<key>Resources/freerdp/macos/lib/libfreerdp-server-proxy3.dylib</key>
+		<data>
+		eyJDjbnWjHUF2R34VICCUmN9fqU=
+		</data>
+		<key>Resources/freerdp/macos/lib/libfreerdp-server3.3.17.2.dylib</key>
+		<data>
+		EilL3rxLeZsBPXuEJkC4x85exuM=
+		</data>
+		<key>Resources/freerdp/macos/lib/libfreerdp-server3.3.dylib</key>
+		<data>
+		viw8+sqoFggahsAxphnLf3KAHkw=
+		</data>
+		<key>Resources/freerdp/macos/lib/libfreerdp-server3.dylib</key>
+		<data>
+		ityVda2RvGVg71u+ucGHzgIBAN0=
+		</data>
+		<key>Resources/freerdp/macos/lib/libfreerdp3.3.17.2.dylib</key>
+		<data>
+		GxxJirw/mh51ln2uxp3VJ+oU0r4=
+		</data>
+		<key>Resources/freerdp/macos/lib/libfreerdp3.3.dylib</key>
+		<data>
+		KmrPA2Tx3uJ6rgKnoISASf3O5Mo=
+		</data>
+		<key>Resources/freerdp/macos/lib/libfreerdp3.dylib</key>
+		<data>
+		8I6MMSs2dT5YN5P1EBtcO5gR1Nk=
+		</data>
+		<key>Resources/freerdp/macos/lib/librdtk0.0.2.0.dylib</key>
+		<data>
+		xrNLltH3ce+n6tkWC6V1XvsHGyM=
+		</data>
+		<key>Resources/freerdp/macos/lib/librdtk0.0.dylib</key>
+		<data>
+		9w4IhEgx6TE7ohck0V2nGbXCEKw=
+		</data>
+		<key>Resources/freerdp/macos/lib/librdtk0.dylib</key>
+		<data>
+		cqJShmkiYfGkPclFDCa+x/Kewrs=
+		</data>
+		<key>Resources/freerdp/macos/lib/libwinpr-tools3.3.17.2.dylib</key>
+		<data>
+		4j7BwdT+wb+NSWlDnq0fEFTnGNs=
+		</data>
+		<key>Resources/freerdp/macos/lib/libwinpr-tools3.3.dylib</key>
+		<data>
+		kfewBHsV5YO1QV6vIqYGn7SGv14=
+		</data>
+		<key>Resources/freerdp/macos/lib/libwinpr-tools3.dylib</key>
+		<data>
+		+sEenNJA2xXjxLvKH6DMVcTn5Pg=
+		</data>
+		<key>Resources/freerdp/macos/lib/libwinpr3.3.17.2.dylib</key>
+		<data>
+		2Xye1bEWDCEXhCHyyz4Uc+kwafM=
+		</data>
+		<key>Resources/freerdp/macos/lib/libwinpr3.3.dylib</key>
+		<data>
+		88Va/ahbpFEfh8yirf3dXGlwvQ4=
+		</data>
+		<key>Resources/freerdp/macos/lib/libwinpr3.dylib</key>
+		<data>
+		iFpWG3b8oQMwOkFAUnshc+R4L9E=
+		</data>
+		<key>Resources/freerdp/macos/xfreerdp</key>
+		<data>
+		lwtEQXlLOLjsBYgwOXNQWUDkzBA=
+		</data>
 		<key>Resources/icon.icns</key>
 		<data>
 		KVAG9bgFQXB/wOIpi833kDUo6Ok=
@@ -877,195 +965,6 @@
 			<key>symlink</key>
 			<string>../Resources/base_library.zip</string>
 		</dict>
-		<key>Frameworks/freerdp/libfreerdp-client3.3.17.2.dylib</key>
-		<dict>
-			<key>cdhash</key>
-			<data>
-			v935BgR4zwoLBPwO536tl+um7pU=
-			</data>
-			<key>requirement</key>
-			<string>cdhash H"bfddf9060478cf0a0b04fc0ee77ead97eba6ee95"</string>
-		</dict>
-		<key>Frameworks/freerdp/libfreerdp-client3.3.dylib</key>
-		<dict>
-			<key>cdhash</key>
-			<data>
-			o5B3YVkuhY0nnkZ0T4S59dqZBOQ=
-			</data>
-			<key>requirement</key>
-			<string>cdhash H"a3907761592e858d279e46744f84b9f5da9904e4"</string>
-		</dict>
-		<key>Frameworks/freerdp/libfreerdp-client3.dylib</key>
-		<dict>
-			<key>cdhash</key>
-			<data>
-			vulVeKaaUh5NXvlbJAhBBtZ09yI=
-			</data>
-			<key>requirement</key>
-			<string>cdhash H"bee95578a69a521e4d5ef95b24084106d674f722"</string>
-		</dict>
-		<key>Frameworks/freerdp/libfreerdp-server-proxy3.3.17.2.dylib</key>
-		<dict>
-			<key>cdhash</key>
-			<data>
-			oL+9GybIYrKOcMPOkbdXVcVirQc=
-			</data>
-			<key>requirement</key>
-			<string>cdhash H"a0bfbd1b26c862b28e70c3ce91b75755c562ad07"</string>
-		</dict>
-		<key>Frameworks/freerdp/libfreerdp-server-proxy3.3.dylib</key>
-		<dict>
-			<key>cdhash</key>
-			<data>
-			vpnwBJCBKQib34TF41t0OvVyKmA=
-			</data>
-			<key>requirement</key>
-			<string>cdhash H"be99f004908129089bdf84c5e35b743af5722a60"</string>
-		</dict>
-		<key>Frameworks/freerdp/libfreerdp-server-proxy3.dylib</key>
-		<dict>
-			<key>cdhash</key>
-			<data>
-			aWzsLtctIt0ibcQr92rYExPl/SY=
-			</data>
-			<key>requirement</key>
-			<string>cdhash H"696cec2ed72d22dd226dc42bf76ad81313e5fd26"</string>
-		</dict>
-		<key>Frameworks/freerdp/libfreerdp-server3.3.17.2.dylib</key>
-		<dict>
-			<key>cdhash</key>
-			<data>
-			S94EdNdi1cY8A8ikjhCkiuDk1mA=
-			</data>
-			<key>requirement</key>
-			<string>cdhash H"4bde0474d762d5c63c03c8a48e10a48ae0e4d660"</string>
-		</dict>
-		<key>Frameworks/freerdp/libfreerdp-server3.3.dylib</key>
-		<dict>
-			<key>cdhash</key>
-			<data>
-			ubhYA37aVXkoXVucDAQoprzhKic=
-			</data>
-			<key>requirement</key>
-			<string>cdhash H"b9b858037eda5579285d5b9c0c0428a6bce12a27"</string>
-		</dict>
-		<key>Frameworks/freerdp/libfreerdp-server3.dylib</key>
-		<dict>
-			<key>cdhash</key>
-			<data>
-			atQ/1boZ5egLW2wPz64PaZI/a7Q=
-			</data>
-			<key>requirement</key>
-			<string>cdhash H"6ad43fd5ba19e5e80b5b6c0fcfae0f69923f6bb4"</string>
-		</dict>
-		<key>Frameworks/freerdp/libfreerdp3.3.17.2.dylib</key>
-		<dict>
-			<key>cdhash</key>
-			<data>
-			zHn1MsMsYLE/wwHsokACa9uc7IY=
-			</data>
-			<key>requirement</key>
-			<string>cdhash H"cc79f532c32c60b13fc301eca240026bdb9cec86"</string>
-		</dict>
-		<key>Frameworks/freerdp/libfreerdp3.3.dylib</key>
-		<dict>
-			<key>cdhash</key>
-			<data>
-			MZhgv6i38pON37Bw7ZXkiXv5XRM=
-			</data>
-			<key>requirement</key>
-			<string>cdhash H"319860bfa8b7f2938ddfb070ed95e4897bf95d13"</string>
-		</dict>
-		<key>Frameworks/freerdp/libfreerdp3.dylib</key>
-		<dict>
-			<key>cdhash</key>
-			<data>
-			WBaMGyqDUJsnNZlrHtRL3XX4H+Q=
-			</data>
-			<key>requirement</key>
-			<string>cdhash H"58168c1b2a83509b2735996b1ed44bdd75f81fe4"</string>
-		</dict>
-		<key>Frameworks/freerdp/librdtk0.0.2.0.dylib</key>
-		<dict>
-			<key>cdhash</key>
-			<data>
-			gZHhvKnX8SmIKbN2SerrKkUQRP4=
-			</data>
-			<key>requirement</key>
-			<string>cdhash H"8191e1bca9d7f1298829b37649eaeb2a451044fe"</string>
-		</dict>
-		<key>Frameworks/freerdp/librdtk0.0.dylib</key>
-		<dict>
-			<key>cdhash</key>
-			<data>
-			y/JUf9vxAubllgeiUjwLteXcsfE=
-			</data>
-			<key>requirement</key>
-			<string>cdhash H"cbf2547fdbf102e6e59607a2523c0bb5e5dcb1f1"</string>
-		</dict>
-		<key>Frameworks/freerdp/librdtk0.dylib</key>
-		<dict>
-			<key>cdhash</key>
-			<data>
-			SOQdriTl8ZL/Y6lGWEsvmAL0qW4=
-			</data>
-			<key>requirement</key>
-			<string>cdhash H"48e41dae24e5f192ff63a946584b2f9802f4a96e"</string>
-		</dict>
-		<key>Frameworks/freerdp/libwinpr-tools3.3.17.2.dylib</key>
-		<dict>
-			<key>cdhash</key>
-			<data>
-			lCYWUnfoUWNHZcwxJ6mo29SRCVk=
-			</data>
-			<key>requirement</key>
-			<string>cdhash H"9426165277e851634765cc3127a9a8dbd4910959"</string>
-		</dict>
-		<key>Frameworks/freerdp/libwinpr-tools3.3.dylib</key>
-		<dict>
-			<key>cdhash</key>
-			<data>
-			HrhrNQNz29aq5Jj547ZSx7ei+30=
-			</data>
-			<key>requirement</key>
-			<string>cdhash H"1eb86b350373dbd6aae498f9e3b652c7b7a2fb7d"</string>
-		</dict>
-		<key>Frameworks/freerdp/libwinpr-tools3.dylib</key>
-		<dict>
-			<key>cdhash</key>
-			<data>
-			bA4Wf57ONvfjrsTKa5/L+NYwwmU=
-			</data>
-			<key>requirement</key>
-			<string>cdhash H"6c0e167f9ece36f7e3aec4ca6b9fcbf8d630c265"</string>
-		</dict>
-		<key>Frameworks/freerdp/libwinpr3.3.17.2.dylib</key>
-		<dict>
-			<key>cdhash</key>
-			<data>
-			euwNtuBHh/oLw+p9Jm0fE8haUoQ=
-			</data>
-			<key>requirement</key>
-			<string>cdhash H"7aec0db6e04787fa0bc3ea7d266d1f13c85a5284"</string>
-		</dict>
-		<key>Frameworks/freerdp/libwinpr3.3.dylib</key>
-		<dict>
-			<key>cdhash</key>
-			<data>
-			R3AbeESbwuySAi1AE0S42mMH1Pc=
-			</data>
-			<key>requirement</key>
-			<string>cdhash H"47701b78449bc2ec92022d401344b8da6307d4f7"</string>
-		</dict>
-		<key>Frameworks/freerdp/libwinpr3.dylib</key>
-		<dict>
-			<key>cdhash</key>
-			<data>
-			O9yOsPB9d1Lgm7j0YyurPsQuWxA=
-			</data>
-			<key>requirement</key>
-			<string>cdhash H"3bdc8eb0f07d7752e09bb8f4632bab3ec42e5b10"</string>
-		</dict>
 		<key>Frameworks/libcrypto.3.dylib</key>
 		<dict>
 			<key>cdhash</key>
@@ -1502,123 +1401,6 @@
 			</data>
 			<key>requirement</key>
 			<string>cdhash H"d770a323e4b5d724bdb9b2a4c9a7f43bcf87ed12"</string>
-		</dict>
-		<key>Frameworks/x11/libX11.6.dylib</key>
-		<dict>
-			<key>cdhash</key>
-			<data>
-			RT6ydMH7C804NLY/87dxD09Vn2w=
-			</data>
-			<key>requirement</key>
-			<string>cdhash H"453eb274c1fb0bcd3834b63ff3b7710f4f559f6c"</string>
-		</dict>
-		<key>Frameworks/x11/libXau.6.dylib</key>
-		<dict>
-			<key>cdhash</key>
-			<data>
-			uch7y9P1WMgpfYySIEXHCGnG+c0=
-			</data>
-			<key>requirement</key>
-			<string>cdhash H"b9c87bcbd3f558c8297d8c922045c70869c6f9cd"</string>
-		</dict>
-		<key>Frameworks/x11/libXcursor.1.dylib</key>
-		<dict>
-			<key>cdhash</key>
-			<data>
-			lZpJfmjRe7NM2QaP3xRM5HBSGfs=
-			</data>
-			<key>requirement</key>
-			<string>cdhash H"959a497e68d17bb34cd9068fdf144ce4705219fb"</string>
-		</dict>
-		<key>Frameworks/x11/libXdmcp.6.dylib</key>
-		<dict>
-			<key>cdhash</key>
-			<data>
-			W43FFBxwBiHXm5p5o9FsBcX+1fs=
-			</data>
-			<key>requirement</key>
-			<string>cdhash H"5b8dc5141c700621d79b9a79a3d16c05c5fed5fb"</string>
-		</dict>
-		<key>Frameworks/x11/libXext.6.dylib</key>
-		<dict>
-			<key>cdhash</key>
-			<data>
-			RlbTVKeZUGbXiRL6N5i28gT4lnk=
-			</data>
-			<key>requirement</key>
-			<string>cdhash H"4656d354a7995066d78912fa3798b6f204f89679"</string>
-		</dict>
-		<key>Frameworks/x11/libXfixes.3.dylib</key>
-		<dict>
-			<key>cdhash</key>
-			<data>
-			RauqNz9LAkCPbAIptpMawPw55gQ=
-			</data>
-			<key>requirement</key>
-			<string>cdhash H"45abaa373f4b02408f6c0229b6931ac0fc39e604"</string>
-		</dict>
-		<key>Frameworks/x11/libXi.6.dylib</key>
-		<dict>
-			<key>cdhash</key>
-			<data>
-			tbcHMoY4pKBk7owSWu/TAMmitE8=
-			</data>
-			<key>requirement</key>
-			<string>cdhash H"b5b707328638a4a064ee8c125aefd300c9a2b44f"</string>
-		</dict>
-		<key>Frameworks/x11/libXinerama.1.dylib</key>
-		<dict>
-			<key>cdhash</key>
-			<data>
-			/1SvnoztIaup5YgrdDatqdWX7H8=
-			</data>
-			<key>requirement</key>
-			<string>cdhash H"ff54af9e8ced21aba9e5882b7436ada9d597ec7f"</string>
-		</dict>
-		<key>Frameworks/x11/libXrandr.2.dylib</key>
-		<dict>
-			<key>cdhash</key>
-			<data>
-			qyDdwgZUwEwDrwZeUEZ3AIWrnAE=
-			</data>
-			<key>requirement</key>
-			<string>cdhash H"ab20ddc20654c04c03af065e5046770085ab9c01"</string>
-		</dict>
-		<key>Frameworks/x11/libXrender.1.dylib</key>
-		<dict>
-			<key>cdhash</key>
-			<data>
-			d5Z6ucBKyYroraxmXMfWP/HG7Hg=
-			</data>
-			<key>requirement</key>
-			<string>cdhash H"77967ab9c04ac98ae8adac665cc7d63ff1c6ec78"</string>
-		</dict>
-		<key>Frameworks/x11/libXv.1.dylib</key>
-		<dict>
-			<key>cdhash</key>
-			<data>
-			04LoK8cMWA0lmvRwOQSY+jrZ+N4=
-			</data>
-			<key>requirement</key>
-			<string>cdhash H"d382e82bc70c580d259af470390498fa3ad9f8de"</string>
-		</dict>
-		<key>Frameworks/x11/libxcb.1.dylib</key>
-		<dict>
-			<key>cdhash</key>
-			<data>
-			punbcksbNjupNrWirC8CMUW+eX0=
-			</data>
-			<key>requirement</key>
-			<string>cdhash H"a6e9db724b1b363ba936b5a2ac2f023145be797d"</string>
-		</dict>
-		<key>MacOS/xfreerdp</key>
-		<dict>
-			<key>cdhash</key>
-			<data>
-			nS/wQ6fomchRCFDIwdMtUCimmQI=
-			</data>
-			<key>requirement</key>
-			<string>cdhash H"9d2ff043a7e899c8510850c8c1d32d5028a69902"</string>
 		</dict>
 		<key>Resources/PyQt5/Qt5/lib</key>
 		<dict>
@@ -2348,6 +2130,160 @@
 			<key>hash2</key>
 			<data>
 			GjEaU2ljPvOaq08DHtRkI38tL9XpQl9UbqeyRy5CTDA=
+			</data>
+		</dict>
+		<key>Resources/freerdp/macos/lib/libfreerdp-client3.3.17.2.dylib</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			O5QiqNuzRkP1h0zDLmp1bxhIkPWqY1ktNF9dIN+MSyI=
+			</data>
+		</dict>
+		<key>Resources/freerdp/macos/lib/libfreerdp-client3.3.dylib</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			oHi6uoM6h3CkU/ptbvEQFqthlpVN0VJpufWm2046lqc=
+			</data>
+		</dict>
+		<key>Resources/freerdp/macos/lib/libfreerdp-client3.dylib</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			aInukb6ki4wIaCHuvMY+5QDehMf2w72zGA1f5kDVRJw=
+			</data>
+		</dict>
+		<key>Resources/freerdp/macos/lib/libfreerdp-server-proxy3.3.17.2.dylib</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			0aEyLa1SNlRQiaaDSzdfpyy9CtYMQYt2ztlX3zCaSGM=
+			</data>
+		</dict>
+		<key>Resources/freerdp/macos/lib/libfreerdp-server-proxy3.3.dylib</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			HV0tmfwDCdDmo1ggFC1xdvQcFWqpkzmXtu9sq6d2RPA=
+			</data>
+		</dict>
+		<key>Resources/freerdp/macos/lib/libfreerdp-server-proxy3.dylib</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			UulJ2u4/zmQaJS81HCdGwJESy8Osp/34wqL4D0eDRI0=
+			</data>
+		</dict>
+		<key>Resources/freerdp/macos/lib/libfreerdp-server3.3.17.2.dylib</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			NFKqj09fSj63l27bLySSqV+QTZZDTrxyXwdEqTSQfpA=
+			</data>
+		</dict>
+		<key>Resources/freerdp/macos/lib/libfreerdp-server3.3.dylib</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			eDn3qb6P5c8pVqR0LwmlTVUuUz6iA6YZtJSaerWnZmc=
+			</data>
+		</dict>
+		<key>Resources/freerdp/macos/lib/libfreerdp-server3.dylib</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			81b0OOcbdr3R1GzDoXf8uouAwBdt1aR9sv3M7qbajCE=
+			</data>
+		</dict>
+		<key>Resources/freerdp/macos/lib/libfreerdp3.3.17.2.dylib</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			m+aeLmRiI4MUrKGAJtJSdWNpcyHRMsuAmT3fbq+15sc=
+			</data>
+		</dict>
+		<key>Resources/freerdp/macos/lib/libfreerdp3.3.dylib</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			5eVrSrPpv5jXHV9pfBALfFBNuoKs36vZYurvXw87tOw=
+			</data>
+		</dict>
+		<key>Resources/freerdp/macos/lib/libfreerdp3.dylib</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			kuSG1y4D06TjgIBcUx/0gN9MhpA1TayrEU6ip3egA40=
+			</data>
+		</dict>
+		<key>Resources/freerdp/macos/lib/librdtk0.0.2.0.dylib</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			ka4WyFLQF8sJvAnj+bDhskHt77ubTze6JRmfxXHYM7E=
+			</data>
+		</dict>
+		<key>Resources/freerdp/macos/lib/librdtk0.0.dylib</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			SE0J/ZMUmDgafYRmmp7qdFnFhpF6uI5vq7dS7HlAuEU=
+			</data>
+		</dict>
+		<key>Resources/freerdp/macos/lib/librdtk0.dylib</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			h9PX2X3P5X756evfIeDSzqceTqfiplfh8AaFb12VKnk=
+			</data>
+		</dict>
+		<key>Resources/freerdp/macos/lib/libwinpr-tools3.3.17.2.dylib</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			HDktyME40Up3c2LgDYa519jgovDly6ic89//nrEGBS0=
+			</data>
+		</dict>
+		<key>Resources/freerdp/macos/lib/libwinpr-tools3.3.dylib</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			9+qhd53PZjkzlN8tVeS+mtqZMHEbqa9aJBbQf4kjaDc=
+			</data>
+		</dict>
+		<key>Resources/freerdp/macos/lib/libwinpr-tools3.dylib</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			Kr6tTK0kf+Mqb9TNiVBYfNcnycc74YdlxCkYdjGckKQ=
+			</data>
+		</dict>
+		<key>Resources/freerdp/macos/lib/libwinpr3.3.17.2.dylib</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			+03LcXVPnEjcqVNqAhJgQGlsVTprVsdd2MyE+Scf1k0=
+			</data>
+		</dict>
+		<key>Resources/freerdp/macos/lib/libwinpr3.3.dylib</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			TNqBvPqunfH4EAvhcPpk8vPeQPiBru4+DbqPN3mK73M=
+			</data>
+		</dict>
+		<key>Resources/freerdp/macos/lib/libwinpr3.dylib</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			JHCvbJLIAZ8yqfDzqNPLXLrmmZfSu37CrqD7t8i5CAo=
+			</data>
+		</dict>
+		<key>Resources/freerdp/macos/xfreerdp</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			viy3y3CmIaZYw7ZFAfABMR8slz/Q0K1MFxX4KQ/XFUY=
 			</data>
 		</dict>
 		<key>Resources/icon.icns</key>
