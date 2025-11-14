@@ -32,6 +32,13 @@ if [ "$OS" == "unsupported" ]; then
     exit 1
 fi
 
+# Determine arch and whether we should use system PyQt5 (APT) on Linux ARM
+ARCH="$(uname -m)"
+USE_SYSTEM_PYQT=0
+if [ "$OS" = "linux" ] && { [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "armv7l" ] || [ "$ARCH" = "armhf" ]; }; then
+    USE_SYSTEM_PYQT=1
+fi
+
 # Create a directory to store the final output based on the OS
 FINAL_DIR="dist/$OS"
 if [ -d "$FINAL_DIR" ]; then
@@ -58,9 +65,14 @@ else
 fi
 
 if [ "$NEED_RECREATE" -eq 1 ]; then
-  log "Creating fresh Python 3.11 virtual environment..."
-  rm -rf env
-  "$PYTHON_BIN" -m venv env
+    log "Creating fresh Python 3.11 virtual environment..."
+    rm -rf env
+    if [ "$USE_SYSTEM_PYQT" -eq 1 ]; then
+        # allow APT-installed PyQt5 to be visible in the venv
+        "$PYTHON_BIN" -m venv --system-site-packages env
+    else
+        "$PYTHON_BIN" -m venv env
+    fi
 fi
 
 # --- Activate venv ---
@@ -82,7 +94,30 @@ python -m pip install --upgrade pip wheel
 log "Installing build dependencies..."
 # PyInstaller 6.9+ supports 3.11 well; lock to <7 to avoid future surprizes.
 # PyQt5 5.15.x is stable for Qt5 on macOS/Linux; lock <6.
-python -m pip install "pyinstaller>=6.9,<7" "sip>=6.9,<7" "PyQt5>=5.15,<6"
+python -m pip install "pyinstaller>=6.9,<7" "sip>=6.9,<7"
+
+if [ "$USE_SYSTEM_PYQT" -eq 1 ]; then
+    # Ensure system PyQt5 (and QtSvg) are present
+    if command -v apt-get >/dev/null 2>&1; then
+        log "Installing system PyQt5 via APT (requires sudo)..."
+        sudo apt-get update
+        sudo apt-get install -y python3-pyqt5 python3-pyqt5.qtsvg
+    else
+        log "ERROR: APT not found; cannot install system PyQt5. Install PyQt5 manually or switch to a distro with APT."
+        exit 1
+    fi
+    # Sanity check
+    python - <<'PY'
+try:
+    import PyQt5.QtCore, PyQt5.QtWidgets, PyQt5.QtSvg
+    print("OK: System PyQt5 detected.")
+except Exception as e:
+    raise SystemExit(f"PyQt5 missing after APT install: {e}")
+PY
+else
+    # Non-ARM / macOS etc: keep using PyPI wheels
+    python -m pip install "PyQt5>=5.15,<6"
+fi
 
 # Optional tools you had; keeping them only if you need them:
 python -m pip install importlib PySide6-Addons
@@ -99,6 +134,15 @@ fi
 if [ -f "$SPEC_FILE" ]; then
     rm -f "$SPEC_FILE"
 fi
+
+log "Verifying required PyQt5 modules are present..."
+python - <<'PY'
+from importlib.util import find_spec
+missing = [m for m in ("PyQt5", "PyQt5.QtSvg") if find_spec(m) is None]
+if missing:
+    raise SystemExit(f"Missing modules before build: {missing}")
+print("Qt check passed.")
+PY
 
 log ".spec file not found. Generating a new one with PyInstaller..."
 if [ "$OS" == "macos" ]; then
