@@ -383,9 +383,9 @@ if [ "$OS" == "macos" ]; then
     hdiutil create "$DMG_NAME" -volname "$NAME" -srcfolder "$FINAL_DIR/$NAME.app" -ov -format UDZO
 
     log "DMG image created at $DMG_NAME"
-else
-    log "Moving the executable to the $FINAL_DIR directory..."
-    mv "dist/$NAME" "$FINAL_DIR/"
+# else
+#     log "Moving the executable to the $FINAL_DIR directory..."
+#     mv "dist/$NAME" "$FINAL_DIR/"
 fi
 
 # Cleanup: Remove the leftover dist/$NAME directory on macOS
