@@ -1066,6 +1066,7 @@ class Client(QMainWindow):
         # Retrieve the path of the icons directory
         icons_dir = self.get_path('icons')
         check_svg = os.path.join(icons_dir, 'check.svg') if icons_dir else None
+        chevron_down_svg = os.path.join(icons_dir, 'chevron-down.svg') if icons_dir else None
 
         # Create stylesheet overrides
         override = (
@@ -1075,6 +1076,9 @@ class Client(QMainWindow):
             "}\n"
             "QCheckBox::indicator:checked { "
             f"image: {self.qss_url(check_svg)};"
+            " }\n"
+            "QComboBox::down-arrow { "
+            f"image: {self.qss_url(chevron_down_svg)};"
             " }\n"
         )
 
