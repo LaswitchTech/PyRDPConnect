@@ -30,20 +30,40 @@ QLineEdit, QTextEdit, QComboBox, QSpinBox {
 QComboBox::drop-down {
     border: 1px solid #76797C;
     border-radius: 5px;
-    /* padding: 10px; */
-    /* margin: 5px; */
+    margin: 2px;
     background-color: #414344;
     color: #FFFFFF;
+    width: 32px;
+    height: 32px;
 }
-
+QComboBox::drop-down:hover {
+    background: #5f6263;
+    border-left-color: #5f6263;
+}
+QComboBox::drop-down:focus {
+    border-color: #0d6efd;
+}
 QComboBox::down-arrow {
-    border: 1px solid #76797C;
-    border-radius: 5px;
-    background-color: #414344;
-    color: #FFFFFF;
     width: 14px;
     height: 14px;
-    /* margin-right: 6px; */
+    padding: 8px;
+}
+QComboBox QAbstractItemView {
+    background-color: #212121;
+    color: #FFFFFF;
+    border: none;
+    outline: 0;
+    selection-background-color: #0d6efd;
+    selection-color: #FFFFFF;
+}
+QComboBox QAbstractItemView::item {
+    min-height: 28px;
+    padding: 6px 10px;
+    border: none;
+}
+QComboBox QAbstractItemView::item:hover {
+    background-color: #5f6263;
+    border: none;
 }
 
 QLabel, QCheckBox {
