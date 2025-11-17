@@ -13,7 +13,7 @@ QTabWidget::pane {
     top: -1px;
 }
 
-QLabel, QLineEdit, QCheckBox, QTextEdit, QComboBox, QSpinBox, QPushButton, QTabBar::tab {
+QLabel, QLineEdit, QCheckBox, QTextEdit, QComboBox, QSpinBox, QPushButton, QTabBar::tab, QComboBox::drop-down {
     font-size: 14px;
     border: 1px solid #76797C;
     border-radius: 5px;
@@ -21,7 +21,7 @@ QLabel, QLineEdit, QCheckBox, QTextEdit, QComboBox, QSpinBox, QPushButton, QTabB
     margin: 5px 0px;
 }
 
-QLineEdit, QTextEdit, QComboBox, QSpinBox {
+QLineEdit, QTextEdit, QComboBox, QComboBox::drop-down, QSpinBox {
     background-color: #212121;
     color: #FFFFFF;
     width: 300px;
