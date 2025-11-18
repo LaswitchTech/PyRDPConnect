@@ -24,7 +24,7 @@ PyRDPConnect is a cross-platform Python application designed to provide a sleek,
 This software is distributed under the [GPLv3](LICENSE) license.
 
 ### Third-Party Licenses
-This project uses some third-party libraries and tools. Please refer to the [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES) file for detailed information on their respective licenses.
+This project uses some third-party libraries and tools. Please refer to the [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES.md) file for detailed information on their respective licenses.
 
 ## Security
 Please disclose any vulnerabilities found responsibly – report security issues to the maintainers privately. See [SECURITY.md](SECURITY.md) for more information.
