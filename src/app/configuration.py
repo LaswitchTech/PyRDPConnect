@@ -332,6 +332,9 @@ class Configuration(QObject):
                 text=current_value or "",
                 placeholder=options.get("placeholder", "")
             )
+        elif widget_type == "picture":
+            # ⬅️ NEW picture button (logo etc.) storing base64 string
+            w = Form.picture(initial=current_value or "")
         elif widget_type == "button":
             w = Form.button(
                 label=options.get("label", "Button"),
@@ -377,9 +380,6 @@ class Configuration(QObject):
         return s[0].upper() + s[1:]
 
     def _update_from_widgets(self) -> None:
-        """
-        Read the values from all widgets and store them back into self._data.
-        """
         from PyQt5.QtWidgets import QLineEdit, QComboBox, QCheckBox, QSpinBox
         from .ui import Form
 
@@ -395,12 +395,11 @@ class Configuration(QObject):
             elif isinstance(widget, QSpinBox):
                 value = widget.value()
             else:
-                # ColorButton or other custom widgets from Form
-                # We only know about Form.ColorButton via method name
-                if hasattr(widget, "hex"):
+                if hasattr(widget, "hex") and callable(getattr(widget, "hex")):
                     value = widget.hex()
+                elif hasattr(widget, "value") and callable(getattr(widget, "value")):
+                    value = widget.value()
                 else:
-                    # Fallback: do nothing
                     continue
 
             self.set(key, value)

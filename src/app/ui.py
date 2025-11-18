@@ -7,13 +7,16 @@ from typing import Iterable, Optional, Callable, List
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QLabel, QHBoxLayout, QPushButton,
     QLineEdit, QSpinBox, QComboBox, QCheckBox, QColorDialog,
-    QSizePolicy, QStyle, QStyleOptionButton, QWidget
+    QSizePolicy, QStyle, QStyleOptionButton, QWidget, QFileDialog
 )
 from PyQt5.QtGui import (
     QIcon, QPixmap, QPainter, QColor, QPen
 )
 from PyQt5.QtCore import QRect, Qt
 from PyQt5.QtSvg import QSvgWidget, QSvgRenderer
+
+import os
+import base64
 
 from .helper import Helper
 
@@ -182,6 +185,102 @@ class ColorButton(QPushButton):
         painter.drawRoundedRect(content, 4, 4)
         painter.end()
 
+class PictureButton(QPushButton):
+    def __init__(self, initial: Optional[str] = None, parent=None, max_size: int = 72):
+        super().__init__(parent)
+        self._b64: str = ""
+        self._max_size = max_size
+
+        # Visual setup
+        self.setFixedSize(max_size + 16, max_size + 24)
+        self.setStyleSheet("padding: 4px;")
+        self.setText("Select Logo")
+
+        # Initialize from existing config value
+        if initial:
+            self._init_from_value(initial)
+
+        self.clicked.connect(self._pick)
+
+    # ----- public API for Configuration -----
+
+    def value(self) -> str:
+        """
+        Return the stored base64 string (or "" if none).
+        """
+        return self._b64
+
+    # ----- internals -----
+
+    def _init_from_value(self, raw: str):
+        raw = raw.strip()
+        if not raw:
+            return
+
+        # 1) Try as base64
+        data: Optional[bytes] = None
+        try:
+            data = base64.b64decode(raw, validate=True)
+        except Exception:
+            data = None
+
+        # 2) If not valid base64, treat as path
+        if data is None:
+            if os.path.isfile(raw):
+                try:
+                    with open(raw, "rb") as f:
+                        data = f.read()
+                except Exception as e:
+                    print(f"[PictureButton] Failed to read logo file '{raw}': {e}")
+                    return
+            else:
+                # Unknown format; give up silently
+                return
+
+        # At this point we have `data`
+        pm = QPixmap()
+        if not pm.loadFromData(data, "PNG"):
+            return
+
+        self._b64 = base64.b64encode(data).decode("ascii")
+        self._set_pixmap(pm)
+
+    def _pick(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select Logo",
+            "",
+            "PNG Files (*.png)"
+        )
+        if not path:
+            return
+
+        try:
+            with open(path, "rb") as f:
+                data = f.read()
+
+            pm = QPixmap()
+            if not pm.loadFromData(data, "PNG"):
+                print(f"[PictureButton] Not a valid PNG: {path}")
+                return
+
+            self._b64 = base64.b64encode(data).decode("ascii")
+            self._set_pixmap(pm)
+        except Exception as e:
+            print(f"[PictureButton] Failed to load logo '{path}': {e}")
+
+    def _set_pixmap(self, pm: QPixmap):
+        scaled = pm.scaled(
+            self._max_size,
+            self._max_size,
+            Qt.KeepAspectRatio,
+            Qt.SmoothTransformation,
+        )
+        self.setIcon(QIcon(scaled))
+        self.setIconSize(scaled.size())
+        self.setText("")
+        self.update()
+
 class StepIndicator(QWidget):
     def __init__(self, text: str, parent=None):
         super().__init__(parent)
@@ -307,3 +406,7 @@ class Form:
         if action:
             btn.clicked.connect(action)
         return btn
+
+    @staticmethod
+    def picture(initial: Optional[str] = None) -> PictureButton:
+        return PictureButton(initial=initial)

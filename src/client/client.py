@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # src/client/client.py
 import sys
+import base64
 from app.application import Application
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QGridLayout, QLabel, QLineEdit,
-    QPushButton, QHBoxLayout, QFormLayout, QSizePolicy,
-    QSpinBox, QComboBox, QCheckBox
+    QHBoxLayout, QFormLayout, QSpinBox, QComboBox, QCheckBox
 )
 from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5.QtCore import Qt
@@ -43,7 +43,7 @@ class Client(QMainWindow):
         self._configuration.add("network.openvpn.auto", False, "checkbox")
         self._configuration.add("network.wireguard.file", None, "text")
         self._configuration.add("network.wireguard.auto", False, "checkbox")
-        self._configuration.add("customize.window.logo_file", None, "text", label="Logo File")
+        self._configuration.add("customize.window.logo_file", None, "picture", label="Logo File")
         self._configuration.add("customize.window.logo_position", "top-center", "select", label="Logo Position", choices=["top-left", "top-center", "top-right", "center-left", "center-center", "center-right", "bottom-left", "bottom-center", "bottom-right"])
         self._configuration.add("customize.window.form_position", "center-center", "select", label="Form Position", choices=["top-left", "top-center", "top-right", "center-left", "center-center", "center-right", "bottom-left", "bottom-center", "bottom-right"])
         self._configuration.add("customize.window.fullscreen", False, "checkbox")
@@ -157,15 +157,32 @@ class Client(QMainWindow):
         logo_grid_pos = position_map.get(logo_pos, (1, 1))
 
         # Load and place the logo image
-        logo_file = self._configuration.get("customize.window.logo_file") or self._helper.join(self._helper.get_path("img"),"logo.png")
-        if logo_file and self._helper.file_exists(logo_file):
+        logo_b64 = self._configuration.get("customize.window.logo_file")
+        pixmap = QPixmap()
+
+        if isinstance(logo_b64, str) and logo_b64.strip():
+            # Stored as base64
+            try:
+                data = base64.b64decode(logo_b64)
+                if not pixmap.loadFromData(data, "PNG"):
+                    pixmap = QPixmap()  # reset on failure
+            except Exception as e:
+                print(f"[Client] Failed to decode logo from configuration: {e}")
+                pixmap = QPixmap()
+
+        # Fallback to bundled logo if no valid custom logo
+        if pixmap.isNull():
+            fallback = self._helper.join(self._helper.get_path("img"), "logo.png")
+            if fallback and self._helper.file_exists(fallback):
+                pixmap.load(fallback)
+
+        if not pixmap.isNull():
             logo_label = QLabel(central_widget)
-            pixmap = QPixmap(logo_file)
-            # Set a maximum size for the logo
             logo_label.setMaximumSize(250, 250)
-            logo_label.setPixmap(pixmap.scaled(250, 250, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            logo_label.setPixmap(
+                pixmap.scaled(250, 250, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            )
             logo_label.setAlignment(Qt.AlignCenter)
-            # Place the logo in the specified position
             grid_layout.addWidget(logo_label, *logo_grid_pos, 1, 1, Qt.AlignCenter)
 
         # Initialize an empty list to keep track of the tab order
@@ -304,12 +321,3 @@ class Client(QMainWindow):
                 overrides[f"general.{name}"] = value
 
         self._freerdp.connect(parent=self, overrides=overrides)
-
-if __name__ == "__main__":
-    app = Application(sys.argv)
-    app.set_mainWindow(Client(
-        helper=app.helper,
-        configuration=app.configuration,
-        logger=app.logger,
-    ))
-    sys.exit(app.exec_())
