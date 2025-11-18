@@ -1,0 +1,406 @@
+#!/usr/bin/env python3
+# src/app/configuration.py
+from __future__ import annotations
+
+import os
+import json
+from collections import defaultdict
+from typing import Any, Dict, Tuple
+
+from PyQt5.QtCore import pyqtSignal, QObject
+from PyQt5.QtWidgets import (
+    QDialog, QVBoxLayout, QTabWidget, QWidget, QFormLayout,
+    QLabel, QPushButton, QHBoxLayout,
+)
+
+from .helper import Helper
+from .ui import Form
+
+class Configuration(QObject):
+
+    # Emitted after a successful save (or when we choose to later)
+    configChanged = pyqtSignal(dict)
+
+    def __init__(self, helper: Helper, filename: str = "configuration.cfg"):
+
+        # Initialize QObject
+        super().__init__()
+
+        # Parent
+        self._parent = None
+
+        # Helper
+        self._helper = helper
+
+        # Root directory for config files
+        self.root_dir = helper.root_dir
+        self._filename = filename
+
+        # Actual config values (nested dict)
+        self._data: dict[str, Any] = {}
+
+        # Schema: key -> {"default": ..., "widget": "text"/"select"/...}
+        self._schema: dict[str, dict[str, Any]] = {}
+
+        # UI widgets mapped by config key
+        self._widgets: dict[str, Any] = {}
+
+        # Labels: key → display label (e.g. "freerdp" -> "FreeRDP",
+        #      "freerdp.display" -> "Display")
+        self._labels: dict[str, str] = {}
+
+        # Load existing file if any
+        self.load()
+
+    # ------------------------------------------------------------------
+    # Core API
+    # ------------------------------------------------------------------
+
+    def load(self, file: str | None = None) -> None:
+        if file is not None:
+            self._filename = file
+
+        config_dir = os.path.join(self.root_dir, "config")
+        os.makedirs(config_dir, exist_ok=True)
+
+        path = os.path.join(config_dir, self._filename)
+        if not os.path.exists(path):
+            # Nothing yet, keep empty data
+            self._data = {}
+            return
+
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                self._data = data
+            else:
+                self._data = {}
+        except Exception as e:
+            print(f"[Configuration] Failed loading {self._filename}: {e}")
+            self._data = {}
+
+    def save(self) -> None:
+        config_dir = os.path.join(self.root_dir, "config")
+        os.makedirs(config_dir, exist_ok=True)
+
+        path = os.path.join(config_dir, self._filename)
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(self._data, f, indent=2)
+            # Notify listeners
+            self.configChanged.emit(self._data)
+        except Exception as e:
+            print(f"[Configuration] Failed saving {self._filename}: {e}")
+
+    def add(self, key: str, default_value: Any, widget: str | None = None, **options: Any) -> None:
+        self._schema[key] = {
+            "default": default_value,
+            "widget": widget,
+            "options": options or {},
+        }
+
+        # If there's no value yet in self._data, apply the default now
+        try:
+            current = self.get(key, _no_fallback=True)
+        except KeyError:
+            # Not present at all → set default
+            self.set(key, default_value)
+
+    def get(self, key: str, default: Any | None = None, _no_fallback: bool = False) -> Any:
+        parts = key.split(".")
+        node: Any = self._data
+
+        for part in parts:
+            if not isinstance(node, dict) or part not in node:
+                # Missing key
+                if _no_fallback:
+                    raise KeyError(key)
+                # explicit default wins
+                if default is not None:
+                    return default
+                # fall back to schema default if any
+                meta = self._schema.get(key)
+                if meta is not None:
+                    return meta.get("default")
+                return None
+            node = node[part]
+
+        return node
+
+    def set(self, key: str, value: Any) -> None:
+        parts = key.split(".")
+        if not parts:
+            return
+
+        node = self._data
+        for part in parts[:-1]:
+            if part not in node or not isinstance(node[part], dict):
+                node[part] = {}
+            node = node[part]
+
+        node[parts[-1]] = value
+
+    def input(self, key: str, show_label: bool = False) -> QWidget:
+        if key not in self._schema:
+            raise KeyError(f"Configuration key not defined in schema: {key}")
+
+        widget, label_text = self._build_widget_for_key(key)
+
+        if not show_label:
+            return widget
+
+        container = QWidget()
+        layout = QHBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        label = QLabel(label_text)
+        layout.addWidget(label)
+        layout.addWidget(widget)
+        return container
+
+    def label(self, key: str, label: str | None = None) -> str:
+        if label is not None:
+            self._labels[key] = label
+
+        if key in self._labels:
+            return self._labels[key]
+
+        # Fallback: nice label from the last segment
+        return self._nice_label(key.split(".")[-1])
+
+    # ------------------------------------------------------------------
+    # Convenience properties
+    # ------------------------------------------------------------------
+
+    @property
+    def data(self) -> dict[str, Any]:
+        return self._data
+
+    @property
+    def schema(self) -> dict[str, dict[str, Any]]:
+        return self._schema
+
+    # ------------------------------------------------------------------
+    # UI dialog builder
+    # ------------------------------------------------------------------
+
+    def show(self, parent=None):
+
+        # Only use a QWidget as dialog parent, otherwise use None
+
+        if parent is not None and isinstance(parent, QWidget):
+            self._parent = parent
+
+        dlg = QDialog(self._parent)
+        dlg.setWindowTitle("Configuration")
+        dlg.setObjectName("configurationWindow")
+
+        root = QVBoxLayout(dlg)
+        tabs = QTabWidget()
+        root.addWidget(tabs)
+
+        # structure[category][subcategory] = [(full_key, meta), ...]
+        structure: dict[str, dict[str | None, list[Tuple[str, dict[str, Any]]]]] = defaultdict(
+            lambda: defaultdict(list)
+        )
+
+        for full_key, meta in self._schema.items():
+            parts = full_key.split(".")
+            if len(parts) == 1:
+                category = parts[0]
+                subcat: str | None = None
+                name = parts[0]
+            elif len(parts) == 2:
+                category = parts[0]
+                subcat = None
+                name = parts[1]
+            else:
+                category = parts[0]
+                subcat = parts[1]
+                name = ".".join(parts[2:])  # rare case of deeper nesting
+
+            structure[category][subcat].append((full_key, meta))
+
+        # Build tabs
+        self._widgets.clear()
+
+        for category, subcats in structure.items():
+            # Top-level tab widget
+            cat_widget = QWidget()
+            cat_layout = QVBoxLayout(cat_widget)
+
+            # If there's more than one subcategory (or exactly one non-None),
+            # we add a nested QTabWidget, otherwise a simple form.
+            non_none_subs = [s for s in subcats.keys() if s is not None]
+
+            if non_none_subs:
+                # There are sub-tabs
+                subtabs = QTabWidget()
+                cat_layout.addWidget(subtabs)
+
+                # subcat == None → put those fields in a "General" sub-tab
+                if None in subcats:
+                    general_tab = QWidget()
+                    general_form = QFormLayout(general_tab)
+                    self._populate_form(general_form, subcats[None])
+                    subtabs.addTab(general_tab, "General")
+
+                for subcat_name, fields in subcats.items():
+                    if subcat_name is None:
+                        continue
+                    sub_widget = QWidget()
+                    sub_form = QFormLayout(sub_widget)
+                    self._populate_form(sub_form, fields)
+                    subtabs.addTab(sub_widget, self.label(f"{category}.{subcat_name}"))
+            else:
+                # Only a single bucket (no sub-tabs)
+                only_fields = subcats.get(None, [])
+                form = QFormLayout()
+                cat_layout.addLayout(form)
+                self._populate_form(form, only_fields)
+
+            tabs.addTab(cat_widget, self.label(category))
+
+        # Buttons row (Save / Cancel)
+        btn_row = QHBoxLayout()
+        btn_row.addStretch(1)
+        save_btn = QPushButton("Save")
+        cancel_btn = QPushButton("Cancel")
+        btn_row.addWidget(cancel_btn)
+        btn_row.addWidget(save_btn)
+        root.addLayout(btn_row)
+
+        # Wire buttons
+        def on_save():
+            self._update_from_widgets()
+            self.save()
+            dlg.accept()
+
+        def on_cancel():
+            dlg.reject()
+
+        save_btn.clicked.connect(on_save)
+        cancel_btn.clicked.connect(on_cancel)
+
+        dlg.exec_()
+
+    # ------------------------------------------------------------------
+    # Internal helpers for dialog
+    # ------------------------------------------------------------------
+
+    def _build_widget_for_key(self, full_key: str) -> Tuple[QWidget, str]:
+        meta = self._schema.get(full_key, {})
+        widget_type = meta.get("widget")
+        options = meta.get("options", {}) or {}
+        current_value = self.get(full_key)
+
+        # Infer widget type if not explicitly set
+        if widget_type is None:
+            if isinstance(current_value, bool):
+                widget_type = "checkbox"
+            elif isinstance(current_value, int):
+                widget_type = "spin"
+            elif isinstance(current_value, str) and "choices" in options:
+                widget_type = "select"
+            else:
+                widget_type = "text"
+
+        # Build widget via Form helpers
+        if widget_type == "checkbox":
+            w = Form.checkbox(checked=bool(current_value))
+        elif widget_type in ("spin", "integer", "number"):
+            w = Form.spin(
+                value=int(current_value) if current_value is not None else 0,
+                minimum=options.get("min", 0),
+                maximum=options.get("max", 65535),
+            )
+        elif widget_type == "select":
+            w = Form.select(
+                items=options.get("choices", []),
+                current=current_value,
+            )
+        elif widget_type == "password":
+            w = Form.password(
+                text=current_value or "",
+                placeholder=options.get("placeholder", "")
+            )
+        elif widget_type == "color":
+            w = Form.color(initial=current_value or "#000000")
+        elif widget_type == "file":
+            # For now just treat as a text line; you can later add a file picker wrapper.
+            w = Form.text(
+                text=current_value or "",
+                placeholder=options.get("placeholder", "")
+            )
+        elif widget_type == "button":
+            w = Form.button(
+                label=options.get("label", "Button"),
+                icon=options.get("icon", None),
+                action=options.get("action", None)
+            )
+        else:
+            # default: text line
+            w = Form.text(
+                text=current_value or "",
+                placeholder=options.get("placeholder", "")
+            )
+
+        # Register this widget for saving (used by _update_from_widgets)
+        self._widgets[full_key] = w
+
+        label_text = options.get(
+            "label",
+            self.label(full_key)
+        )
+        return w, label_text
+
+    def _populate_form(
+        self,
+        form_layout,
+        fields: list[Tuple[str, dict[str, Any]]]
+    ) -> None:
+        """
+        Populate a QFormLayout for one (sub)category.
+        """
+        for full_key, _meta in fields:
+            w, label_text = self._build_widget_for_key(full_key)
+            form_layout.addRow(QLabel(label_text), w)
+
+    def _nice_label(self, raw: str) -> str:
+        """
+        Turn a key-like string into a human label:
+        'gradient_start' -> 'Gradient start'
+        """
+        s = raw.replace("_", " ").replace("-", " ")
+        if not s:
+            return ""
+        return s[0].upper() + s[1:]
+
+    def _update_from_widgets(self) -> None:
+        """
+        Read the values from all widgets and store them back into self._data.
+        """
+        from PyQt5.QtWidgets import QLineEdit, QComboBox, QCheckBox, QSpinBox
+        from .ui import Form
+
+        for key, widget in self._widgets.items():
+            value: Any
+
+            if isinstance(widget, QLineEdit):
+                value = widget.text()
+            elif isinstance(widget, QComboBox):
+                value = widget.currentText()
+            elif isinstance(widget, QCheckBox):
+                value = widget.isChecked()
+            elif isinstance(widget, QSpinBox):
+                value = widget.value()
+            else:
+                # ColorButton or other custom widgets from Form
+                # We only know about Form.ColorButton via method name
+                if hasattr(widget, "hex"):
+                    value = widget.hex()
+                else:
+                    # Fallback: do nothing
+                    continue
+
+            self.set(key, value)

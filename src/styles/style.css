@@ -68,7 +68,7 @@ QComboBox QListView::item {
 QComboBox QAbstractItemView::item:selected,
 QComboBox QListView::item:selected {
     background-color: #0d6efd;
-    color: FFFFFF;
+    color: #FFFFFF;
 }
 QComboBox QAbstractItemView::item:hover,
 QComboBox QListView::item:hover {
@@ -146,37 +146,23 @@ QPushButton:pressed, QTabBar::tab:pressed, QTabBar::tab:selected {
     border-color: #0d6efd;
 }
 
-/* Apply margin and padding to the main window container */
-#promptWindow,
-#promptWidget {
-    margin: 0;
-    padding: 0;
+#MsgBox {
+    min-width: 400px;
+    background-color: #393939;
+    color: #FFFFFF;
+    padding: 10px;
+    font-size: 14px;
 }
 
-/* Apply margin and padding to the main window container */
-#configurationsWindow,
-#configurationsWidget {
-    margin: 0;
-    padding: 0;
+#Client {
+    min-width: 400px;
+    background-color: #393939;
+    color: #FFFFFF;
+    padding: 10px;
+    font-size: 14px;
 }
 
-/* Style for the individual tabs */
-#configurationsWindow QGroupBox {
-    margin-top: 0; /* Use a negative value if needed */
-}
-
-#configurationsWindow QPushButton#unsavedChanges {
-    border: 1px solid #198754;
-    background-color: #198754;
-}
-
-#configurationsWindow QPushButton#unsavedChanges:hover {
-    background-color: #1fa869;
-    border-color: #1fa869;
-}
-
-/* Don't let the global QLabel rule shrink the status dot */
-#diagnosticsWindow QLabel#statusDot {
+#DiagnosticDialog QLabel#statusDot {
     padding: 0;
     margin: 0;
     min-width: 16px;
@@ -184,9 +170,4 @@ QPushButton:pressed, QTabBar::tab:pressed, QTabBar::tab:selected {
     max-width: 16px;
     max-height: 16px;
     border-radius: 8px;
-}
-
-/* make sure icon column has a bit of room */
-#customMsgBox {
-    min-width: 360px;
 }
