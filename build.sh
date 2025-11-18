@@ -206,7 +206,16 @@ if [ "$OS" == "macos" ]; then
     pyinstaller --windowed --name "$NAME" src/PyRDPConnect.py
 elif [ "$OS" == "linux" ]; then
     # Linux build: bundle data and hidden import directly
-    pyinstaller --onefile --name "$NAME" --hidden-import PyQt5.QtSvg --add-data "src/styles:styles" --add-data "src/icons:icons" --add-data "src/img:img" --add-data "src/freerdp/linux:freerdp/linux" src/PyRDPConnect.py
+    pyinstaller \
+        --onefile \
+        --name "$NAME" \
+        --hidden-import PyQt5.QtSvg \
+        --add-data "src/app:app" \
+        --add-data "src/styles:styles" \
+        --add-data "src/icons:icons" \
+        --add-data "src/img:img" \
+        --add-data "src/freerdp/linux:freerdp/linux" \
+        src/PyRDPConnect.py
 fi
 
 # Ensure the spec file now exists
@@ -223,13 +232,13 @@ if [ "$OS" == "macos" ]; then
     sed -i '' "s|icon=None|icon='$ICON_FILE'|g" $SPEC_FILE
     sed -i '' "/Analysis/s/(.*)/\0, hiddenimports=['PyQt5.QtSvg']/" $SPEC_FILE
     sed -i '' "/a.datas +=/a \\
-        datas=[('src/styles', 'styles'), ('src/icons', 'icons'), ('src/img', 'img')],
+        datas=[('src/styles', 'styles'), ('src/icons', 'icons'), ('src/app', 'app'), ('src/img', 'img')],
     " $SPEC_FILE
 elif [ "$OS" == "linux" ]; then
     sed -i "s|icon=None|icon='$ICON_FILE'|g" $SPEC_FILE
     sed -i "/Analysis/s/(.*)/\0, hiddenimports=['PyQt5.QtSvg']/" $SPEC_FILE
     sed -i "/a.datas +=/a \\
-        datas=[('src/styles', 'styles'), ('src/icons', 'icons'), ('src/img', 'img')],
+        datas=[('src/styles', 'styles'), ('src/icons', 'icons'), ('src/app', 'app'), ('src/img', 'img')],
     " $SPEC_FILE
 fi
 
