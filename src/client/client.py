@@ -59,7 +59,6 @@ class Client(QMainWindow):
 
         # Labels for categories and sections
         self._configuration.label("network.wifi", "WiFi")
-        self._configuration.label("network.wifi.ssid", "SSID")
         self._configuration.label("network.openvpn", "OpenVPN")
         self._configuration.label("network.wireguard", "WireGuard")
 
