@@ -24,7 +24,7 @@ PyRDPConnect is a cross-platform Python application designed to provide a sleek,
 This software is distributed under the [GPLv3](LICENSE) license.
 
 ### Third-Party Licenses
-This project uses FreeRDP, which is licensed under the [Apache License 2.0](THIRD_PARTY_LICENSES) license.
+This project uses some third-party libraries and tools. Please refer to the [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES) file for detailed information on their respective licenses.
 
 ## Security
 Please disclose any vulnerabilities found responsibly – report security issues to the maintainers privately. See [SECURITY.md](SECURITY.md) for more information.
@@ -41,6 +41,8 @@ Contributions to PyRDPConnect are welcome! If you have ideas for new features or
   - **FreeRDP**: For providing a powerful and flexible open-source RDP client.
   - **PyQt5**: For making it easy to create a modern and responsive UI in Python.
   - **PyInstaller**: For simplifying the process of packaging Python applications for distribution.
+  - **OpenVPN**: For inspiring cross-platform connectivity solutions.
+  - **WireGuard**: For demonstrating the power of simplicity in secure connections.
 
 ## Wait, where is the documentation?
 Review the [Documentation](https://laswitchtech.com/en/blog/projects/pyrdpconnect/index).
