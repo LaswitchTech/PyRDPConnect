@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import (
     QDesktopWidget, QWidget, QTabWidget, QCheckBox, QFrame, QSizePolicy,
     QHBoxLayout, QVBoxLayout, QPushButton, QLabel, QLineEdit, QFormLayout,
     QGroupBox, QGridLayout, QComboBox, QSpinBox, QFileDialog, QColorDialog,
-    QTextEdit, QListWidget, QListWidgetItem, QAbstractItemView
+    QTextEdit, QListWidget, QListWidgetItem
 )
 from PyQt5.QtGui import (
     QIcon, QPixmap, QPainter, QPalette, QColor, QValidator, QTextCharFormat
@@ -1066,7 +1066,6 @@ class Client(QMainWindow):
         # Retrieve the path of the icons directory
         icons_dir = self.get_path('icons')
         check_svg = os.path.join(icons_dir, 'check.svg') if icons_dir else None
-        chevron_down_svg = os.path.join(icons_dir, 'chevron-down.svg') if icons_dir else None
 
         # Create stylesheet overrides
         override = (
@@ -1076,9 +1075,6 @@ class Client(QMainWindow):
             "}\n"
             "QCheckBox::indicator:checked { "
             f"image: {self.qss_url(check_svg)};"
-            " }\n"
-            "QComboBox::down-arrow { "
-            f"image: {self.qss_url(chevron_down_svg)};"
             " }\n"
         )
 
