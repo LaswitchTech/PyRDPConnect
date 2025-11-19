@@ -314,45 +314,69 @@ class OpenVPN(QObject):
         os.makedirs(run_dir, exist_ok=True)
         return run_dir
 
-    def _on_config_file_changed(self, path: str) -> None:
-        if not path or not os.path.isfile(path):
-            return
-
+    def _on_config_file_changed(self, value: Any) -> None:
         host: Optional[str] = None
         port: Optional[int] = None
         auth_user_pass = False
         ca_rel: Optional[str] = None
         key_rel: Optional[str] = None
 
+        text: Optional[str] = None
+        cfg_path_for_rel: Optional[str] = None
+
+        if isinstance(value, str) and "::" in value:
+            try:
+                _, b64 = value.split("::", 1)
+                data = base64.b64decode(b64)
+                text = data.decode("utf-8", errors="ignore")
+            except Exception as e:
+                self._logger.append(
+                    f"[OpenVPN] Failed to decode inline config (string) in _on_config_file_changed: {e}",
+                    channel=self._log_channel,
+                )
+
+        elif isinstance(value, dict):
+            try:
+                b64 = value.get("data") or value.get("base64") or value.get("b64") or ""
+                if b64:
+                    data = base64.b64decode(b64)
+                    text = data.decode("utf-8", errors="ignore")
+            except Exception as e:
+                self._logger.append(
+                    f"[OpenVPN] Failed to decode inline config (dict) in _on_config_file_changed: {e}",
+                    channel=self._log_channel,
+                )
+
+        if not text:
+            return
+
         try:
-            with open(path, "r", encoding="utf-8", errors="ignore") as f:
-                for raw in f:
-                    line = raw.strip()
-                    if not line or line.startswith("#") or line.startswith(";"):
-                        continue
-                    parts = line.split()
-                    if not parts:
-                        continue
+            for raw in text.splitlines():
+                line = raw.strip()
+                if not line or line.startswith("#") or line.startswith(";"):
+                    continue
+                parts = line.split()
+                if not parts:
+                    continue
 
-                    key = parts[0].lower()
+                key = parts[0].lower()
 
-                    if key == "remote" and len(parts) >= 2:
-                        host = parts[1]
-                        if len(parts) >= 3:
-                            try:
-                                port = int(parts[2])
-                            except ValueError:
-                                pass
-                    elif key == "auth-user-pass":
-                        auth_user_pass = True
-                    elif key == "ca" and len(parts) >= 2:
-                        ca_rel = parts[1]
-                    elif key in ("tls-auth", "tls-crypt") and len(parts) >= 2:
-                        key_rel = parts[1]
-
+                if key == "remote" and len(parts) >= 2:
+                    host = parts[1]
+                    if len(parts) >= 3:
+                        try:
+                            port = int(parts[2])
+                        except ValueError:
+                            pass
+                elif key == "auth-user-pass":
+                    auth_user_pass = True
+                elif key == "ca" and len(parts) >= 2:
+                    ca_rel = parts[1]
+                elif key in ("tls-auth", "tls-crypt") and len(parts) >= 2:
+                    key_rel = parts[1]
         except Exception as e:
             self._logger.append(
-                f"[OpenVPN] Failed to parse config '{path}': {e}",
+                f"[OpenVPN] Failed to parse inline config in _on_config_file_changed: {e}",
                 channel=self._log_channel,
             )
             return
@@ -367,59 +391,57 @@ class OpenVPN(QObject):
             self._configuration.reload("network.openvpn.global", True)
             self._on_global_changed(True)
 
-        # CA certificate → base64 into network.openvpn.certificate
-        if ca_rel:
-            cfg_dir = os.path.dirname(path)
-            ca_path = os.path.join(cfg_dir, ca_rel)
-            if os.path.isfile(ca_path):
-                try:
-                    with open(ca_path, "rb") as f:
-                        data = f.read()
-                    b64 = base64.b64encode(data).decode("ascii")
+        # For CA/TLS files, we *only* auto-import them when we know the actual
+        # directory on disk (i.e., when cfg_path_for_rel is available).
+        if cfg_path_for_rel and (ca_rel or key_rel):
+            cfg_dir = os.path.dirname(cfg_path_for_rel)
 
-                    fname = os.path.basename(ca_path)
-                    stored = f"{fname}::{b64}"
+            if ca_rel:
+                ca_path = os.path.join(cfg_dir, ca_rel)
+                if os.path.isfile(ca_path):
+                    try:
+                        with open(ca_path, "rb") as f:
+                            data = f.read()
+                        b64 = base64.b64encode(data).decode("ascii")
+                        fname = os.path.basename(ca_path)
+                        stored = f"{fname}::{b64}"
+                        self._configuration.reload("network.openvpn.certificate", stored)
+                        self._logger.append(
+                            f"[OpenVPN] Loaded CA certificate from '{ca_path}' into configuration.",
+                            channel=self._log_channel,
+                        )
+                    except Exception as e:
+                        self._logger.append(
+                            f"[OpenVPN] Failed to load CA certificate '{ca_path}': {e}",
+                            channel=self._log_channel,
+                        )
 
-                    self._configuration.reload("network.openvpn.certificate", stored)
-                    self._logger.append(
-                        f"[OpenVPN] Loaded CA certificate from '{ca_path}' into configuration.",
-                        channel=self._log_channel,
-                    )
-                except Exception as e:
-                    self._logger.append(
-                        f"[OpenVPN] Failed to load CA certificate '{ca_path}': {e}",
-                        channel=self._log_channel,
-                    )
-
-        # TLS key file → base64 into network.openvpn.certificate
-        if key_rel:
-            cfg_dir = os.path.dirname(path)
-            key_path = os.path.join(cfg_dir, key_rel)
-            if os.path.isfile(key_path):
-                try:
-                    with open(key_path, "rb") as f:
-                        data = f.read()
-                    b64 = base64.b64encode(data).decode("ascii")
-
-                    fname = os.path.basename(key_path)
-                    stored = f"{fname}::{b64}"
-
-                    self._configuration.reload("network.openvpn.key", stored)
-                    self._logger.append(
-                        f"[OpenVPN] Loaded TLS key from '{key_path}' into configuration.",
-                        channel=self._log_channel,
-                    )
-                except Exception as e:
-                    self._logger.append(
-                        f"[OpenVPN] Failed to load TLS key '{key_path}': {e}",
-                        channel=self._log_channel,
-                    )
+            if key_rel:
+                key_path = os.path.join(cfg_dir, key_rel)
+                if os.path.isfile(key_path):
+                    try:
+                        with open(key_path, "rb") as f:
+                            data = f.read()
+                        b64 = base64.b64encode(data).decode("ascii")
+                        fname = os.path.basename(key_path)
+                        stored = f"{fname}::{b64}"
+                        self._configuration.reload("network.openvpn.key", stored)
+                        self._logger.append(
+                            f"[OpenVPN] Loaded TLS key from '{key_path}' into configuration.",
+                            channel=self._log_channel,
+                        )
+                    except Exception as e:
+                        self._logger.append(
+                            f"[OpenVPN] Failed to load TLS key '{key_path}': {e}",
+                            channel=self._log_channel,
+                        )
 
         self._configuration.save()
 
         self._logger.append(
-            f"[OpenVPN] Parsed config '{os.path.basename(path)}': "
-            f"host={host or '-'} port={port or '-'} auth-user-pass={auth_user_pass} ca={ca_rel or '-'}",
+            "[OpenVPN] Parsed config: "
+            f"host={host or '-'} port={port or '-'} auth-user-pass={auth_user_pass} "
+            f"ca={ca_rel or '-'} tls={key_rel or '-'}",
             channel=self._log_channel,
         )
 
@@ -504,7 +526,29 @@ class OpenVPN(QObject):
 
         run_dir = self._runtime_dir()
 
-        # New-style: "filename.ovpn::BASE64..."
+        if isinstance(stored, dict):
+            name = stored.get("name") or "openvpn.ovpn"
+            b64 = stored.get("data") or stored.get("base64") or stored.get("b64") or ""
+            if not b64:
+                self._logger.append(
+                    "[OpenVPN] Config dict is missing base64 data.",
+                    channel=self._log_channel,
+                )
+                return None
+            try:
+                data = base64.b64decode(b64)
+                cfg_path = os.path.join(run_dir, name)
+                with open(cfg_path, "wb") as f:
+                    f.write(data)
+                self._register_temp(cfg_path)
+                return cfg_path
+            except Exception as e:
+                self._logger.append(
+                    f"[OpenVPN] Failed to materialize inline config (dict): {e}",
+                    channel=self._log_channel,
+                )
+                return None
+
         if isinstance(stored, str) and "::" in stored:
             name, b64 = stored.split("::", 1)
             name = name or "openvpn.ovpn"
@@ -522,23 +566,10 @@ class OpenVPN(QObject):
                 )
                 return None
 
-        # Legacy: treat stored value as a path
-        if isinstance(stored, str) and os.path.isfile(stored):
-            name = os.path.basename(stored)
-            cfg_path = os.path.join(run_dir, name)
-            try:
-                if stored != cfg_path:
-                    with open(stored, "rb") as src, open(cfg_path, "wb") as dst:
-                        dst.write(src.read())
-                self._register_temp(cfg_path)
-                return cfg_path
-            except Exception as e:
-                self._logger.append(
-                    f"[OpenVPN] Failed to copy legacy config '{stored}' to runtime: {e}",
-                    channel=self._log_channel,
-                )
-                return None
-
+        self._logger.append(
+            "[OpenVPN] Unknown format for 'network.openvpn.file' (no config materialized).",
+            channel=self._log_channel,
+        )
         return None
 
     def _materialize_aux(self, cfg_key: str, default_name: str) -> Optional[str]:
@@ -547,10 +578,28 @@ class OpenVPN(QObject):
             return None
 
         try:
-            if "::" in stored:
+            if isinstance(stored, dict):
+                name = stored.get("name") or default_name
+                b64 = stored.get("data") or stored.get("base64") or stored.get("b64") or ""
+                if not b64:
+                    self._logger.append(
+                        f"[OpenVPN] {cfg_key} dict missing base64 data.",
+                        channel=self._log_channel,
+                    )
+                    return None
+
+            elif isinstance(stored, str) and "::" in stored:
                 name, b64 = stored.split("::", 1)
-            else:
+
+            elif isinstance(stored, str):
                 name, b64 = default_name, stored
+
+            else:
+                self._logger.append(
+                    f"[OpenVPN] Unsupported type for {cfg_key}: {type(stored).__name__}",
+                    channel=self._log_channel,
+                )
+                return None
 
             data = base64.b64decode(b64)
             run_dir = self._runtime_dir()
@@ -601,14 +650,18 @@ class OpenVPN(QObject):
 
         # Materialize config + CA + key into runtime
         cfg_path = self._materialize_config()
+        if not cfg_path:
+            self._logger.append(
+                "[OpenVPN] No config file materialized; aborting command.",
+                channel=self._log_channel,
+            )
+            return []
 
         # Even if we don't pass these on CLI, ensure the files exist
         self._materialize_aux("network.openvpn.certificate", "ca.crt")
         self._materialize_aux("network.openvpn.key", "ta.key")
 
-        cmd: list[str] = [bin_path]
-        if cfg_path:
-            cmd += ["--config", cfg_path]
+        cmd: list[str] = [bin_path, "--config", cfg_path]
 
         # Optional host/port override
         host = val("network.openvpn.host", "")
@@ -653,6 +706,21 @@ class OpenVPN(QObject):
             return
 
         cmd = self.build_command(overrides)
+
+        if not cmd:
+            MsgBox.show(
+                parent=parent,
+                title="OpenVPN",
+                message=(
+                    "OpenVPN configuration is invalid or missing.\n\n"
+                    "Please re-import your .ovpn file in the Configuration window."
+                ),
+                icon="error",
+                buttons=("OK",),
+                default="OK",
+                icon_lookup_fn=self._helper.get_path,
+            )
+            return
 
         # Reset channel for this new attempt
         self._logger.clear(self._log_channel)
