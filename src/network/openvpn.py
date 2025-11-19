@@ -7,7 +7,7 @@ import base64
 import signal
 import subprocess
 import threading
-from typing import Optional, TYPE_CHECKING, Any, Dict, Callable
+from typing import Optional, TYPE_CHECKING, Any, Dict, Callable, Set
 
 from PyQt5.QtCore import QObject, pyqtSignal, QThread, Qt
 from PyQt5.QtWidgets import (
@@ -70,6 +70,7 @@ class OpenVPNConnection(QThread):
                 env=env,
                 bufsize=1,
                 universal_newlines=True,
+                cwd=self._owner._runtime_dir(),
             )
 
             # Expose process to owner for is_running()/stop()
@@ -281,6 +282,9 @@ class OpenVPN(QObject):
         self._auth_file: Optional[str] = None
         self._last_error: str = ""
 
+        # Track all temporary files created in runtime (ovpn, cert, key, auth)
+        self._temp_files: set[str] = set()
+
         # For UI connect()
         self._dialog: Optional[OpenVPNDialog] = None
         self._thread: Optional[OpenVPNConnection] = None
@@ -487,6 +491,7 @@ class OpenVPN(QObject):
                 f.write(username + "\n" + password + "\n")
             os.chmod(path, 0o600)
             self._auth_file = path
+            self._register_temp(path)
             self._logger.append(f"[OpenVPN] Created auth file at {path}", channel=self._log_channel)
         except Exception as e:
             self._logger.append(f"[OpenVPN] Failed to create auth file: {e}", channel=self._log_channel)
@@ -508,6 +513,7 @@ class OpenVPN(QObject):
                 cfg_path = os.path.join(run_dir, name)
                 with open(cfg_path, "wb") as f:
                     f.write(data)
+                self._register_temp(cfg_path)
                 return cfg_path
             except Exception as e:
                 self._logger.append(
@@ -524,6 +530,7 @@ class OpenVPN(QObject):
                 if stored != cfg_path:
                     with open(stored, "rb") as src, open(cfg_path, "wb") as dst:
                         dst.write(src.read())
+                self._register_temp(cfg_path)
                 return cfg_path
             except Exception as e:
                 self._logger.append(
@@ -535,16 +542,11 @@ class OpenVPN(QObject):
         return None
 
     def _materialize_aux(self, cfg_key: str, default_name: str) -> Optional[str]:
-        """
-        Create a file in runtime/ from a 'name::base64' value stored in configuration.
-        If only base64 is stored (legacy), use default_name.
-        """
         stored = self._configuration.get(cfg_key)
         if not stored:
             return None
 
         try:
-            import base64
             if "::" in stored:
                 name, b64 = stored.split("::", 1)
             else:
@@ -555,6 +557,7 @@ class OpenVPN(QObject):
             path = os.path.join(run_dir, name)
             with open(path, "wb") as f:
                 f.write(data)
+            self._register_temp(path)
             return path
         except Exception as e:
             self._logger.append(
@@ -564,12 +567,20 @@ class OpenVPN(QObject):
             return None
 
     def _cleanup_temp_files(self) -> None:
-        if self._auth_file and os.path.exists(self._auth_file):
-            try:
-                os.remove(self._auth_file)
-            except Exception:
-                pass
+        # Include auth file in the temp set for safety
+        paths = set(self._temp_files)
+        if self._auth_file:
+            paths.add(self._auth_file)
+
+        for p in paths:
+            if p and os.path.exists(p):
+                try:
+                    os.remove(p)
+                except Exception:
+                    pass
+
         self._auth_file = None
+        self._temp_files.clear()
 
     # ------------------------------------------------------------------
     # Command generation
@@ -618,116 +629,7 @@ class OpenVPN(QObject):
         return cmd
 
     # ------------------------------------------------------------------
-    # Old synchronous process management (still used by ensure_connected)
-    # ------------------------------------------------------------------
-
-    def is_running(self) -> bool:
-        return self._proc is not None and self._proc.poll() is None
-
-    def last_error(self) -> str:
-        return self._last_error
-
-    def start(self) -> bool:
-        """
-        Start OpenVPN if configured and not already running.
-        (Legacy synchronous variant; does not show UI.)
-        """
-        self._last_error = ""
-
-        if not self.is_configured():
-            self._last_error = "OpenVPN config file is not set."
-            self._logger.append(self._last_error, channel=self._log_channel)
-            self.stateChanged.emit("error")
-            return False
-
-        if self.is_running():
-            self._logger.append(
-                "[OpenVPN] start() called but process is already running.",
-                channel=self._log_channel,
-            )
-            return True
-
-        cmd = self.build_command()
-
-        if not cmd:
-            self._last_error = "OpenVPN command is empty."
-            self._logger.append(self._last_error, channel=self._log_channel)
-            self.stateChanged.emit("error")
-            return False
-
-        self.stateChanged.emit("starting")
-        self._logger.append(f"[OpenVPN] Starting (legacy): {' '.join(cmd)}", channel=self._log_channel)
-
-        try:
-            self._proc = subprocess.Popen(
-                cmd,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            self.stateChanged.emit("running")
-            self._logger.append("[OpenVPN] Process started successfully (legacy).", channel=self._log_channel)
-            return True
-        except Exception as e:
-            self._last_error = str(e)
-            self._proc = None
-            self.stateChanged.emit("error")
-            self._logger.append(f"[OpenVPN] Failed to start (legacy): {e}", channel=self._log_channel)
-            return False
-
-    def stop(self) -> None:
-        """
-        Stop OpenVPN if running.
-        """
-        if not self.is_running():
-            self._logger.append(
-                "[OpenVPN] stop() called but process is not running.",
-                channel=self._log_channel,
-            )
-            self._proc = None
-            self._cleanup_temp_files()
-            self.stateChanged.emit("stopped")
-            return
-
-        self._logger.append("[OpenVPN] Stopping OpenVPN process...", channel=self._log_channel)
-
-        try:
-            if self._helper.get_os() == "windows":
-                self._proc.terminate()
-            else:
-                self._proc.send_signal(signal.SIGTERM)
-        except Exception as e:
-            self._logger.append(
-                f"[OpenVPN] Error while stopping: {e}",
-                channel=self._log_channel,
-            )
-        finally:
-            self._proc = None
-            self._cleanup_temp_files()
-            self.stateChanged.emit("stopped")
-            self._logger.append("[OpenVPN] Process stopped.", channel=self._log_channel)
-
-    def ensure_connected(self) -> tuple[bool, str]:
-        """
-        Legacy high-level helper (no UI).
-
-        - If not configured or auto-connect disabled: (True, "")
-        - If already running: (True, "")
-        - Else: try start() and return (ok, error_message)
-        """
-        if not self.is_configured() or not self.auto_connect():
-            return True, ""
-
-        if self.is_running():
-            return True, ""
-
-        ok = self.start()
-        if not ok:
-            return False, self._last_error
-
-        return True, ""
-
-    # ------------------------------------------------------------------
-    # New UI-based connect() (like FreeRDP.connect)
+    # Public connect API
     # ------------------------------------------------------------------
 
     def connect(
@@ -748,12 +650,6 @@ class OpenVPN(QObject):
                 default="OK",
                 icon_lookup_fn=self._helper.get_path,
             )
-            return
-
-        # If already running, just invoke the callback (if any) and exit
-        if self.is_running():
-            if callable(on_success):
-                on_success()
             return
 
         cmd = self.build_command(overrides)
