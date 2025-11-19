@@ -92,6 +92,12 @@ class Application(QApplication):
             "QComboBox::down-arrow { "
             f"image: {self._helper.qss_url(chevron_expand_svg)};"
             " }\n"
+            "QSpinBox::up-arrow { "
+            f"image: {self._helper.qss_url(chevron_up_svg)};"
+            " }\n"
+            "QSpinBox::down-arrow { "
+            f"image: {self._helper.qss_url(chevron_down_svg)};"
+            " }\n"
         )
 
         # Start with base + global overrides
