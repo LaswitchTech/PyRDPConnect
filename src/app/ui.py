@@ -7,7 +7,8 @@ from typing import Iterable, Optional, Callable, List
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QLabel, QHBoxLayout, QPushButton,
     QLineEdit, QSpinBox, QComboBox, QCheckBox, QColorDialog,
-    QSizePolicy, QStyle, QStyleOptionButton, QWidget, QFileDialog
+    QSizePolicy, QStyle, QStyleOptionButton, QWidget, QFileDialog,
+    QListView
 )
 from PyQt5.QtGui import (
     QIcon, QPixmap, QPainter, QColor, QPen
@@ -371,6 +372,9 @@ class Form:
     @staticmethod
     def select(items: Iterable[str], current: Optional[str] = None) -> QComboBox:
         cb = QComboBox()
+        popup = QListView()
+        popup.setObjectName("ComboPopup")
+        cb.setView(popup)
         vals: List[str] = list(items)
         cb.addItems(vals)
         if current is not None:
