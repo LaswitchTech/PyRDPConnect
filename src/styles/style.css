@@ -75,7 +75,17 @@ QComboBox QListView::item:hover {
     background-color: #5f6263;
     border: none;
 } */
-QComboBox::view {
+/* QComboBox::view {
+    border: 1px solid #76797C;
+    border-radius: 5px;
+    background-color: #212121;
+    color: #FFFFFF;
+    outline: 0;
+    selection-background-color: #0d6efd;
+    selection-color: #FFFFFF;
+} */
+QListView,
+QAbstractItemView {
     border: 1px solid #76797C;
     border-radius: 5px;
     background-color: #212121;
