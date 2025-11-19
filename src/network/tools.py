@@ -4,15 +4,35 @@
 import shutil
 import socket
 import re
+from typing import Optional
+from PyQt5.QtWidgets import QApplication
 
 from app.helper import Helper
 
 class Tools:
 
-    def __init__(self):
-        self._helper = Helper()
-        self._os = self._helper.get_os()
-        pass
+    def __init__(
+        self,
+        helper: Optional[Helper] = None
+    ):
+
+        # Initialize QObject
+        super().__init__()
+
+        # --- auto-wire from QApplication if not provided ---
+        if helper is None:
+            app = QApplication.instance()
+            if app is None:
+                raise RuntimeError("Client must be created after QApplication/Application.")
+            # narrow the type for linters / IDEs
+            # no runtime import to avoid circular imports
+            helper = helper or app.helper          # type: ignore[attr-defined]
+
+        # Helper
+        self._helper: Helper = helper
+
+        # OS type
+        self._os: str = self._helper.get_os()
 
     def ping(self, host):
         args = []

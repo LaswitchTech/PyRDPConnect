@@ -25,16 +25,11 @@ class Application(QApplication):
         self._helper = Helper()
 
         # Configuration manager
-        self._configuration = Configuration(
-            helper=self._helper
-        )
+        self._configuration = Configuration()
         self._configuration.configChanged.connect(self.reset)
 
         # Logger
-        self._logger = Log(
-            helper=self._helper,
-            configuration=self._configuration
-        )
+        self._logger = Log()
 
         # Initial stylesheet load
         self._loadStylesheet()

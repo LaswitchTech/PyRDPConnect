@@ -5,12 +5,12 @@ from __future__ import annotations
 import os
 import json
 from collections import defaultdict
-from typing import Any, Dict, Tuple
+from typing import Any, Tuple, Optional
 
 from PyQt5.QtCore import pyqtSignal, QObject
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QTabWidget, QWidget, QFormLayout,
-    QLabel, QPushButton, QHBoxLayout,
+    QLabel, QPushButton, QHBoxLayout, QApplication
 )
 
 from .helper import Helper
@@ -21,16 +21,29 @@ class Configuration(QObject):
     # Emitted after a successful save (or when we choose to later)
     configChanged = pyqtSignal(dict)
 
-    def __init__(self, helper: Helper, filename: str = "configuration.cfg"):
+    def __init__(
+        self,
+        helper: Optional[Helper] = None,
+        filename: str = "configuration.cfg"
+    ):
 
         # Initialize QObject
         super().__init__()
 
-        # Parent
-        self._parent = None
+        # --- auto-wire from QApplication if not provided ---
+        if helper is None:
+            app = QApplication.instance()
+            if app is None:
+                raise RuntimeError("Client must be created after QApplication/Application.")
+            # narrow the type for linters / IDEs
+            # no runtime import to avoid circular imports
+            helper = helper or app.helper          # type: ignore[attr-defined]
 
         # Helper
-        self._helper = helper
+        self._helper: Helper = helper
+
+        # Parent
+        self._parent = None
 
         # Root directory for config files
         self.root_dir = helper.root_dir

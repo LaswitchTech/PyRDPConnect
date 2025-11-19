@@ -13,8 +13,7 @@ from typing import Any, Dict, Optional, Iterable
 
 from PyQt5.QtCore import QThread, pyqtSignal, Qt
 from PyQt5.QtWidgets import (
-    QPushButton,
-    QProgressDialog,
+    QPushButton, QProgressDialog, QApplication
 )
 
 from app.helper import Helper
@@ -321,21 +320,36 @@ class FreeRDPDialog(QProgressDialog):
 # ---------------------------------------------------------------------------
 
 class FreeRDP:
-    def __init__(self, helper: Helper, config: Configuration, logger: Log):
-        self._helper = helper
-        self._configuration = config
-        self._logger = logger
-        self._log_channel = "freerdp"
 
-        self._dialog: Optional[FreeRDPDialog] = None
-        self._thread: Optional[FreeRDPConnection] = None
+    def __init__(
+        self,
+        helper: Optional[Helper] = None,
+        configuration: Optional[Configuration] = None,
+        logger: Optional[Log] = None,
+    ):
 
-        # Default configuration entries
+        # --- auto-wire from QApplication if not provided ---
+        if helper is None or configuration is None or logger is None:
+            app = QApplication.instance()
+            if app is None:
+                raise RuntimeError("Client must be created after QApplication/Application.")
+            # narrow the type for linters / IDEs
+            # no runtime import to avoid circular imports
+            helper = helper or app.helper          # type: ignore[attr-defined]
+            configuration = configuration or app.configuration  # type: ignore[attr-defined]
+            logger = logger or app.logger          # type: ignore[attr-defined]
+
+        # Helper
+        self._helper: Helper = helper
+
+        # Configuration
+        self._configuration: Configuration = configuration
         self._configuration.add("general.host", None, "text", placeholder="Server Address")
         self._configuration.add("general.port", 3389, "number", min=1, max=65535)
         self._configuration.add("general.username", None, "text", placeholder="Username")
         self._configuration.add("general.password", None, "password", placeholder="Password")
         self._configuration.add("general.domain", None, "text", placeholder="Domain")
+        self._configuration.label("freerdp", "FreeRDP")
         self._configuration.add("freerdp.display.resolution", None, "select", choices=["800x600", "1024x768", "1280x720", "1366x768", "1920x1080", "3840x2160"])
         self._configuration.add("freerdp.display.fullscreen", False, "checkbox", label="Fullscreen")
         self._configuration.add("freerdp.display.fit", False, "checkbox", label="Fit to window")
@@ -357,11 +371,16 @@ class FreeRDP:
         self._configuration.add("freerdp.experience.disable_wallpaper", False, "checkbox", label="Disable Wallpaper")
         self._configuration.add("freerdp.experience.show_certificate_warning", False, "checkbox", label="Show Certificate Warning")
 
-        # Labels for categories and sections
-        self._configuration.label("freerdp", "FreeRDP")
-
         # Save any new defaults
         self._configuration.save()
+
+        # Logger
+        self._logger: Log = logger
+        self._log_channel = "freerdp"
+
+        # Internal state
+        self._dialog: Optional[FreeRDPDialog] = None
+        self._thread: Optional[FreeRDPConnection] = None
 
     # ------------------------------------------------------------------
     # Binary / version helpers

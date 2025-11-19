@@ -6,11 +6,15 @@ import sys
 from app.application import Application
 from client.client import Client
 
-if __name__ == "__main__":
+def main():
     app = Application(sys.argv)
-    app.set_mainWindow(Client(
-        helper=app.helper,
-        configuration=app.configuration,
-        logger=app.logger,
-    ))
+
+    # Create main window and register it with Application
+    win = Client()
+    app.set_mainWindow(win)
+
+    # All other code gets app via QApplication.instance()
     sys.exit(app.exec_())
+
+if __name__ == "__main__":
+    main()

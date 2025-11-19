@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 # src/client/client.py
-import sys
 import base64
-from app.application import Application
+from typing import Optional, TYPE_CHECKING
+
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QGridLayout, QLabel, QLineEdit,
-    QHBoxLayout, QFormLayout, QSpinBox, QComboBox, QCheckBox
+    QHBoxLayout, QFormLayout, QSpinBox, QComboBox, QCheckBox,
+    QApplication,
 )
 from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5.QtCore import Qt
@@ -14,9 +15,12 @@ from app.helper import Helper
 from app.ui import Form
 from app.configuration import Configuration
 from app.log import Log
-from network.tools import Tools
 from network.diagnostic import Diagnostic
 from .freerdp import FreeRDP
+
+if TYPE_CHECKING:
+    # For type hints only, avoids circular import at runtime
+    from app.application import Application
 
 class Client(QMainWindow):
     """
@@ -25,18 +29,29 @@ class Client(QMainWindow):
 
     def __init__(
         self,
-        helper: Helper,
-        configuration: Configuration,
-        logger: Log,
+        helper: Optional[Helper] = None,
+        configuration: Optional[Configuration] = None,
+        logger: Optional[Log] = None,
     ):
         # Initialize parent
         super().__init__()
 
+        # --- auto-wire from QApplication if not provided ---
+        if helper is None or configuration is None or logger is None:
+            app = QApplication.instance()
+            if app is None:
+                raise RuntimeError("Client must be created after QApplication/Application.")
+            # narrow the type for linters / IDEs
+            # no runtime import to avoid circular imports
+            helper = helper or app.helper          # type: ignore[attr-defined]
+            configuration = configuration or app.configuration  # type: ignore[attr-defined]
+            logger = logger or app.logger          # type: ignore[attr-defined]
+
         # Helper
-        self._helper = helper
+        self._helper: Helper = helper
 
         # Configuration
-        self._configuration = configuration
+        self._configuration: Configuration = configuration
         if(self._helper.get_os() == "linux"):
             self._configuration.label("network.wifi", "WiFi")
             self._configuration.add("network.wifi.ssid", None, "text", label="SSID")
@@ -65,7 +80,7 @@ class Client(QMainWindow):
         self._configuration.save()
 
         # Logger
-        self._logger = logger
+        self._logger: Log = logger
 
         # FreeRDP
         self._freerdp = FreeRDP(self._helper, self._configuration, self._logger)
