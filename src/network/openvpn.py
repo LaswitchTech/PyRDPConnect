@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import base64
 import signal
 import subprocess
 import threading
@@ -116,6 +117,12 @@ class OpenVPNConnection(QThread):
             # Reset process handle on owner
             self._owner._proc = None
 
+            # Always clean up temporary files (auth file etc.)
+            try:
+                self._owner._cleanup_temp_files()
+            except Exception:
+                pass
+
             if self._stop_flag:
                 # User-cancelled; do not treat as error
                 self._owner.stateChanged.emit("stopped")
@@ -166,7 +173,6 @@ class OpenVPNConnection(QThread):
             except Exception:
                 pass
 
-
 # ---------------------------------------------------------------------------
 # Connection progress dialog
 # ---------------------------------------------------------------------------
@@ -193,7 +199,6 @@ class OpenVPNDialog(QProgressDialog):
     def _on_cancel(self):
         self.canceled_by_user.emit()
         self.reject()
-
 
 # ---------------------------------------------------------------------------
 # High-level OpenVPN façade
@@ -234,6 +239,7 @@ class OpenVPN(QObject):
             label="Config File",
             filter="OpenVPN Config Files (*.ovpn);;All Files (*)",
             on_changed=self._on_config_file_changed,
+            as_base64=True,
         )
         self._configuration.add("network.openvpn.auto", False, "checkbox", label="Auto Connect")
         self._configuration.add("network.openvpn.host", "", "text", label="Host")
@@ -253,6 +259,14 @@ class OpenVPN(QObject):
             "file",
             label="Certificate File",
             filter="Certificate Files (*.crt *.pem);;All Files (*)",
+            as_base64=True,
+        )
+        self._configuration.add(
+            "network.openvpn.key",
+            None,
+            "file",
+            label="TLS Key File",
+            filter="Key Files (*.key);;All Files (*)",
             as_base64=True,
         )
 
@@ -278,8 +292,9 @@ class OpenVPN(QObject):
     # ------------------------------------------------------------------
 
     def is_configured(self) -> bool:
-        cfg = self._configuration.get("network.openvpn.file")
-        return bool(cfg)
+        inline = self._configuration.get("network.openvpn.config_data")
+        file_cfg = self._configuration.get("network.openvpn.file")
+        return bool(inline or file_cfg)
 
     def auto_connect(self) -> bool:
         return bool(self._configuration.get("network.openvpn.auto"))
@@ -304,6 +319,7 @@ class OpenVPN(QObject):
         port: Optional[int] = None
         auth_user_pass = False
         ca_rel: Optional[str] = None
+        key_rel: Optional[str] = None
 
         try:
             with open(path, "r", encoding="utf-8", errors="ignore") as f:
@@ -354,7 +370,6 @@ class OpenVPN(QObject):
                 try:
                     with open(ca_path, "rb") as f:
                         data = f.read()
-                    import base64
                     b64 = base64.b64encode(data).decode("ascii")
 
                     fname = os.path.basename(ca_path)
@@ -368,6 +383,30 @@ class OpenVPN(QObject):
                 except Exception as e:
                     self._logger.append(
                         f"[OpenVPN] Failed to load CA certificate '{ca_path}': {e}",
+                        channel=self._log_channel,
+                    )
+
+        # TLS key file → base64 into network.openvpn.certificate
+        if key_rel:
+            cfg_dir = os.path.dirname(path)
+            key_path = os.path.join(cfg_dir, key_rel)
+            if os.path.isfile(key_path):
+                try:
+                    with open(key_path, "rb") as f:
+                        data = f.read()
+                    b64 = base64.b64encode(data).decode("ascii")
+
+                    fname = os.path.basename(key_path)
+                    stored = f"{fname}::{b64}"
+
+                    self._configuration.reload("network.openvpn.key", stored)
+                    self._logger.append(
+                        f"[OpenVPN] Loaded TLS key from '{key_path}' into configuration.",
+                        channel=self._log_channel,
+                    )
+                except Exception as e:
+                    self._logger.append(
+                        f"[OpenVPN] Failed to load TLS key '{key_path}': {e}",
                         channel=self._log_channel,
                     )
 
@@ -445,11 +484,71 @@ class OpenVPN(QObject):
         try:
             with open(path, "w", encoding="utf-8") as f:
                 f.write(username + "\n" + password + "\n")
+            os.chmod(path, 0o600)
             self._auth_file = path
             self._logger.append(f"[OpenVPN] Created auth file at {path}", channel=self._log_channel)
         except Exception as e:
             self._logger.append(f"[OpenVPN] Failed to create auth file: {e}", channel=self._log_channel)
         return path
+
+    def _materialize_config(self) -> Optional[str]:
+        """
+        Create a temporary .ovpn file in runtime/ from inline base64 config,
+        or fall back to the original path if inline config is missing.
+        """
+        stored = self._configuration.get("network.openvpn.config_data")
+        if not stored:
+            # Fallback: use original on-disk config if still set
+            return self.config_file()
+
+        try:
+            import base64
+            if "::" in stored:
+                name, b64 = stored.split("::", 1)
+            else:
+                name, b64 = "openvpn.ovpn", stored
+
+            data = base64.b64decode(b64)
+            run_dir = self._runtime_dir()
+            cfg_path = os.path.join(run_dir, name)
+            with open(cfg_path, "wb") as f:
+                f.write(data)
+            return cfg_path
+        except Exception as e:
+            self._logger.append(
+                f"[OpenVPN] Failed to materialize inline config: {e}",
+                channel=self._log_channel,
+            )
+            return None
+
+    def _materialize_aux(self, cfg_key: str, default_name: str) -> Optional[str]:
+        """
+        Create a file in runtime/ from a 'name::base64' value stored in configuration.
+        If only base64 is stored (legacy), use default_name.
+        """
+        stored = self._configuration.get(cfg_key)
+        if not stored:
+            return None
+
+        try:
+            import base64
+            if "::" in stored:
+                name, b64 = stored.split("::", 1)
+            else:
+                name, b64 = default_name, stored
+
+            data = base64.b64decode(b64)
+            run_dir = self._runtime_dir()
+            path = os.path.join(run_dir, name)
+            with open(path, "wb") as f:
+                f.write(data)
+            return path
+        except Exception as e:
+            self._logger.append(
+                f"[OpenVPN] Failed to materialize {cfg_key}: {e}",
+                channel=self._log_channel,
+            )
+            return None
 
     def _cleanup_temp_files(self) -> None:
         if self._auth_file and os.path.exists(self._auth_file):
@@ -475,11 +574,20 @@ class OpenVPN(QObject):
             return self._configuration.get(key, default)
 
         bin_path = self._binary_path()
-        cfg = self.config_file()
+
+        # Materialize config + CA + key into runtime
+        cfg_path = self._materialize_config()
+        if not cfg_path:
+            # Last fallback: original on-disk config
+            cfg_path = self.config_file()
+
+        # Even if we don't pass these on CLI, ensure the files exist
+        self._materialize_aux("network.openvpn.certificate", "ca.crt")
+        self._materialize_aux("network.openvpn.key", "ta.key")
 
         cmd: list[str] = [bin_path]
-        if cfg:
-            cmd += ["--config", cfg]
+        if cfg_path:
+            cmd += ["--config", cfg_path]
 
         # Optional host/port override
         host = val("network.openvpn.host", "")
@@ -491,7 +599,7 @@ class OpenVPN(QObject):
                 port_int = 1194
             cmd += ["--remote", str(host), str(port_int)]
 
-        # Credentials → auth-user-pass file
+        # Credentials → auth-user-pass file (see §3)
         username, password = self._resolve_credentials(overrides)
         if username and password:
             auth_file = self._write_auth_file(username, password)
