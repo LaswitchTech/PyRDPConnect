@@ -289,12 +289,16 @@ class FileInput(QWidget):
         caption: str = "Select File",
         directory: str = "",
         filter: str = "All Files (*)",
+        as_base64: bool = False,
+        on_changed: Optional[Callable[[str], None]] = None,
         parent=None,
     ):
         super().__init__(parent)
         self._caption = caption
         self._directory = directory
         self._filter = filter
+        self._as_base64 = as_base64
+        self._on_changed = on_changed
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -322,13 +326,32 @@ class FileInput(QWidget):
         )
         if path:
             self._edit.setText(path)
+            if self._on_changed:
+                self._on_changed(path)
 
     def value(self) -> str:
-        """Return the selected file path."""
-        return self._edit.text()
+        """
+        Return either the raw path (default) or the file content as base64.
+        """
+        path = self._edit.text().strip()
+        if not self._as_base64:
+            return path
+
+        if not path:
+            return ""
+
+        try:
+            with open(path, "rb") as f:
+                data = f.read()
+            return base64.b64encode(data).decode("ascii")
+        except Exception as e:
+            print(f"[FileInput] Failed to read '{path}' for base64: {e}")
+            return ""
 
     def setValue(self, path: str):
         self._edit.setText(path)
+        if self._on_changed:
+            self._on_changed(path)
 
 class StepIndicator(QWidget):
     def __init__(self, text: str, parent=None):
@@ -464,10 +487,19 @@ class Form:
         return PictureButton(initial=initial)
 
     @staticmethod
-    def file(initial: str = "", caption: str = "Select File", directory: str = "", filter: str = "All Files (*)") -> FileInput:
+    def file(
+        initial: str = "",
+        caption: str = "Select File",
+        directory: str = "",
+        filter: str = "All Files (*)",
+        as_base64: bool = False,
+        on_changed: Optional[Callable[[str], None]] = None,
+    ) -> FileInput:
         return FileInput(
             initial=initial,
             caption=caption,
             directory=directory,
             filter=filter,
+            as_base64=as_base64,
+            on_changed=on_changed,
         )

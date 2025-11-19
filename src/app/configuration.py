@@ -347,6 +347,8 @@ class Configuration(QObject):
                 caption=options.get("caption", "Select File"),
                 directory=options.get("directory", ""),
                 filter=options.get("filter", "All Files (*)"),
+                as_base64=options.get("as_base64", False),
+                on_changed=options.get("on_changed", None),
             )
         elif widget_type == "button":
             w = Form.button(
