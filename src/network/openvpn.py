@@ -291,10 +291,6 @@ class OpenVPN(QObject):
         return run_dir
 
     def _on_config_file_changed(self, path: str) -> None:
-        """
-        Called when the .ovpn file is selected in the configuration UI.
-        Extracts host, port, auth-user-pass presence, and CA certificate.
-        """
         if not path or not os.path.isfile(path):
             return
 
@@ -353,7 +349,11 @@ class OpenVPN(QObject):
                         data = f.read()
                     import base64
                     b64 = base64.b64encode(data).decode("ascii")
-                    self._configuration.reload("network.openvpn.certificate", b64)
+
+                    fname = os.path.basename(ca_path)
+                    stored = f"{fname}::{b64}"
+
+                    self._configuration.reload("network.openvpn.certificate", stored)
                     self._logger.append(
                         f"[OpenVPN] Loaded CA certificate from '{ca_path}' into configuration.",
                         channel=self._log_channel,
