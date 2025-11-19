@@ -388,7 +388,7 @@ class Form:
         helper = Helper()
         btn = QPushButton(label)
         if icon:
-            icon_path = f"icons/{icon}.svg"
+            icon_path = helper.get_path(f"icons/{icon}.svg")
             if icon_path:
                 if helper.file_exists(icon_path):
                     renderer = QSvgRenderer(icon_path)
@@ -402,7 +402,6 @@ class Form:
                     btn.setIconSize(pixmap.size())
                     if label:
                         btn.setText("\u2002" + label)
-        # btn.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
         if action:
             btn.clicked.connect(action)
         return btn
