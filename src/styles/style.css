@@ -48,12 +48,6 @@ QComboBox::down-arrow {
     height: 14px;
     padding: 8px;
 }
-QComboBox QFrame {
-    background-color: #212121;
-    border: 1px solid #76797C;
-    border-radius: 5px;
-    padding: 0px;
-}
 QListView,
 QAbstractItemView {
     border: 1px solid #76797C;
@@ -78,6 +72,18 @@ QAbstractItemView::item:selected {
 QListView::item:hover,
 QAbstractItemView::item:hover {
     background-color: #5f6263;
+    border: none;
+}
+QComboBox QFrame,
+QFrame#qt_qcombobox_popup {
+    background-color: #212121;
+    border: 1px solid #76797C;
+    border-radius: 5px;
+    padding: 0px;
+}
+QFrame#qt_qcombobox_popup QListView,
+QFrame#qt_qcombobox_popup QAbstractItemView {
+    background-color: #212121;
     border: none;
 }
 
