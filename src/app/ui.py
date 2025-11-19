@@ -299,6 +299,7 @@ class FileInput(QWidget):
         self._filter = filter
         self._as_base64 = as_base64
         self._on_changed = on_changed
+        self._stored_value: str = initial or ""
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -306,8 +307,18 @@ class FileInput(QWidget):
 
         self._edit = QLineEdit(self)
 
-        if initial and (not self._as_base64 or os.path.isfile(initial)):
-            self._edit.setText(initial)
+        if not self._as_base64:
+            if initial:
+                self._edit.setText(initial)
+        else:
+            display = ""
+            if initial:
+                if "::" in initial:
+                    fname, _ = initial.split("::", 1)
+                    display = fname
+                else:
+                    display = "(embedded)"
+            self._edit.setText(display)
 
         self._btn = QPushButton(". . .", self)
         self._btn.setFixedWidth(28)
@@ -332,28 +343,58 @@ class FileInput(QWidget):
 
     def value(self) -> str:
         """
-        Return either the raw path (default) or the file content as base64.
+        Return either the raw path (default) or a 'filename::base64' value
+        when as_base64=True.
         """
-        path = self._edit.text().strip()
+        path_or_name = self._edit.text().strip()
+
         if not self._as_base64:
-            return path
+            # Normal mode – return the path from the line edit
+            return path_or_name
 
-        if not path:
-            return ""
+        # Base64 mode
+        # If the text points to an actual file, re-read and encode it
+        if path_or_name and os.path.isfile(path_or_name):
+            try:
+                with open(path_or_name, "rb") as f:
+                    data = f.read()
+                b64 = base64.b64encode(data).decode("ascii")
+                fname = os.path.basename(path_or_name)
+                self._stored_value = f"{fname}::{b64}"
+            except Exception as e:
+                print(f"[FileInput] Failed to read '{path_or_name}' for base64: {e}")
 
-        try:
-            with open(path, "rb") as f:
-                data = f.read()
-            return base64.b64encode(data).decode("ascii")
-        except Exception as e:
-            print(f"[FileInput] Failed to read '{path}' for base64: {e}")
-            return ""
+        # If it's not a real file path, just return the last stored value
+        return self._stored_value or ""
 
-    def setValue(self, path: str):
-        self._edit.setText(path)
+    def setValue(self, value: str):
+        """
+        Update both the stored value and the visible text.
+        value is expected to be either:
+          - a path (normal mode), or
+          - 'filename::base64' / raw base64 (as_base64=True).
+        """
+        if not self._as_base64:
+            self._edit.setText(value or "")
+            if self._on_changed:
+                self._on_changed(value)
+            return
+
+        self._stored_value = value or ""
+
+        display = ""
+        if value:
+            if "::" in value:
+                fname, _ = value.split("::", 1)
+                display = fname
+            else:
+                display = "(embedded)"
+
+        self._edit.setText(display)
+
+        # Only call on_changed if we really want config-file reactions etc.
         if self._on_changed:
-            self._on_changed(path)
-
+            self._on_changed(value)
 class StepIndicator(QWidget):
     def __init__(self, text: str, parent=None):
         super().__init__(parent)
