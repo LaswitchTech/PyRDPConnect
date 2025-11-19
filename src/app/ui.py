@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QLabel, QHBoxLayout, QPushButton,
     QLineEdit, QSpinBox, QComboBox, QCheckBox, QColorDialog,
     QSizePolicy, QStyle, QStyleOptionButton, QWidget, QFileDialog,
-    QListView
+    QListView, QFrame
 )
 from PyQt5.QtGui import (
     QIcon, QPixmap, QPainter, QColor, QPen
@@ -373,7 +373,8 @@ class Form:
     def select(items: Iterable[str], current: Optional[str] = None) -> QComboBox:
         cb = QComboBox()
         popup = QListView()
-        popup.setObjectName("ComboPopup")
+        popup.setFrameShape(QFrame.NoFrame)
+        popup.setFrameShadow(QFrame.Plain)
         cb.setView(popup)
         vals: List[str] = list(items)
         cb.addItems(vals)
