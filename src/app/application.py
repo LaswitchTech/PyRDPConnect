@@ -79,7 +79,9 @@ class Application(QApplication):
 
         # Retrieve icon paths
         check_svg = self._helper.get_path("icons/check.svg")
+        chevron_up_svg = self._helper.get_path("icons/chevron-up.svg")
         chevron_down_svg = self._helper.get_path("icons/chevron-down.svg")
+        chevron_expand_svg = self._helper.get_path("icons/chevron-expand.svg")
 
         # Override styles
         override = (
@@ -88,7 +90,7 @@ class Application(QApplication):
             f"image: {self._helper.qss_url(check_svg)};"
             " }\n"
             "QComboBox::down-arrow { "
-            f"image: {self._helper.qss_url(chevron_down_svg)};"
+            f"image: {self._helper.qss_url(chevron_expand_svg)};"
             " }\n"
         )
 

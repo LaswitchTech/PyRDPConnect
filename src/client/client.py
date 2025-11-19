@@ -37,12 +37,16 @@ class Client(QMainWindow):
 
         # Configuration
         self._configuration = configuration
-        self._configuration.add("network.wifi.ssid", None, "text", label="SSID")
-        self._configuration.add("network.wifi.passphrase", None, "password")
-        self._configuration.add("network.openvpn.file", None, "text")
-        self._configuration.add("network.openvpn.auto", False, "checkbox")
-        self._configuration.add("network.wireguard.file", None, "text")
-        self._configuration.add("network.wireguard.auto", False, "checkbox")
+        if(self._helper.get_os() == "linux"):
+            self._configuration.label("network.wifi", "WiFi")
+            self._configuration.add("network.wifi.ssid", None, "text", label="SSID")
+            self._configuration.add("network.wifi.passphrase", None, "password")
+        self._configuration.label("network.openvpn", "OpenVPN")
+        self._configuration.add("network.openvpn.file", None, "text", label="Config File")
+        self._configuration.add("network.openvpn.auto", False, "checkbox", label="Auto Connect")
+        self._configuration.label("network.wireguard", "WireGuard")
+        self._configuration.add("network.wireguard.file", None, "text", label="Config File")
+        self._configuration.add("network.wireguard.auto", False, "checkbox", label="Auto Connect")
         self._configuration.add("customize.window.logo_file", None, "picture", label="Logo File")
         self._configuration.add("customize.window.logo_position", "top-center", "select", label="Logo Position", choices=["top-left", "top-center", "top-right", "center-left", "center-center", "center-right", "bottom-left", "bottom-center", "bottom-right"])
         self._configuration.add("customize.window.form_position", "center-center", "select", label="Form Position", choices=["top-left", "top-center", "top-right", "center-left", "center-center", "center-right", "bottom-left", "bottom-center", "bottom-right"])
@@ -56,11 +60,6 @@ class Client(QMainWindow):
         self._configuration.add("administration.update", None, "button", label="Check for Updates", action=self.exit)
         self._configuration.add("administration.import", None, "button", label="Import Configuration", action=self.exit)
         self._configuration.add("administration.export", None, "button", label="Export Configuration", action=self.exit)
-
-        # Labels for categories and sections
-        self._configuration.label("network.wifi", "WiFi")
-        self._configuration.label("network.openvpn", "OpenVPN")
-        self._configuration.label("network.wireguard", "WireGuard")
 
         # Save any new defaults
         self._configuration.save()
