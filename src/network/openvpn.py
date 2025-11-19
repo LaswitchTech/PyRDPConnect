@@ -247,7 +247,7 @@ class OpenVPN(QObject):
             "file",
             label="Certificate File",
             filter="Certificate Files (*.crt *.pem);;All Files (*)",
-            as_base64=True,   # <-- stored as base64 in configuration
+            as_base64=True,
         )
 
         # Save any new defaults
@@ -290,14 +290,18 @@ class OpenVPN(QObject):
         os.makedirs(run_dir, exist_ok=True)
         return run_dir
 
-    # Called when the user picks a .ovpn file in the config dialog
     def _on_config_file_changed(self, path: str) -> None:
+        """
+        Called when the .ovpn file is selected in the configuration UI.
+        Extracts host, port, auth-user-pass presence, and CA certificate.
+        """
         if not path or not os.path.isfile(path):
             return
 
         host: Optional[str] = None
         port: Optional[int] = None
         auth_user_pass = False
+        ca_rel: Optional[str] = None
 
         try:
             with open(path, "r", encoding="utf-8", errors="ignore") as f:
@@ -308,6 +312,7 @@ class OpenVPN(QObject):
                     parts = line.split()
                     if not parts:
                         continue
+
                     key = parts[0].lower()
 
                     if key == "remote" and len(parts) >= 2:
@@ -319,21 +324,51 @@ class OpenVPN(QObject):
                                 pass
                     elif key == "auth-user-pass":
                         auth_user_pass = True
+                    elif key == "ca" and len(parts) >= 2:
+                        ca_rel = parts[1]
+
         except Exception as e:
-            self._logger.append(f"[OpenVPN] Failed to parse config '{path}': {e}", channel=self._log_channel)
+            self._logger.append(
+                f"[OpenVPN] Failed to parse config '{path}': {e}",
+                channel=self._log_channel,
+            )
             return
 
+        # --- Apply values into configuration + visible widgets ---
+
         if host:
-            self._configuration.set("network.openvpn.host", host)
+            self._configuration.reload("network.openvpn.host", host)
         if port is not None:
-            self._configuration.set("network.openvpn.port", port)
+            self._configuration.reload("network.openvpn.port", port)
         if auth_user_pass:
-            # If the config expects username/password, default to using global creds.
-            self._configuration.set("network.openvpn.global", True)
+            self._configuration.reload("network.openvpn.global", True)
+
+        # CA certificate → base64 into network.openvpn.certificate
+        if ca_rel:
+            cfg_dir = os.path.dirname(path)
+            ca_path = os.path.join(cfg_dir, ca_rel)
+            if os.path.isfile(ca_path):
+                try:
+                    with open(ca_path, "rb") as f:
+                        data = f.read()
+                    import base64
+                    b64 = base64.b64encode(data).decode("ascii")
+                    self._configuration.reload("network.openvpn.certificate", b64)
+                    self._logger.append(
+                        f"[OpenVPN] Loaded CA certificate from '{ca_path}' into configuration.",
+                        channel=self._log_channel,
+                    )
+                except Exception as e:
+                    self._logger.append(
+                        f"[OpenVPN] Failed to load CA certificate '{ca_path}': {e}",
+                        channel=self._log_channel,
+                    )
 
         self._configuration.save()
+
         self._logger.append(
-            f"[OpenVPN] Parsed config: host={host or '-'} port={port or '-'} auth-user-pass={auth_user_pass}",
+            f"[OpenVPN] Parsed config '{os.path.basename(path)}': "
+            f"host={host or '-'} port={port or '-'} auth-user-pass={auth_user_pass} ca={ca_rel or '-'}",
             channel=self._log_channel,
         )
 

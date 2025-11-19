@@ -305,10 +305,11 @@ class FileInput(QWidget):
         layout.setSpacing(4)
 
         self._edit = QLineEdit(self)
-        if initial:
+
+        if initial and (not self._as_base64 or os.path.isfile(initial)):
             self._edit.setText(initial)
 
-        self._btn = QPushButton("…", self)
+        self._btn = QPushButton(". . .", self)
         self._btn.setFixedWidth(28)
         self._btn.clicked.connect(self._browse)
 

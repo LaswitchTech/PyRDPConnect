@@ -181,6 +181,32 @@ class Configuration(QObject):
         # Fallback: nice label from the last segment
         return self._nice_label(key.split(".")[-1])
 
+    def reload(self, key: str, value: Any) -> None:
+        self.set(key, value)
+        w = self._widgets.get(key)
+        if w is None:
+            return
+
+        from PyQt5.QtWidgets import QLineEdit, QComboBox, QCheckBox, QSpinBox
+
+        if isinstance(w, QLineEdit):
+            w.setText(str(value) if value is not None else "")
+        elif isinstance(w, QComboBox):
+            idx = w.findText(str(value))
+            if idx >= 0:
+                w.setCurrentIndex(idx)
+        elif isinstance(w, QCheckBox):
+            w.setChecked(bool(value))
+        elif isinstance(w, QSpinBox):
+            try:
+                w.setValue(int(value))
+            except Exception:
+                pass
+        else:
+            # Custom widgets (ColorButton, FileInput, PictureButton, etc.)
+            if hasattr(w, "setValue") and callable(getattr(w, "setValue")):
+                w.setValue(value)
+
     # ------------------------------------------------------------------
     # Convenience properties
     # ------------------------------------------------------------------
