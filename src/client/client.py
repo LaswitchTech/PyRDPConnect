@@ -13,9 +13,11 @@ from PyQt5.QtCore import Qt
 
 from app.helper import Helper
 from app.ui import Form
+from app.ui import MsgBox
 from app.configuration import Configuration
 from app.log import Log
 from network.diagnostic import Diagnostic
+from network.openvpn import OpenVPN
 from .freerdp import FreeRDP
 
 if TYPE_CHECKING:
@@ -56,9 +58,6 @@ class Client(QMainWindow):
             self._configuration.label("network.wifi", "WiFi")
             self._configuration.add("network.wifi.ssid", None, "text", label="SSID")
             self._configuration.add("network.wifi.passphrase", None, "password")
-        self._configuration.label("network.openvpn", "OpenVPN")
-        self._configuration.add("network.openvpn.file", None, "text", label="Config File")
-        self._configuration.add("network.openvpn.auto", False, "checkbox", label="Auto Connect")
         self._configuration.label("network.wireguard", "WireGuard")
         self._configuration.add("network.wireguard.file", None, "text", label="Config File")
         self._configuration.add("network.wireguard.auto", False, "checkbox", label="Auto Connect")
@@ -83,7 +82,10 @@ class Client(QMainWindow):
         self._logger: Log = logger
 
         # FreeRDP
-        self._freerdp = FreeRDP(self._helper, self._configuration, self._logger)
+        self._freerdp = FreeRDP()
+
+        # OpenVPN
+        self._openvpn = OpenVPN(parent=self)
 
     # ------------------------------------------------------------------
     # Callbacks / overrides
@@ -303,10 +305,33 @@ class Client(QMainWindow):
         grid_layout.addWidget(form_widget, *login_grid_pos, 1, 1, Qt.AlignCenter)
 
     # ------------------------------------------------------------------
+    # VPN helper
+    # ------------------------------------------------------------------
+
+    def _ensure_vpn(self) -> bool:
+        ok, err = self._openvpn.ensure_connected()
+        if ok:
+            return True
+
+        MsgBox.show(
+            parent=self,
+            title="OpenVPN error",
+            message=f"Failed to start OpenVPN.\n\n{err or 'Unknown error.'}",
+            icon="error",
+            buttons=("OK",),
+            default="OK",
+            icon_lookup_fn=self._helper.get_path,
+        )
+        return False
+    # ------------------------------------------------------------------
     # Actions
     # ------------------------------------------------------------------
 
     def connect(self):
+
+        # Make sure VPN is up if needed
+        if not self._ensure_vpn():
+            return
 
         # Initialize overrides dictionary
         overrides = {}

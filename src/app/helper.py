@@ -71,6 +71,17 @@ class Helper:
         return "unknown"
 
     @staticmethod
+    def get_arch() -> str:
+        arch = platform.machine().lower()
+        if arch in ("x86_64", "amd64"):
+            return "x86_64"
+        if arch in ("aarch64", "arm64"):
+            return "arm64"
+        if arch in ("i386", "i686", "x86", "i86pc"):
+            return "x86"
+        return "unknown"
+
+    @staticmethod
     def file_exists(path: str | None) -> bool:
         return bool(path) and os.path.isfile(path)
 

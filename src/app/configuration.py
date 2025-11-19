@@ -339,15 +339,15 @@ class Configuration(QObject):
             )
         elif widget_type == "color":
             w = Form.color(initial=current_value or "#000000")
-        elif widget_type == "file":
-            # For now just treat as a text line; you can later add a file picker wrapper.
-            w = Form.text(
-                text=current_value or "",
-                placeholder=options.get("placeholder", "")
-            )
         elif widget_type == "picture":
-            # ⬅️ NEW picture button (logo etc.) storing base64 string
             w = Form.picture(initial=current_value or "")
+        elif widget_type == "file":
+            w = Form.file(
+                initial=current_value or "",
+                caption=options.get("caption", "Select File"),
+                directory=options.get("directory", ""),
+                filter=options.get("filter", "All Files (*)"),
+            )
         elif widget_type == "button":
             w = Form.button(
                 label=options.get("label", "Button"),

@@ -282,6 +282,54 @@ class PictureButton(QPushButton):
         self.setText("")
         self.update()
 
+class FileInput(QWidget):
+    def __init__(
+        self,
+        initial: str = "",
+        caption: str = "Select File",
+        directory: str = "",
+        filter: str = "All Files (*)",
+        parent=None,
+    ):
+        super().__init__(parent)
+        self._caption = caption
+        self._directory = directory
+        self._filter = filter
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+
+        self._edit = QLineEdit(self)
+        if initial:
+            self._edit.setText(initial)
+
+        self._btn = QPushButton("…", self)
+        self._btn.setFixedWidth(28)
+        self._btn.clicked.connect(self._browse)
+
+        layout.addWidget(self._edit)
+        layout.addWidget(self._btn)
+
+    def _browse(self):
+        # Start from configured directory, or from current value's folder
+        start_dir = self._directory or os.path.dirname(self._edit.text() or "") or ""
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            self._caption,
+            start_dir,
+            self._filter,
+        )
+        if path:
+            self._edit.setText(path)
+
+    def value(self) -> str:
+        """Return the selected file path."""
+        return self._edit.text()
+
+    def setValue(self, path: str):
+        self._edit.setText(path)
+
 class StepIndicator(QWidget):
     def __init__(self, text: str, parent=None):
         super().__init__(parent)
@@ -414,3 +462,12 @@ class Form:
     @staticmethod
     def picture(initial: Optional[str] = None) -> PictureButton:
         return PictureButton(initial=initial)
+
+    @staticmethod
+    def file(initial: str = "", caption: str = "Select File", directory: str = "", filter: str = "All Files (*)") -> FileInput:
+        return FileInput(
+            initial=initial,
+            caption=caption,
+            directory=directory,
+            filter=filter,
+        )

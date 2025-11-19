@@ -386,14 +386,12 @@ class FreeRDP:
     # Binary / version helpers
     # ------------------------------------------------------------------
 
-    def _get_freerdp_bin_path(self) -> str:
-        """
-        Prefer bundled bin/freerdp/{os}/xfreerdp, then PATH.
-        """
+    def _binary_path(self) -> str:
         osname = self._helper.get_os()
+        arch = self._helper.get_arch()
 
         if osname in ("macos", "linux"):
-            rel = f"bin/freerdp/{osname}/xfreerdp"
+            rel = f"bin/freerdp/{osname}/{arch}/xfreerdp"
             cand = self._helper.get_path(rel)
         else:
             cand = None
@@ -439,11 +437,6 @@ class FreeRDP:
         self,
         overrides: Optional[Dict[str, Any]] = None
     ) -> tuple[list[str], Optional[str], bool, bool]:
-        """
-        Build xfreerdp command from Configuration + optional runtime overrides.
-
-        Returns: (command, stdin_password, show_cert_warning, debug_enabled)
-        """
         overrides = overrides or {}
 
         def val(key: str, default: Any = None) -> Any:
@@ -451,7 +444,7 @@ class FreeRDP:
                 return overrides[key]
             return self._configuration.get(key, default)
 
-        freerdp_path = self._get_freerdp_bin_path()
+        freerdp_path = self._binary_path()
         freerdp_version = self._get_freerdp_version(freerdp_path)
         major_version = int(freerdp_version.split(".")[0]) if freerdp_version else None
 
