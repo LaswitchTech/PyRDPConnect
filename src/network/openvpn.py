@@ -238,7 +238,13 @@ class OpenVPN(QObject):
         self._configuration.add("network.openvpn.auto", False, "checkbox", label="Auto Connect")
         self._configuration.add("network.openvpn.host", "", "text", label="Host")
         self._configuration.add("network.openvpn.port", 1194, "number", label="Port")
-        self._configuration.add("network.openvpn.global", False, "checkbox", label="Use Global Credentials")
+        self._configuration.add(
+            "network.openvpn.global",
+            False,
+            "checkbox",
+            label="Use Global Credentials",
+            on_changed=self._on_global_changed,
+        )
         self._configuration.add("network.openvpn.username", "", "text", label="Username")
         self._configuration.add("network.openvpn.password", "", "password", label="Password")
         self._configuration.add(
@@ -338,6 +344,7 @@ class OpenVPN(QObject):
             self._configuration.reload("network.openvpn.port", port)
         if auth_user_pass:
             self._configuration.reload("network.openvpn.global", True)
+            self._on_global_changed(True)
 
         # CA certificate → base64 into network.openvpn.certificate
         if ca_rel:
@@ -371,6 +378,17 @@ class OpenVPN(QObject):
             f"host={host or '-'} port={port or '-'} auth-user-pass={auth_user_pass} ca={ca_rel or '-'}",
             channel=self._log_channel,
         )
+
+    def _on_global_changed(self, value: Any) -> None:
+        use_global = bool(value)
+        try:
+            self._configuration.visibility("network.openvpn.username", not use_global)
+            self._configuration.visibility("network.openvpn.password", not use_global)
+        except Exception as e:
+            self._logger.append(
+                f"[OpenVPN] _on_global_changed error: {e}",
+                channel=self._log_channel,
+            )
 
     # ------------------------------------------------------------------
     # Binary location

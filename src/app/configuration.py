@@ -58,6 +58,9 @@ class Configuration(QObject):
         # UI widgets mapped by config key
         self._widgets: dict[str, Any] = {}
 
+        # Actual QLabel widgets mapped by config key (for show/hide)
+        self._widget_labels: dict[str, Any] = {}
+
         # Labels: key → display label (e.g. "freerdp" -> "FreeRDP",
         #      "freerdp.display" -> "Display")
         self._labels: dict[str, str] = {}
@@ -207,6 +210,15 @@ class Configuration(QObject):
             if hasattr(w, "setValue") and callable(getattr(w, "setValue")):
                 w.setValue(value)
 
+    def visibility(self, key: str, visible: bool) -> None:
+        w = self._widgets.get(key)
+        if w is not None:
+            w.setVisible(visible)
+
+        lbl = self._widget_labels.get(key)
+        if lbl is not None:
+            lbl.setVisible(visible)
+
     # ------------------------------------------------------------------
     # Convenience properties
     # ------------------------------------------------------------------
@@ -262,6 +274,7 @@ class Configuration(QObject):
 
         # Build tabs
         self._widgets.clear()
+        self._widget_labels.clear()
 
         for category, subcats in structure.items():
             # Top-level tab widget
@@ -389,6 +402,26 @@ class Configuration(QObject):
                 placeholder=options.get("placeholder", "")
             )
 
+        # --- generic on_changed wiring for basic widgets ---
+        callback = options.get("on_changed")
+        if callback is not None:
+            from PyQt5.QtWidgets import QLineEdit, QComboBox, QCheckBox, QSpinBox
+
+            try:
+                if isinstance(w, QCheckBox):
+                    w.toggled.connect(callback)
+                elif isinstance(w, QLineEdit):
+                    w.textChanged.connect(callback)
+                elif isinstance(w, QSpinBox):
+                    w.valueChanged.connect(callback)
+                elif isinstance(w, QComboBox):
+                    w.currentTextChanged.connect(callback)
+
+                # Initial call so state (e.g. visibility) is correct
+                callback(current_value)
+            except Exception as e:
+                print(f"[Configuration] on_changed for {full_key} failed: {e}")
+
         # Register this widget for saving (used by _update_from_widgets)
         self._widgets[full_key] = w
 
@@ -403,12 +436,13 @@ class Configuration(QObject):
         form_layout,
         fields: list[Tuple[str, dict[str, Any]]]
     ) -> None:
-        """
-        Populate a QFormLayout for one (sub)category.
-        """
         for full_key, _meta in fields:
             w, label_text = self._build_widget_for_key(full_key)
-            form_layout.addRow(QLabel(label_text), w)
+            label_widget = QLabel(label_text)
+            form_layout.addRow(label_widget, w)
+
+            # Keep track of the label widget so we can hide/show it
+            self._widget_labels[full_key] = label_widget
 
     def _nice_label(self, raw: str) -> str:
         """
