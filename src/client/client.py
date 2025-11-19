@@ -334,8 +334,12 @@ class Client(QMainWindow):
             if overrides.get(f"general.{name}") in (None, ""):
                 overrides[f"general.{name}"] = value
 
-        # Make sure VPN is up if needed
+        # Make sure VPN is up if needed; only start RDP after VPN connects
         if self._configuration.get("network.openvpn.auto"):
-            self._openvpn.connect(parent=self, overrides=overrides)
-
-        self._freerdp.connect(parent=self, overrides=overrides)
+            self._openvpn.connect(
+                parent=self,
+                overrides=overrides,
+                on_success=lambda: self._freerdp.connect(parent=self, overrides=overrides),
+            )
+        else:
+            self._freerdp.connect(parent=self, overrides=overrides)

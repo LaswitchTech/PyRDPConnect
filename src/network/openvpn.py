@@ -6,7 +6,7 @@ import os
 import signal
 import subprocess
 import threading
-from typing import Optional, TYPE_CHECKING, Any, Dict
+from typing import Optional, TYPE_CHECKING, Any, Dict, Callable
 
 from PyQt5.QtCore import QObject, pyqtSignal, QThread, Qt
 from PyQt5.QtWidgets import (
@@ -598,14 +598,10 @@ class OpenVPN(QObject):
         self,
         parent,
         overrides: Optional[Dict[str, Any]] = None,
+        on_success: Optional[Callable[[], None]] = None,
     ) -> None:
-        """
-        UI-based connection attempt:
-          - shows a progress dialog
-          - runs OpenVPN in a background thread
-          - logs stdout/stderr to central Log
-          - on failure shows MsgBox with 'Open log' button (if log enabled)
-        """
+
+        # If not configured, show error dialog
         if not self.is_configured():
             MsgBox.show(
                 parent=parent,
@@ -616,6 +612,12 @@ class OpenVPN(QObject):
                 default="OK",
                 icon_lookup_fn=self._helper.get_path,
             )
+            return
+
+        # If already running, just invoke the callback (if any) and exit
+        if self.is_running():
+            if callable(on_success):
+                on_success()
             return
 
         cmd = self.build_command(overrides)
@@ -641,7 +643,7 @@ class OpenVPN(QObject):
             debug_enabled=debug_enabled,
             parent=parent,
         )
-        self._thread.connected.connect(lambda: self._on_success(parent))
+        self._thread.connected.connect(lambda: self._on_success(parent, on_success))
         self._thread.failed.connect(
             lambda title, details, raw: self._on_failed(parent, title, details, raw)
         )
@@ -659,7 +661,7 @@ class OpenVPN(QObject):
         _ = line
         return
 
-    def _on_success(self, parent):
+    def _on_success(self, parent, on_success: Optional[Callable[[], None]] = None):
         if self._dialog:
             self._dialog.hide()
         MsgBox.show(
@@ -671,6 +673,9 @@ class OpenVPN(QObject):
             default="OK",
             icon_lookup_fn=self._helper.get_path,
         )
+
+        if callable(on_success):
+            on_success()
 
     def _on_failed(self, parent, title: str, details: str, raw_log: str):
         _ = raw_log  # canonical log is already in self._logger
