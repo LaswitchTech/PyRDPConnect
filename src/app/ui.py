@@ -320,8 +320,7 @@ class FileInput(QWidget):
                     display = "(embedded)"
             self._edit.setText(display)
 
-        self._btn = QPushButton("Select", self)
-        self._btn.setFixedWidth(28)
+        self._btn = QPushButton("...", self)
         self._btn.clicked.connect(self._browse)
 
         layout.addWidget(self._edit)
