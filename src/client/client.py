@@ -13,7 +13,6 @@ from PyQt5.QtCore import Qt
 
 from app.helper import Helper
 from app.ui import Form
-from app.ui import MsgBox
 from app.configuration import Configuration
 from app.log import Log
 from network.diagnostic import Diagnostic
@@ -305,33 +304,10 @@ class Client(QMainWindow):
         grid_layout.addWidget(form_widget, *login_grid_pos, 1, 1, Qt.AlignCenter)
 
     # ------------------------------------------------------------------
-    # VPN helper
-    # ------------------------------------------------------------------
-
-    def _ensure_vpn(self) -> bool:
-        ok, err = self._openvpn.ensure_connected()
-        if ok:
-            return True
-
-        MsgBox.show(
-            parent=self,
-            title="OpenVPN error",
-            message=f"Failed to start OpenVPN.\n\n{err or 'Unknown error.'}",
-            icon="error",
-            buttons=("OK",),
-            default="OK",
-            icon_lookup_fn=self._helper.get_path,
-        )
-        return False
-    # ------------------------------------------------------------------
     # Actions
     # ------------------------------------------------------------------
 
     def connect(self):
-
-        # Make sure VPN is up if needed
-        if not self._ensure_vpn():
-            return
 
         # Initialize overrides dictionary
         overrides = {}
@@ -357,5 +333,9 @@ class Client(QMainWindow):
         for name, value in general.items():
             if overrides.get(f"general.{name}") in (None, ""):
                 overrides[f"general.{name}"] = value
+
+        # Make sure VPN is up if needed
+        if self._configuration.get("network.openvpn.auto"):
+            self._openvpn.connect(parent=self, overrides=overrides)
 
         self._freerdp.connect(parent=self, overrides=overrides)
