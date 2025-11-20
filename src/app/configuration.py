@@ -342,6 +342,9 @@ class Configuration(QObject):
     # ------------------------------------------------------------------
 
     def import_cfg(self, parent: Optional[QWidget] = None) -> bool:
+        # Allow this method to be called as a Qt slot callback (clicked(bool)), where parent might be a bool
+        if not isinstance(parent, QWidget):
+            parent = self._parent if isinstance(self._parent, QWidget) else None
         path, _ = QFileDialog.getOpenFileName(
             parent,
             "Import configuration",
@@ -379,6 +382,9 @@ class Configuration(QObject):
         return True
 
     def export_cfg(self, parent: Optional[QWidget] = None) -> bool:
+        # Allow this method to be called as a Qt slot callback (clicked(bool)), where parent might be a bool
+        if not isinstance(parent, QWidget):
+            parent = self._parent if isinstance(self._parent, QWidget) else None
         path, _ = QFileDialog.getSaveFileName(
             parent,
             "Export configuration",
