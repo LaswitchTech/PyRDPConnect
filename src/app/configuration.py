@@ -365,6 +365,7 @@ class Configuration(QObject):
             print(f"[Configuration] Imported configuration is not a dict: {type(imported)}")
             return False
 
+        collected_keys = []
         def _apply(prefix: str, node: dict[str, Any]) -> None:
             for key, value in node.items():
                 if isinstance(value, dict):
@@ -374,8 +375,19 @@ class Configuration(QObject):
                     full_key = f"{prefix}.{key}" if prefix else key
                     # Use the existing setter so we don't stomp entire blocks
                     self.set(full_key, value)
+                    collected_keys.append(full_key)
 
         _apply("", imported)
+
+        # After applying, reload each key recursively with imported values
+        for key in collected_keys:
+            # Traverse imported dict to get the value for the full key
+            node = imported
+            parts = key.split(".")
+            for part in parts[:-1]:
+                node = node.get(part, {})
+            value = node.get(parts[-1], None)
+            self.reload(key, value)
 
         # Persist and notify listeners via save()
         self.save()
@@ -516,10 +528,6 @@ class Configuration(QObject):
             self._widget_labels[full_key] = label_widget
 
     def _nice_label(self, raw: str) -> str:
-        """
-        Turn a key-like string into a human label:
-        'gradient_start' -> 'Gradient start'
-        """
         s = raw.replace("_", " ").replace("-", " ")
         if not s:
             return ""
