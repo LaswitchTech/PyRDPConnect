@@ -176,7 +176,7 @@ QPushButton {
     background-color: #414344;
     color: #FFFFFF;
 
-    selection-border-color: #414344;
+    selection-border: none;
     selection-background-color: #414344;
     selection-color: #FFFFFF;
 }
