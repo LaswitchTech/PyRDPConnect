@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import os
 import json
+import shutil
 from collections import defaultdict
 from typing import Any, Tuple, Optional
 
 from PyQt5.QtCore import pyqtSignal, QObject
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QTabWidget, QWidget, QFormLayout,
-    QLabel, QPushButton, QHBoxLayout, QApplication
+    QLabel, QPushButton, QHBoxLayout, QApplication, QFileDialog
 )
 
 from .helper import Helper
@@ -335,6 +336,70 @@ class Configuration(QObject):
         cancel_btn.clicked.connect(on_cancel)
 
         dlg.exec_()
+
+    # ------------------------------------------------------------------
+    # Import / Export
+    # ------------------------------------------------------------------
+
+    def import_cfg(self, parent: Optional[QWidget] = None) -> bool:
+        path, _ = QFileDialog.getOpenFileName(
+            parent,
+            "Import configuration",
+            "",
+            "Config files (*.cfg);;All files (*)",
+        )
+        if not path:
+            return False  # User cancelled
+
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                imported = json.load(f)
+        except Exception as e:
+            print(f"[Configuration] Failed importing configuration from {path}: {e}")
+            return False
+
+        if not isinstance(imported, dict):
+            print(f"[Configuration] Imported configuration is not a dict: {type(imported)}")
+            return False
+
+        def _apply(prefix: str, node: dict[str, Any]) -> None:
+            for key, value in node.items():
+                if isinstance(value, dict):
+                    new_prefix = f"{prefix}.{key}" if prefix else key
+                    _apply(new_prefix, value)
+                else:
+                    full_key = f"{prefix}.{key}" if prefix else key
+                    # Use the existing setter so we don't stomp entire blocks
+                    self.set(full_key, value)
+
+        _apply("", imported)
+
+        # Persist and notify listeners via save()
+        self.save()
+        return True
+
+    def export_cfg(self, parent: Optional[QWidget] = None) -> bool:
+        path, _ = QFileDialog.getSaveFileName(
+            parent,
+            "Export configuration",
+            "configuration.cfg",
+            "Config files (*.cfg);;All files (*)",
+        )
+        if not path:
+            return False  # User cancelled
+
+        # Ensure latest config is written to disk
+        self.save()
+
+        config_dir = os.path.join(self.root_dir, "config")
+        src = os.path.join(config_dir, self._filename)
+
+        try:
+            shutil.copy2(src, path)
+            return True
+        except Exception as e:
+            print(f"[Configuration] Failed exporting configuration to {path}: {e}")
+            return False
 
     # ------------------------------------------------------------------
     # Internal helpers for dialog
