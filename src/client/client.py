@@ -37,16 +37,20 @@ class Client(QMainWindow):
         # Initialize parent
         super().__init__()
 
+        # Retrieve the application instance
+        self._app: Application = QApplication.instance()
+
+        # Ensure Client is created after Application
+        if self._app is None:
+            raise RuntimeError("Client must be created after QApplication/Application.")
+
         # --- auto-wire from QApplication if not provided ---
         if helper is None or configuration is None or logger is None:
-            app = QApplication.instance()
-            if app is None:
-                raise RuntimeError("Client must be created after QApplication/Application.")
             # narrow the type for linters / IDEs
             # no runtime import to avoid circular imports
-            helper = helper or app.helper          # type: ignore[attr-defined]
-            configuration = configuration or app.configuration  # type: ignore[attr-defined]
-            logger = logger or app.logger          # type: ignore[attr-defined]
+            helper = helper or self._app.helper          # type: ignore[attr-defined]
+            configuration = configuration or self._app.configuration  # type: ignore[attr-defined]
+            logger = logger or self._app.logger          # type: ignore[attr-defined]
 
         # Helper
         self._helper: Helper = helper
@@ -297,7 +301,7 @@ class Client(QMainWindow):
             self.restart_button = Form.button(
                 label="Restart",
                 icon="arrow-repeat",
-                action=self.exit
+                action=self._app.restart
             )
             tab_order_widgets.append(self.restart_button)
             buttons_layout.addWidget(self.restart_button)
@@ -306,7 +310,7 @@ class Client(QMainWindow):
             self.shutdown_button = Form.button(
                 label="Shutdown",
                 icon="power",
-                action=self.exit
+                action=self._app.shutdown
             )
             tab_order_widgets.append(self.shutdown_button)
             buttons_layout.addWidget(self.shutdown_button)
