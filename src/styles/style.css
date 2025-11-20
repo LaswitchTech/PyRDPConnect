@@ -252,3 +252,8 @@ QPushButton:pressed, QTabBar::tab:pressed, QTabBar::tab:selected {
     max-height: 16px;
     border-radius: 8px;
 }
+
+/* --- LEGACY: ClientWindow style --- */
+#clientWindow {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #265162, stop:1 #002136);
+}
