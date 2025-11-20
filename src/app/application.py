@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import QProxyStyle, QStyle, QApplication
 from .helper import Helper
 from .configuration import Configuration
 from .log import Log
+import subprocess
 
 class NoFocusRectStyle(QProxyStyle):
     def drawPrimitive(self, element, option, painter, widget=None):
@@ -128,3 +129,53 @@ class Application(QApplication):
         if hasattr(self._mainWindow, 'reset'):
             self._loadStylesheet()
             self._mainWindow.reset()
+
+    # ------------------------------------------------------------------
+    # System Helpers
+    # ------------------------------------------------------------------
+
+    def _run_system_command(self, args: list[str]) -> None:
+        # Only attempt on Linux; ignore silently on other platforms
+        try:
+            os_name = self._helper.get_os()
+        except Exception:
+            os_name = None
+
+        if os_name != "linux":
+            if self._logger:
+                self._logger.append(
+                    f"[Application] Ignoring system command {args!r} on non-Linux OS: {os_name}",
+                    channel="system",
+                    level="warning",
+                )
+            return
+
+        try:
+            # Use Popen so we don't block the UI; systemd will take over.
+            subprocess.Popen(args)
+            if self._logger:
+                self._logger.append(
+                    f"[Application] Executed system command: {' '.join(args)}",
+                    channel="system",
+                    level="info",
+                )
+        except Exception as e:
+            if self._logger:
+                self._logger.append(
+                    f"[Application] Failed to execute system command {args!r}: {e}",
+                    channel="system",
+                    level="error",
+                )
+
+    def shutdown(self) -> None:
+        self._run_system_command(["systemctl", "poweroff"])
+
+    def restart(self) -> None:
+        self._run_system_command(["systemctl", "reboot"])
+
+    # ------------------------------------------------------------------
+    # Application Helpers
+    # ------------------------------------------------------------------
+
+    def update(self):
+        pass
