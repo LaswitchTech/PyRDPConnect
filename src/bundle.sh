@@ -11,7 +11,20 @@ TARGET_BIN="$1"
 # Root of your project (adjust if needed)
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-OS="linux"
+UNAME_OS="$(uname -s)"
+
+case "$UNAME_OS" in
+    Linux)
+        OS="linux"
+        ;;
+    Darwin)
+        OS="macos"
+        ;;
+    *)
+        echo "Unsupported OS: $UNAME_OS" >&2
+        exit 1
+        ;;
+esac
 ARCH="$(uname -m)"
 
 case "$ARCH" in
