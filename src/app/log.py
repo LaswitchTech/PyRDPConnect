@@ -42,6 +42,7 @@ class Log:
         self._configuration.add("log.enabled", True, "checkbox")
         self._configuration.add("log.open", None, "button", label="Open Log", action=self.show)
         self._configuration.add("log.clear", True, "checkbox", label="Allow clearing log")
+        self._configuration.add("log.verbose", False, "checkbox", label="Verbose logging")
 
         # Save any new defaults
         self._configuration.save()
@@ -59,6 +60,8 @@ class Log:
     # ---------- core storage ----------
 
     def append(self, message: str, channel: str = "default", level: str = "info") -> None:
+
+        # Check if logging is enabled and level is sufficient
         if not self._configuration.get("log.enabled"):
             return
         if self._configuration.get("log.level") == "none":
@@ -73,8 +76,16 @@ class Log:
             return
         if not message:
             return
+
         # Normalize to individual lines
         lines = message.splitlines() or [message]
+
+        # Check if verbose logging is enabled and print to console
+        if self._configuration.get("log.verbose"):
+            for ln in lines:
+                print(f"[{channel}] {ln}")
+
+        # Append lines to the buffer
         with self._lock:
             self._buffers[channel].extend(lines)
 
