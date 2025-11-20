@@ -505,6 +505,8 @@ class Form:
     def button(label: str, action: Callable | None, icon: str = "") -> QPushButton:
         helper = Helper()
         btn = QPushButton(label)
+        btn.setAutoDefault(False)
+        btn.setDefault(False)
         if icon:
             icon_path = helper.get_path(f"icons/{icon}.svg")
             if icon_path:

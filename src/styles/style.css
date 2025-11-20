@@ -172,7 +172,8 @@ QCheckBox::indicator:focus {
     border-color: #0d6efd;
 }
 
-QPushButton {
+QPushButton,
+QTabBar::tab {
     background-color: #414344;
     color: #FFFFFF;
 
@@ -181,20 +182,26 @@ QPushButton {
     selection-background-color: #414344;
     selection-color: #FFFFFF;
 }
-QPushButton:focus {
+QPushButton:focus,
+QTabBar::tab:focus {
     border-color: #0d6efd;
     background-color: #414344;
 }
-QPushButton:hover {
+QPushButton:hover,
+QTabBar::tab:hover {
     background-color: #5f6263;
     border-color: #5f6263;
 }
-QPushButton:pressed {
+QPushButton:pressed,
+QTabBar::tab:pressed,
+QTabBar::tab:selected {
     background-color: #0d6efd;
     border-color: #0d6efd;
 }
 QPushButton:default,
-QPushButton:default:focus {
+QPushButton:default:focus,
+QTabBar::tab:default,
+QTabBar::tab:default:focus {
     background-color: #414344;
     border-color: #0d6efd;
 }
