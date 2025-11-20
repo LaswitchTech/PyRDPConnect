@@ -394,6 +394,7 @@ class FileInput(QWidget):
         # Only call on_changed if we really want config-file reactions etc.
         if self._on_changed:
             self._on_changed(value)
+
 class StepIndicator(QWidget):
     def __init__(self, text: str, parent=None):
         super().__init__(parent)
