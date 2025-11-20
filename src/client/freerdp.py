@@ -465,6 +465,9 @@ class FreeRDP(QObject):
             for token in parts:
                 if re.match(r"^\d+\.\d+(\.\d+)?$", token):
                     return token
+
+            self._logger.append(f"[FreeRDP] +version output did not contain a version number", channel=self._log_channel, level="debug")
+            self._logger.append(f"[FreeRDP] +version output: {res.stdout.strip()}", channel=self._log_channel, level="debug")
             return None
         except Exception as e:
             self._logger.append(f"[FreeRDP] Error retrieving version: {type(e).__name__}: {e}", channel=self._log_channel, level="debug")
