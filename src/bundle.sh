@@ -46,8 +46,32 @@ mkdir -p "$DEST_DIR"
 SOURCE_BIN="$(command -v "${TARGET_BIN}" || true)"
 
 if [[ -z "$SOURCE_BIN" ]]; then
-    echo "${TARGET_BIN} not found in PATH. Install it first." >&2
-    exit 1
+    echo "${TARGET_BIN} not found in PATH. Attempting installation..."
+
+    if [[ "$OS" == "macos" ]]; then
+        if ! command -v brew >/dev/null 2>&1; then
+            echo "Homebrew is required but not installed." >&2
+            exit 1
+        fi
+        echo "Installing ${TARGET_BIN} using Homebrew..."
+        brew install "${TARGET_BIN}" || {
+            echo "Failed to install ${TARGET_BIN} via Homebrew." >&2
+            exit 1
+        }
+    elif [[ "$OS" == "linux" ]]; then
+        echo "Installing ${TARGET_BIN} using apt-get..."
+        sudo apt-get update -y
+        sudo apt-get install -y "${TARGET_BIN}" || {
+            echo "Failed to install ${TARGET_BIN} via apt-get." >&2
+            exit 1
+        }
+    fi
+
+    SOURCE_BIN="$(command -v "${TARGET_BIN}" || true)"
+    if [[ -z "$SOURCE_BIN" ]]; then
+        echo "Installation succeeded but ${TARGET_BIN} is still not in PATH." >&2
+        exit 1
+    fi
 fi
 
 echo "Found ${TARGET_BIN} at: $SOURCE_BIN"
