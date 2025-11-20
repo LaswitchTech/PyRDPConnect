@@ -2,11 +2,17 @@
 # src/app/application.py
 from __future__ import annotations
 
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtWidgets import QProxyStyle, QStyle, QApplication
 
 from .helper import Helper
 from .configuration import Configuration
 from .log import Log
+
+class NoFocusRectStyle(QProxyStyle):
+    def drawPrimitive(self, element, option, painter, widget=None):
+        if element == QStyle.PE_FrameFocusRect:
+            return  # skip drawing the focus rect completely
+        super().drawPrimitive(element, option, painter, widget)
 
 class Application(QApplication):
 
@@ -17,6 +23,9 @@ class Application(QApplication):
 
         # Set application style
         self.setStyle('Fusion')
+
+        # Use custom style to suppress focus rectangles
+        self.setStyle(NoFocusRectStyle(self.style()))
 
         # Main window placeholder (e.g. Client)
         self._mainWindow = None
