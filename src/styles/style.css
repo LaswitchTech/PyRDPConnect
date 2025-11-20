@@ -27,6 +27,10 @@ QLineEdit, QTextEdit, QComboBox, QSpinBox {
     width: 300px;
 }
 
+QLineEdit:focus, QTextEdit:focus, QComboBox:focus, QSpinBox:focus {
+    border: 1px solid #0d6efd;
+}
+
 QSpinBox {
     padding-right: 39px;
 }
@@ -171,6 +175,9 @@ QCheckBox::indicator:focus {
 QPushButton, QTabBar::tab {
     background-color: #414344;
     color: #FFFFFF;
+}
+QPushButton:focus, QTabBar::tab:focus {
+    border-color: #0d6efd;
 }
 
 QTabWidget::tab-bar, QTabBar {
