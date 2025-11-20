@@ -455,22 +455,47 @@ class FreeRDP(QObject):
                 text=True,
             )
             if res.returncode != 0:
-                self._logger.append(f"[FreeRDP] +version returned non-zero exit code {res.returncode}", channel=self._log_channel, level="debug")
+                self._logger.append(
+                    f"[FreeRDP] +version returned non-zero exit code {res.returncode}",
+                    channel=self._log_channel,
+                    level="debug",
+                )
                 return None
+
             lines = [ln.strip() for ln in res.stdout.splitlines() if ln.strip()]
             if not lines:
-                self._logger.append(f"[FreeRDP] +version returned no output", channel=self._log_channel, level="debug")
+                self._logger.append(
+                    "[FreeRDP] +version returned no output",
+                    channel=self._log_channel,
+                    level="debug",
+                )
                 return None
+
             parts = lines[0].split()
             for token in parts:
-                if re.match(r"^\d+\.\d+(\.\d+)?$", token):
-                    return token
+                # Accept things like '3.18.1', '3.18', and '3.18.1-dev0'
+                m = re.match(r"^(\d+\.\d+(?:\.\d+)?)(?:[^\d].*)?$", token)
+                if m:
+                    version = m.group(1)
+                    return version
 
-            self._logger.append(f"[FreeRDP] +version output did not contain a version number", channel=self._log_channel, level="debug")
-            self._logger.append(f"[FreeRDP] +version output: {res.stdout.strip()}", channel=self._log_channel, level="debug")
+            self._logger.append(
+                "[FreeRDP] +version output did not contain a version number",
+                channel=self._log_channel,
+                level="debug",
+            )
+            self._logger.append(
+                f"[FreeRDP] +version output: {res.stdout.strip()}",
+                channel=self._log_channel,
+                level="debug",
+            )
             return None
         except Exception as e:
-            self._logger.append(f"[FreeRDP] Error retrieving version: {type(e).__name__}: {e}", channel=self._log_channel, level="debug")
+            self._logger.append(
+                f"[FreeRDP] Error retrieving version: {type(e).__name__}: {e}",
+                channel=self._log_channel,
+                level="debug",
+            )
             return None
 
     def _get_num_monitors(self) -> int:
