@@ -3,14 +3,11 @@ from PyQt5.QtWidgets import (
     QApplication, QProgressDialog, QMessageBox, QDialog, QMainWindow,
     QDesktopWidget, QWidget, QTabWidget, QCheckBox, QFrame, QSizePolicy,
     QHBoxLayout, QVBoxLayout, QPushButton, QLabel, QLineEdit, QFormLayout,
-    QGroupBox, QGridLayout, QComboBox, QSpinBox, QFileDialog, QColorDialog,
-    QTextEdit, QListWidget, QListWidgetItem
+    QGroupBox, QGridLayout, QComboBox, QSpinBox, QFileDialog
 )
-from PyQt5.QtGui import (
-    QIcon, QPixmap, QPainter, QPalette, QColor, QValidator, QTextCharFormat
-)
+from PyQt5.QtGui import QIcon, QPixmap, QPainter, QPalette, QColor
 from PyQt5.QtSvg import QSvgRenderer
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QRegExp, QSize
+from PyQt5.QtCore import Qt, QThread, pyqtSignal
 import subprocess
 import platform
 import shutil
@@ -19,668 +16,55 @@ import json
 import sys
 import os
 import re
-import enum
-import threading
-import queue
-import time
-
-class Severity(enum.Enum):
-    INFO = 1
-    WARNING = 2
-    ERROR = 3
-
-class StepIndicator(QWidget):
-    """
-    A compact status lamp + label. States: 'idle', 'running', 'ok', 'fail'
-    Uses stylesheet-only colors so it renders on thin clients without emoji/fonts.
-    """
-    def __init__(self, text: str, parent=None):
-        super().__init__(parent)
-        self._state = 'idle'
-        self.dot = QLabel()
-        self.dot.setObjectName("statusDot")
-        self.dot.setFixedSize(16, 16)
-        self.label = QLabel(text)
-
-        lay = QVBoxLayout(self)
-        lay.setContentsMargins(4, 4, 4, 4)
-        lay.setSpacing(6)
-        dot_wrap = QWidget()
-        dot_wrap.setFixedHeight(20)
-        dot_lay = QHBoxLayout(dot_wrap)
-        dot_lay.setContentsMargins(0,0,0,0)
-        dot_lay.addStretch(1)
-        dot_lay.addWidget(self.dot, 0, Qt.AlignCenter)
-        dot_lay.addStretch(1)
-
-        lay.addWidget(dot_wrap)
-        self.label.setAlignment(Qt.AlignCenter)
-        lay.addWidget(self.label)
-        self._apply_style()
-
-    def set_state(self, state: str):
-        self._state = state
-        self._apply_style()
-
-    def _apply_style(self):
-        colors = {
-            'idle':    '#A0A4A8',   # grey
-            'running': '#F5C542',   # amber
-            'ok':      '#2FB344',   # green
-            'fail':    '#E03131',   # red
-        }
-        c = colors.get(self._state, '#A0A4A8')
-        self.dot.setStyleSheet(f"background:{c}; border-radius:7px; border:1px solid rgba(0,0,0,.25);")
-
-class DiagnosticsWindow(QDialog):
-    def __init__(self, parent: "Client"):
-        super().__init__(parent)
-        self.client = parent
-        self.setWindowTitle("Diagnostics")
-        self.setObjectName("diagnosticsWindow")
-        self.setWindowFlags(Qt.Dialog | Qt.WindowTitleHint | Qt.CustomizeWindowHint | Qt.WindowCloseButtonHint)
-        self.setMinimumSize(700, 420)
-
-        # --- top: horizontal stepper
-        self.dev_ind   = StepIndicator("Device")
-        self.net_ind   = StepIndicator("Network")
-        self.int_ind   = StepIndicator("Internet")
-        self.svc_ind   = StepIndicator("Service")
-
-        stepper = QHBoxLayout()
-        stepper.setSpacing(24); stepper.setContentsMargins(16, 16, 16, 8)
-        for w in (self.dev_ind, self.net_ind, self.int_ind, self.svc_ind):
-            stepper.addWidget(w, 1)
-
-        # --- right: “Your network status”
-        self.status_panel = QLabel()
-        self.status_panel.setTextFormat(Qt.PlainText)
-        self.status_panel.setAlignment(Qt.AlignTop | Qt.AlignLeft)
-        self.status_panel.setMinimumWidth(260)
-        self.status_panel.setStyleSheet("QLabel { background: rgba(255,255,255,.06); padding:12px; border:1px solid rgba(0,0,0,.15); border-radius:8px; }")
-
-        # --- left: log
-        self.log = QTextEdit(); self.log.setReadOnly(True)
-
-        mid = QHBoxLayout()
-        mid.setContentsMargins(16, 0, 16, 0)
-        mid.setSpacing(16)
-        mid.addWidget(self.log, 2)
-        mid.addWidget(self.status_panel, 1)
-
-        # --- bottom: buttons
-        self.run_btn   = QPushButton("Run Diagnostics")
-        self.close_btn = QPushButton("Close")
-        self.run_btn.clicked.connect(self.start)
-        self.close_btn.clicked.connect(self.close)
-
-        btns = QHBoxLayout()
-        btns.setContentsMargins(16, 8, 16, 16)
-        btns.addStretch(1); btns.addWidget(self.run_btn); btns.addWidget(self.close_btn)
-
-        # --- root
-        root = QVBoxLayout(self)
-        root.addLayout(stepper)
-        root.addLayout(mid)
-        root.addLayout(btns)
-
-        self._update_status_panel("Unknown", "Unknown", "Unknown")
-
-        # thread handle
-        self._thr = None
-
-    def _update_status_panel(self, network, internet, service):
-        lines = [
-            "Your network status:",
-            f"Network:  {network}",
-            f"Internet: {internet}",
-            f"Service:  {service}",
-        ]
-        self.status_panel.setText("\n".join(lines))
-
-    def _set_all(self, state='idle'):
-        self.dev_ind.set_state(state)
-        self.net_ind.set_state(state)
-        self.int_ind.set_state(state)
-        self.svc_ind.set_state(state)
-
-    def start(self):
-        self.log.clear()
-        self._set_all('idle')
-        self.run_btn.setEnabled(False)
-
-        # assemble target/port from current config
-        cfg = self.client.config
-        host = (cfg.get("General", {}).get("Server Address") or "").strip()
-        port = int(cfg.get("General", {}).get("Port") or 3389)
-
-        self._thr = DiagnosticsThread(host=host, port=port, parent=self)
-        self._thr.log.connect(self._on_log)
-        self._thr.phase.connect(self._on_phase)   # phase, state
-        self._thr.summary.connect(self._on_summary)  # network, internet, service
-        self._thr.finished.connect(lambda: self.run_btn.setEnabled(True))
-        self._thr.start()
-
-    def _on_log(self, s: str):
-        self.log.append(s)
-
-    def _on_phase(self, phase: str, state: str):
-        mapping = {
-            'device': self.dev_ind,
-            'network': self.net_ind,
-            'internet': self.int_ind,
-            'service': self.svc_ind,
-        }
-        if phase in mapping:
-            mapping[phase].set_state(state)
-
-    def _on_summary(self, network: bool, internet: bool, service: bool):
-        def t(b): return "Connected" if b else "Not connected"
-        self._update_status_panel(t(network), t(internet), t(service))
-
-class DiagnosticsThread(QThread):
-    log     = pyqtSignal(str)
-    phase   = pyqtSignal(str, str)          # ('device'|'network'|'internet'|'service', 'idle'|'running'|'ok'|'fail')
-    summary = pyqtSignal(bool, bool, bool)  # network_ok, internet_ok, service_ok
-
-    def __init__(self, host: str, port: int, parent=None):
-        super().__init__(parent)
-        self.host = host
-        self.port = port
-
-    # ---------- helpers ----------
-    def _run(self, cmd):
-        try:
-            p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                               text=True, timeout=6)
-            return p.returncode, (p.stdout or "").strip()
-        except Exception as e:
-            return 1, f"{type(e).__name__}: {e}"
-
-    def _ping(self, host, osname):
-        args = ["ping", "-c", "1"] + (["-t", "1"] if osname == "Darwin" else ["-W", "1"])
-        # try PATH ping if absolute not found
-        return self._run(args + [host])[0] == 0
-
-    def _default_gateway(self, osname):
-        # macOS
-        rc, out = self._run(["/sbin/route", "-n", "get", "default"]) if osname == "Darwin" else (1, "")
-        if rc == 0:
-            m = re.search(r"gateway:\s+([0-9.]+)", out);
-            if m: return m.group(1)
-        # Linux fallbacks: /sbin/ip, ip, route -n
-        for cmd in (["/sbin/ip","route"], ["ip","route"], ["route","-n"]):
-            rc, out = self._run(cmd)
-            if rc == 0:
-                for line in out.splitlines():
-                    if line.startswith("default via "):
-                        parts = line.split()
-                        if len(parts) >= 3: return parts[2]
-                    if line.startswith("0.0.0.0") and len(line.split()) >= 3:  # busybox route -n
-                        return line.split()[1]
-        return None
-
-    def _egress_ip(self):
-        import socket
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.settimeout(2)
-            s.connect(("8.8.8.8", 80))
-            ip = s.getsockname()[0]; s.close()
-            return ip
-        except Exception:
-            return None
-
-    def _is_apipa(self, ip): return isinstance(ip, str) and ip.startswith("169.254.")
-
-    def _dns_lookup(self, host):
-        import socket
-        try:
-            return True, socket.gethostbyname(host)
-        except Exception as e:
-            return False, str(e)
-
-    def _tcp_connect(self, host, port, timeout=3.0):
-        import socket
-        try:
-            ai = socket.getaddrinfo(host, port, socket.AF_UNSPEC, socket.SOCK_STREAM)
-            for fam, st, proto, canon, sa in ai:
-                s = socket.socket(fam, st, proto)
-                s.settimeout(timeout)
-                try:
-                    s.connect(sa)
-                    s.close()
-                    return True
-                except Exception:
-                    s.close()
-            return False
-        except Exception:
-            return False
-
-    # ---------- main ----------
-    def run(self):
-        osname = platform.system()
-
-        # DEVICE
-        self.phase.emit('device', 'running')
-        ip = self._egress_ip()
-        if not ip:
-            self.log.emit("Device: could not determine local egress IP.")
-            self.phase.emit('device', 'fail'); self.summary.emit(False, False, False); return
-        if self._is_apipa(ip):
-            self.log.emit(f"Device: APIPA address {ip} (DHCP failure).")
-            self.phase.emit('device', 'fail'); self.summary.emit(False, False, False); return
-        self.log.emit(f"Device: local IP is {ip}")
-        self.phase.emit('device', 'ok')
-
-        # NETWORK (gateway)
-        self.phase.emit('network', 'running')
-        gw = self._default_gateway(osname)
-        if not gw:
-            self.log.emit("Network: default gateway not found.")
-            self.phase.emit('network', 'fail'); self.summary.emit(False, False, False); return
-        self.log.emit(f"Network: default gateway {gw}")
-        gw_ok = self._ping(gw, osname)
-        self.log.emit("Network: gateway reachable." if gw_ok else "Network: gateway not reachable.")
-        self.phase.emit('network', 'ok' if gw_ok else 'fail')
-        network_ok = gw_ok
-
-        # INTERNET (public ping + DNS)
-        self.phase.emit('internet', 'running')
-        pub_ok = self._ping("8.8.8.8", osname)
-        self.log.emit("Internet: 8.8.8.8 reachable." if pub_ok else "Internet: cannot reach 8.8.8.8.")
-        dns_ok, detail = self._dns_lookup("google.com")
-        self.log.emit(f"Internet: DNS {'OK → '+detail if dns_ok else 'failed: '+detail}")
-        internet_ok = pub_ok and dns_ok
-        self.phase.emit('internet', 'ok' if internet_ok else 'fail')
-
-        # SERVICE (resolve + ping + TCP port)
-        self.phase.emit('service', 'running')
-        svc_ok = False
-        if not self.host:
-            self.log.emit("Service: no host configured.")
-        else:
-            res_ok, addr = self._dns_lookup(self.host) if not re.match(r'^\d+\.\d+\.\d+\.\d+$', self.host) else (True, self.host)
-            if not res_ok:
-                self.log.emit(f"Service: cannot resolve {self.host}: {addr}")
-            else:
-                self.log.emit(f"Service: target {self.host} -> {addr}:{self.port}")
-                p_ok = self._ping(addr, osname)
-                self.log.emit("Service: ping reachable." if p_ok else "Service: ping failed.")
-                t_ok = self._tcp_connect(addr, self.port, timeout=3.0)
-                self.log.emit("Service: TCP port open." if t_ok else "Service: TCP connect failed.")
-                svc_ok = p_ok and t_ok
-
-        self.phase.emit('service', 'ok' if svc_ok else 'fail')
-
-        # Summary back to window
-        self.summary.emit(network_ok, internet_ok, svc_ok)
-
-class FreerdpEvent:
-    def __init__(self, severity: Severity, code: str, message: str, hint: str = ""):
-        self.severity = severity
-        self.code = code             # e.g. ERRCONNECT_ACTIVATION_TIMEOUT
-        self.message = message       # user-facing short message
-        self.hint = hint             # optional suggestion/fix
-
-class FreerdpLogInterpreter:
-    def __init__(self, show_cert_warning: bool = False):
-        self.show_cert_warning = show_cert_warning
-
-    # Patterns → (severity, code, user message, hint)
-    RULES = [
-        # --- Normal/expected endings ---
-        (r'ERRINFO_LOGOFF_BY_USER', (Severity.INFO, 'ERRINFO_LOGOFF_BY_USER',
-            'You logged off the remote session.',
-            'This is normal if you clicked Disconnect/Sign out on the remote Windows session.')),
-        (r'ERRINFO_IDLE_TIMEOUT', (Severity.INFO, 'ERRINFO_IDLE_TIMEOUT',
-            'Disconnected due to inactivity.', 'Reconnect to continue.')),
-
-        # --- Common alternate lines seen on some FreeRDP builds/platforms ---
-        (r'ERRINFO_RPC_INITIATED_DISCONNECT', (Severity.INFO, 'ERRINFO_LOGOFF_BY_USER',
-            'You were disconnected by the server.',
-            'This can be normal if you signed out or the admin ended the session.')),
-        (r'freerdp_disconnect: closing connection', (Severity.INFO, 'ERRINFO_LOGOFF_BY_USER',
-            'The session was closed.',
-            'If you clicked Disconnect/Sign out, this is expected.')),
-
-        # --- Idle timeout ---
-        (r'ERRINFO_IDLE_TIMEOUT', (Severity.INFO, 'ERRINFO_IDLE_TIMEOUT',
-            'Disconnected due to inactivity.', 'Reconnect to continue.')),
-
-        # --- Connect/handshake timeouts ---
-        (r'ERRCONNECT_ACTIVATION_TIMEOUT', (Severity.ERROR, 'ERRCONNECT_ACTIVATION_TIMEOUT',
-            'The server took too long to activate the session.',
-            'Try again, or increase the connection timeout in Settings.')),
-
-        # --- Certificate warnings ---
-        (r'Certificate not checked, /cert:ignore in use', (Severity.WARNING, 'CERT_IGNORE',
-            'Unverified server certificate (ignored).',
-            'Only use /cert:ignore on trusted LAN. Otherwise, enable certificate validation.')),
-
-        # --- Password on CLI warnings (don’t block, just hint) ---
-        (r'Using /p is insecure', (Severity.WARNING, 'INSECURE_PASSWORD_ARG',
-            'Password was passed on the command line.',
-            'Use /from-stdin or set FREERDP_ASKPASS for safer credential entry.')),
-
-        # --- Device hotplug noise (non-fatal) ---
-        (r'handle_hotplug failed with error 1', (Severity.WARNING, 'RDPDR_HOTPLUG',
-            'A redirected device failed to hot-plug.',
-            'Usually harmless. If it persists, disable “Drives/Printers” redirection and retry.')),
-
-        # --- Generic catch-alls we still want to prettify ---
-        (r'Could not connect to RDP server', (Severity.ERROR, 'CANNOT_CONNECT',
-            'Could not connect to the server.', 'Verify IP/hostname and port 3389 reachability.')),
-        (r'Access Denied', (Severity.ERROR, 'ACCESS_DENIED',
-            'Access denied by the server.', 'Check username, password, and domain.')),
-        (r'LOGON_FAILURE', (Severity.ERROR, 'LOGON_FAILURE',
-            'Logon failed.', 'Check credentials or account lockout.')),
-        (r'hostname cannot be resolved', (Severity.ERROR, 'DNS_FAIL',
-            'Host cannot be resolved.', 'Check DNS or use the IP address.')),
-        (r'GATEWAY.*denied|HTTP/.* 403', (Severity.ERROR, 'GATEWAY_DENIED',
-            'Gateway denied the connection.', 'Check RD Gateway URL/credentials.')),
-    ]
-
-    def classify(self, text: str) -> list:
-        events = []
-        for pat, (sev, code, msg, hint) in self.RULES:
-            if re.search(pat, text, re.IGNORECASE):
-                if code == 'CERT_IGNORE' and not self.show_cert_warning:
-                    continue
-                events.append(FreerdpEvent(sev, code, msg, hint))
-        return events
-
-    def most_relevant(self, events: list) -> FreerdpEvent | None:
-        if not events:
-            return None
-        # Prefer ERROR > WARNING > INFO
-        priority = {Severity.ERROR: 3, Severity.WARNING: 2, Severity.INFO: 1}
-        events.sort(key=lambda e: priority[e.severity], reverse=True)
-        return events[0]
-
-class LogWindow(QDialog):
-    def __init__(self, parent=None, text: str = "", filter_text: str = None):
-        super().__init__(parent)
-        self.setWindowTitle("Connection Log")
-        self.setObjectName("logWindow")
-        self.setMinimumSize(720, 420)
-
-        # keep the full log intact; we render a filtered view into the QTextEdit
-        self._full_text = text or ""
-
-        self.text = QTextEdit(self)
-        self.text.setReadOnly(True)
-        self.text.setPlainText(self._full_text)
-
-        self.find_box = QLineEdit(self)
-        self.find_box.setPlaceholderText("Filter...")
-        # live filtering as the user types
-        self.find_box.textChanged.connect(self.apply_filter)
-
-        self.copy_btn = QPushButton("Copy all")
-        self.copy_btn.clicked.connect(lambda: QApplication.clipboard().setText(self.text.toPlainText()))
-        self.save_btn = QPushButton("Save as...")
-        self.save_btn.clicked.connect(self.save_as)
-
-        top = QHBoxLayout()
-        top.addWidget(self.find_box)
-        top.addWidget(self.copy_btn)
-        top.addWidget(self.save_btn)
-
-        root = QVBoxLayout(self)
-        root.addLayout(top)
-        root.addWidget(self.text)
-
-        # if the window is opened with a filter, apply it immediately
-        if filter_text:
-            self.find_box.setText(filter_text)
-        else:
-            self.apply_filter()  # renders full text (no highlight) on open
-
-    def set_text(self, text: str):
-        self._full_text = text or ""
-        self.apply_filter()
-
-    def save_as(self):
-        path, _ = QFileDialog.getSaveFileName(
-            self, "Save log", "connection.log",
-            "Log Files (*.log);;Text Files (*.txt);;All Files (*)"
-        )
-        if path:
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(self.text.toPlainText())
-
-    # ---- filtering + highlighting ----
-    def apply_filter(self):
-        needle = self.find_box.text().strip()
-        if not needle:
-            # show everything, no highlights
-            self._set_view_text(self._full_text)
-            return
-
-        # keep only lines containing the needle (case-insensitive)
-        filtered_lines = [ln for ln in self._full_text.splitlines()
-                          if needle.lower() in ln.lower()]
-        self._set_view_text("\n".join(filtered_lines))
-
-        # highlight all occurrences of the needle in yellow
-        self._highlight_all(needle)
-
-    def _set_view_text(self, s: str):
-        # avoid recursive textChanged signals while replacing the whole buffer
-        self.text.blockSignals(True)
-        self.text.setPlainText(s)
-        self.text.blockSignals(False)
-
-    def _highlight_all(self, needle: str):
-        if not needle:
-            return
-        doc = self.text.document()
-        cursor = self.text.textCursor()
-        cursor.beginEditBlock()
-
-        # clear previous formats
-        clear = QTextCharFormat()
-        rng = self.text.textCursor()
-        rng.movePosition(rng.Start)
-        rng.movePosition(rng.End, rng.KeepAnchor)
-        rng.setCharFormat(clear)
-
-        # yellow background for matches
-        fmt = QTextCharFormat()
-        fmt.setBackground(QColor("yellow"))
-        fmt.setForeground(QColor("black"))
-
-        # case-insensitive search with QRegExp
-        rx = QRegExp(needle)
-        rx.setCaseSensitivity(Qt.CaseInsensitive)
-
-        pos = 0
-        while True:
-            pos = rx.indexIn(doc.toPlainText(), pos)
-            if pos < 0:
-                break
-            # select the match and apply format
-            match_cursor = self.text.textCursor()
-            match_cursor.setPosition(pos)
-            match_cursor.setPosition(pos + rx.matchedLength(), match_cursor.KeepAnchor)
-            match_cursor.mergeCharFormat(fmt)
-            pos += max(1, rx.matchedLength())
-
-        cursor.endEditBlock()
-
-    # keep these around for compatibility (optional)
-    def find_next(self):
-        # not needed anymore (live filter), but kept if you call it elsewhere
-        self.apply_filter()
 
 class ConnectionThread(QThread):
     connection_success = pyqtSignal()
-    connection_failed = pyqtSignal(str, str, str)   # (title, details)
-    connection_info   = pyqtSignal(str)        # live status text (optional)
-    stop_thread = False
+    connection_failed = pyqtSignal(str)
+    stop_thread = False  # Flag to stop the thread
 
-    def __init__(self, command, parent = None, show_cert_warning: bool = False, stdin_password: str | None = None, debug_enabled: bool = False):
+    def __init__(self, command, parent=None):
         super().__init__(parent)
         self.command = command
-        self.freerdp_process = None
-        self._interpreter = FreerdpLogInterpreter(show_cert_warning=show_cert_warning)
-        self._stdin_password = stdin_password
-        self._debug_enabled = debug_enabled
 
     def run(self):
         try:
-            env = os.environ.copy()
-            freerdp_bin = self.command[0]
-            base_dir = os.path.dirname(freerdp_bin)
-
-            # Look for adjacent 'lib' and 'plugins' folders in the bundle
-            lib_dir = os.path.join(base_dir, 'lib')
-            plugins_dir = os.path.join(base_dir, 'plugins')
-
-            # Per-OS runtime search paths
-            if sys.platform == 'darwin':
-                if os.path.isdir(lib_dir):
-                    env['DYLD_LIBRARY_PATH'] = lib_dir + (':' + env.get('DYLD_LIBRARY_PATH','') if env.get('DYLD_LIBRARY_PATH') else '')
-            elif sys.platform.startswith('linux'):
-                if os.path.isdir(lib_dir):
-                    env['LD_LIBRARY_PATH'] = lib_dir + (':' + env.get('LD_LIBRARY_PATH','') if env.get('LD_LIBRARY_PATH') else '')
-
-            # Channel plugins (cliprdr, drdynvc, rdpsnd, etc.)
-            if os.path.isdir(plugins_dir):
-                env['FREERDP_PLUGIN_PATH'] = plugins_dir
-
-            # (Optional) make certificates resolvable in restricted environments
-            # env.setdefault('SSL_CERT_DIR', '/etc/ssl/certs')
-
+            # Start the freerdp3 connection as a subprocess
             self.freerdp_process = subprocess.Popen(
                 self.command,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                stdin=subprocess.PIPE,
-                text=True,
-                env=env,
-                bufsize=1,
-                universal_newlines=True
+                text=True
             )
 
-            # Send password via stdin (compatible with v2 and v3)
-            try:
-                if any(arg.startswith("/from-stdin") for arg in self.command) and self._stdin_password is not None:
-                    self.freerdp_process.stdin.write(self._stdin_password + "\n")
-                    self.freerdp_process.stdin.flush()
-                    # keep stdin open; some builds may read again
-            except Exception:
-                pass
+            # Capture output and errors
+            stdout, stderr = self.freerdp_process.communicate()
 
-            collected = []
-
-            def pump(stream):
-                for line in iter(stream.readline, ''):
-                    if self.stop_thread:
-                        break
-                    ln = line.rstrip()
-                    collected.append(ln)
-                stream.close()
-
-            # Read both streams
-            t_out = threading.Thread(target=pump, args=(self.freerdp_process.stdout,))
-            t_err = threading.Thread(target=pump, args=(self.freerdp_process.stderr,))
-            t_out.start(); t_err.start()
-
-            # Wait for freerdp to exit
-            rc = self.freerdp_process.wait()
-            t_out.join(); t_err.join()
-
-            text = "\n".join(collected)
-
+            # Check if the thread is supposed to stop
             if self.stop_thread:
-                # Treat as a user-cancel—don’t show an error dialog
+                self.freerdp_process.terminate()  # Terminate the subprocess
                 return
 
-            # If return code is 0, success
-            if rc == 0:
-                self.connection_success.emit()
-                return
-
-            # Classify errors
-            events = self._interpreter.classify(text)
-            top = self._interpreter.most_relevant(events)
-
-            # Special case: treat user logoff as INFO, not an error
-            if top and top.code == 'ERRINFO_LOGOFF_BY_USER':
-                # self.connection_failed.emit("Disconnected", top.message + (f"\n\nHint: {top.hint}" if top.hint else ""))
-                # return
-                details = top.message + (f"\n\nHint: {top.hint}" if top.hint else "")
-                self.connection_failed.emit("Disconnected", details, text)
-                return
-
-            # Build a friendly message
-            if top:
-                title = "Connection problem" if top.severity != Severity.INFO else "Information"
-                details = top.message + (f"\n\nHint: {top.hint}" if top.hint else "")
+            # Check for errors in stderr
+            if self.freerdp_process.returncode != 0:
+                error_message = stderr.strip()
+                self.connection_failed.emit(error_message)
             else:
-                title = "Connection failed"
-                details = "The connection ended unexpectedly.\n\nOpen the detailed log for more information."
-
-            self.connection_failed.emit(title, details, text)
+                self.connection_success.emit()
 
         except Exception as e:
-            # make sure we still forward whatever we collected
-            if not text:
-                try:
-                    text = "\n".join(collected)
-                except Exception:
-                    text = ""
-            self.connection_failed.emit("Unexpected error", f"{type(e).__name__}: {e}", text)
+            # Emit failed signal with error message if any exception occurs
+            self.connection_failed.emit(str(e))
 
     def stop(self):
+        # Method to stop the thread
         self.stop_thread = True
         if self.freerdp_process:
-            try:
-                self.freerdp_process.terminate()
-            except Exception:
-                pass
-
-class ColorButton(QPushButton):
-    """
-    A small button that shows a color swatch; clicking opens a color dialog.
-    Use .color() to get QColor; .hex() for '#RRGGBB'.
-    """
-    colorChanged = pyqtSignal(QColor)
-
-    def __init__(self, initial="#265162", parent=None):
-        super().__init__(parent)
-        self._color = QColor(initial)
-        self.setFixedSize(48, 24)
-        self._update_style()
-        self.clicked.connect(self._pick)
-
-    def _pick(self):
-        chosen = QColorDialog.getColor(self._color, self, "Choose Color")
-        if chosen.isValid():
-            self._color = chosen
-            self._update_style()
-            self.colorChanged.emit(self._color)
-
-    def _update_style(self):
-        self.setStyleSheet(
-            f"border: 1px solid #76797C; border-radius: 4px; "
-            f"background: {self._color.name()};"
-        )
-
-    def color(self) -> QColor:
-        return self._color
-
-    def hex(self) -> str:
-        return self._color.name()
+            self.freerdp_process.terminate()  # Terminate the subprocess if running
 
 class Client(QMainWindow):
 
     def __init__(self):
         super().__init__()
-
-        # Initialize the last log text
-        self.last_log_text = ""
 
         # Initialize properties
         self.init_properties()
@@ -698,41 +82,26 @@ class Client(QMainWindow):
         self.init_ui()
 
     def get_path(self,path):
+
         """
-        Return an absolute path to a data file bundled either:
-        - in a PyInstaller onefile (sys._MEIPASS),
-        - in a macOS .app (Contents/Resources),
-        - in the repo (src/),
-        and gracefully return None if not found.
+        Returns the full path to a file if it exists in either the 'src' or 'Resources' directory.
+        Prints a debug message if the file is not found.
+
+        :param path: Relative path to the file
+        :return: Full path to the file if found, None otherwise
         """
-        # Normalize input (accept "icons/foo.svg" or os.path.join(...))
-        rel = path.replace("\\", "/")
+        # Check the 'src' directory
+        src_path = os.path.join(self.root_dir, 'src', path)
+        if os.path.exists(src_path):
+            return src_path
 
-        # 1) PyInstaller onefile temp dir
-        meipass = getattr(sys, "_MEIPASS", None)
-        if meipass:
-            p = os.path.join(meipass, rel)
-            if os.path.exists(p):
-                return p
+        # Check the 'Resources' directory
+        resources_path = os.path.join(self.root_dir, 'Resources', path)
+        if os.path.exists(resources_path):
+            return resources_path
 
-        # 2) Next to the frozen executable (one-folder or manual copies)
-        if getattr(sys, 'frozen', False):
-            p = os.path.join(self.script_dir, rel)
-            if os.path.exists(p):
-                return p
-
-        # 3) macOS .app Resources (…/Contents/Resources/<rel>)
-        res = os.path.join(self.root_dir, 'Resources', rel)
-        if os.path.exists(res):
-            return res
-
-        # 4) Repo layout (…/<root>/src/<rel>)
-        src = os.path.join(self.root_dir, 'src', rel)
-        if os.path.exists(src):
-            return src
-
-        # Debug
-        print(f"Could not find: [{self.root_dir}] {rel}")
+        # Debugging message if file is not found
+        print(f"Could not find: [{self.root_dir}] {path}")
         return None
 
     def get_os(self):
@@ -757,193 +126,154 @@ class Client(QMainWindow):
                 "Password": "",
                 "Domain": ""
             },
-            "FreeRDP": {
-                "Display": {
-                    "Resolution": "",
-                    "Use all monitors": False,
-                    "Start session in fullscreen": False,
-                    "Fit session to window": False
-                },
-                "Devices": {
-                    "Play sound": "",
-                    "Record sound": "",
-                    "Printers": False,
-                    "Smart Cards": False,
-                    "Ports": False,
-                    "Drives": False
-                },
-                "Folders": {
-                    "Redirect": False,
-                    "Folders": []
-                },
-                "Experience": {
-                    "Clipboard": False,
-                    "RemoteFX": False,
-                    "Smooth Fonts": False,
-                    "Desktop Composition": False,
-                    "Full Window Drag": False,
-                    "Menu Animations": False,
-                    "Disable Themes": False,
-                    "Disable Wallpaper": False,
-                    "Show certificate warning": False
-                }
+            "Display": {
+                "Resolution": "",
+                "Use all monitors": False,
+                "Start session in fullscreen": False,
+                "Fit session to window": False
             },
-            "Networking": {
-                "WiFi": {
-                    "Interface": "",
-                    "SSID": "",
-                    "Password": "",
-                    "Auto connect": False
-                },
-                "OpenVPN": {
-                    "Config File": "",
-                    "Auto connect": False
-                },
-                "WireGuard": {
-                    "Config File": "",
-                    "Auto connect": False
-                }
+            "Audio": {
+                "Play sound": "",
+                "Record sound": "",
+            },
+            "Devices": {
+                "Printers": False,
+                "Smart Cards": False,
+                "Ports": False,
+                "Drives": False
+            },
+            "Folders": {
+                "Redirect": False,
+                "Folders": []
+            },
+            "Experience": {
+                "Clipboard": False,
+                "RemoteFX": False,
+                "Smooth Fonts": False,
+                "Desktop Composition": False,
+                "Full Window Drag": False,
+                "Menu Animations": False,
+                "Disable Themes": False,
+                "Disable Wallpaper": False,
             },
             "Appearance": {
                 "Logo File": "",
                 "Logo Position": "top-center",
                 "Login Position": "center-center",
                 "Hide Exit": False,
-                "Hide Diagnostics": False,
                 "Hide Restart": False,
                 "Hide Shutdown": False,
-                "Fullscreen": False,
-                "Gradient Start": "#265162",
-                "Gradient End":   "#002136"
+                "Fullscreen": False
             },
             "Administration": {
-                "Password": "",
-                "Debug logging": False
+                "Password": ""
             },
         }
 
         # Load config from file
         config_dir = os.path.join(self.root_dir, 'config')
 
-        # --- load new-style cfgs if present ---
-        def _merge_into(dst, src):
-            for k, v in src.items():
-                if isinstance(v, dict) and isinstance(dst.get(k), dict):
-                    _merge_into(dst[k], v)
-                else:
-                    # keep lists non-None
-                    if isinstance(dst.get(k), list) and v is None:
-                        dst[k] = []
-                    else:
-                        dst[k] = v
+        for category in self.config.keys():
+            config_path = os.path.join(config_dir, f'{category.lower()}.cfg')
+            if os.path.exists(config_path):
+                with open(config_path, 'r') as f:
+                    category_config = json.load(f)
 
-        for fname, topkey in [("general.cfg","General"),
-                            ("freerdp.cfg","FreeRDP"),
-                            ("networking.cfg","Networking"),
-                            ("appearance.cfg","Appearance"),
-                            ("administration.cfg","Administration")]:
-            p = os.path.join(config_dir, fname)
-            if os.path.exists(p):
-                try:
-                    with open(p, "r") as f:
-                        data = json.load(f)
-                    if topkey in self.config and isinstance(self.config[topkey], dict) and isinstance(data, dict):
-                        _merge_into(self.config[topkey], data)
-                    elif topkey in self.config:
-                        self.config[topkey] = data
-                except Exception as e:
-                    print(f"Failed loading {fname}: {e}")
+                    # Loop through each config item and set the config value
+                    for name, value in category_config.items():
 
-        # --- LEGACY migration (display.cfg / devices.cfg / folders.cfg / experience.cfg) ---
-        legacy_map = {
-            "display.cfg": ("FreeRDP", "Display"),
-            "devices.cfg": ("FreeRDP", "Devices"),
-            "folders.cfg": ("FreeRDP", "Folders"),
-            "experience.cfg": ("FreeRDP", "Experience"),
-        }
-        for legacy_fname, (top, sub) in legacy_map.items():
-            p = os.path.join(config_dir, legacy_fname)
-            if os.path.exists(p):
-                try:
-                    with open(p, "r") as f:
-                        data = json.load(f)
-                    if isinstance(data, dict):
-                        _merge_into(self.config[top][sub], data)
-                except Exception as e:
-                    print(f"Failed migrating {legacy_fname}: {e}")
+                        # Check if the config item exists in the config
+                        if name in self.config[category]:
+                            if isinstance(self.config[category][name], list) and value is None:
+                                # Make sure lists like Folders are not set to None
+                                self.config[category][name] = []
+                            else:
+                                self.config[category][name] = value
 
-        # Logo path resolution (same behavior)
+        # Check if the custom logo exists in the 'config/' directory
         logo_path = os.path.join(self.root_dir, 'config', 'logo.png')
         if os.path.exists(logo_path):
             self.config["Appearance"]["Logo File"] = logo_path
         else:
-            self.config["Appearance"]["Logo File"] = self.get_path(os.path.join('img', 'logo.png')) or ""
+            # Fallback to default logo in 'src/img/logo.png'
+            self.config["Appearance"]["Logo File"] = self.get_path(os.path.join('img', 'logo.png'))
 
     def load_widgets(self):
+
         """
-        Build self.widgets as a nested map that mirrors self.config for categories
-        with sub-tabs (FreeRDP, Networking).
+        Load all the widgets including logo selection and preview.
         """
 
-        # password edits
-        passwordLineEdit = QLineEdit(); passwordLineEdit.setEchoMode(QLineEdit.Password)
-        lockLineEdit = QLineEdit();     lockLineEdit.setEchoMode(QLineEdit.Password)
+        # Initialize QLineEdit for password with echo mode set to Password
+        passwordLineEdit = QLineEdit()
+        passwordLineEdit.setEchoMode(QLineEdit.Password)
 
-        # Port
-        portSpinBox = QSpinBox(); portSpinBox.setRange(1, 65535)
+        # Initialize QLineEdit for lock password with echo mode set to Password
+        lockLineEdit = QLineEdit()
+        lockLineEdit.setEchoMode(QLineEdit.Password)
+
+        # Initialize QSpinBox for port with default value and range
+        portSpinBox = QSpinBox()
+        portSpinBox.setRange(1, 65535)
         portSpinBox.setValue(self.config["General"]["Port"])
 
-        # Resolution (detect)
+        # Get current screen resolution
         screenResolution = QApplication.desktop().screenGeometry()
         currentResolution = f"{screenResolution.width()}x{screenResolution.height()}"
-        self.config["FreeRDP"]["Display"]["Resolution"] = currentResolution
+        self.config["Display"]["Resolution"] = currentResolution
 
+        # Initialize resolution combo box with common resolutions
         resolutionComboBox = QComboBox()
-        commonRes = ["800x600","1024x768","1280x720","1366x768","1920x1080","3840x2160"]
-        if currentResolution not in commonRes:
-            commonRes.insert(0, currentResolution)
-        resolutionComboBox.addItems(commonRes)
-        resolutionComboBox.setCurrentText(self.config["FreeRDP"]["Display"]["Resolution"])
+        commonResolutions = ["800x600", "1024x768", "1280x720", "1366x768", "1920x1080", "3840x2160"]
+        if currentResolution not in commonResolutions:
+            commonResolutions.insert(0, currentResolution)
+        resolutionComboBox.addItems(commonResolutions)
+        resolutionComboBox.setCurrentText(currentResolution)
 
-        # Sound combos
-        playSoundCombo = QComboBox(); playSoundCombo.addItems(["Never","On this computer","On the remote computer"])
-        playSoundCombo.setCurrentText(self.config["FreeRDP"]["Devices"]["Play sound"])
-        recordSoundCombo = QComboBox(); recordSoundCombo.addItems(["Never","On this computer","On the remote computer"])
-        recordSoundCombo.setCurrentText(self.config["FreeRDP"]["Devices"]["Record sound"])
+        # Initialize sound options combo box
+        playSoundComboBox = QComboBox()
+        playSoundOptions = ["Never", "On this computer", "On the remote computer"]
+        playSoundComboBox.addItems(playSoundOptions)
+        playSoundComboBox.setCurrentText(self.config["Audio"]["Play sound"])
 
-        # Positions
-        positionsOptions = ["top-left","top-center","top-right","center-left","center-center","center-right","bottom-left","bottom-center","bottom-right"]
-        loginPosCombo = QComboBox(); loginPosCombo.addItems(positionsOptions)
-        loginPosCombo.setCurrentText(self.config["Appearance"]["Login Position"])
-        logoPosCombo  = QComboBox(); logoPosCombo.addItems(positionsOptions)
-        logoPosCombo.setCurrentText(self.config["Appearance"]["Logo Position"])
+        # Initialize sound options combo box
+        recordSoundComboBox = QComboBox()
+        recordSoundOptions = ["Never", "On this computer", "On the remote computer"]
+        recordSoundComboBox.addItems(recordSoundOptions)
+        recordSoundComboBox.setCurrentText(self.config["Audio"]["Record sound"])
 
-        # Logo
+        # Initialize login and logo positions
+        positionsOptions = ["top-left", "top-center", "top-right", "center-left", "center-center", "center-right", "bottom-left", "bottom-center", "bottom-right"]
+        loginPositionComboBox = QComboBox()
+        loginPositionComboBox.addItems(positionsOptions)
+        loginPositionComboBox.setCurrentText(self.config["Appearance"]["Login Position"])
+
+        logoPositionComboBox = QComboBox()
+        logoPositionComboBox.addItems(positionsOptions)
+        logoPositionComboBox.setCurrentText(self.config["Appearance"]["Logo Position"])
+
+        # Replace logo file text field with a button for file selection and preview
         logo_file = self.config["Appearance"]["Logo File"] or self.get_path(os.path.join('img', 'logo.png'))
         self.gen_logo_button(logo_file)
 
-        # Gradient
-        gradient_start_btn = ColorButton(self.config["Appearance"]["Gradient Start"] or "#265162")
-        gradient_end_btn   = ColorButton(self.config["Appearance"]["Gradient End"] or "#002136")
-        gradient_start_btn.colorChanged.connect(lambda _: self.on_configuration_changed())
-        gradient_end_btn.colorChanged.connect(lambda _: self.on_configuration_changed())
-
-        # Folder redirection controls
+        # Initialize folder redirection
         self.folder_add_button = QPushButton("Add Folder")
         self.folder_add_button.clicked.connect(self.select_folder)
         self.folder_list_layout = QVBoxLayout()
 
-        # Admin buttons
-        self.open_log_button = QPushButton("Open log")
-        self.open_log_button.clicked.connect(self.open_last_log)
+        # Add "Update" button in the Administration tab
         self.update_button = QPushButton("Update")
         self.update_button.clicked.connect(self.update_application)
+
+        # Add "Import" button in the Administration tab
         self.import_button = QPushButton("Import")
         self.import_button.clicked.connect(self.import_settings)
+
+        # Add "Export" button in the Administration tab
         self.export_button = QPushButton("Export")
         self.export_button.clicked.connect(self.export_settings)
 
-        # --- Build widgets map mirroring new config structure ---
+        # Initialize widgets dictionary
         self.widgets = {
             "General": {
                 "Server Address": QLineEdit(),
@@ -952,89 +282,64 @@ class Client(QMainWindow):
                 "Password": passwordLineEdit,
                 "Domain": QLineEdit(),
             },
-            "FreeRDP": {
-                "Display": {
-                    "Resolution": resolutionComboBox,
-                    "Use all monitors": QCheckBox(),
-                    "Start session in fullscreen": QCheckBox(),
-                    "Fit session to window": QCheckBox(),
-                },
-                "Devices": {
-                    "Play sound":   playSoundCombo,
-                    "Record sound": recordSoundCombo,
-                    "Printers":     QCheckBox(),
-                    "Smart Cards":  QCheckBox(),
-                    "Ports":        QCheckBox(),
-                    "Drives":       QCheckBox(),
-                },
-                "Folders": {
-                    "Redirect": QCheckBox(),
-                    "Folders":  [],  # list UI handled separately
-                },
-                "Experience": {
-                    "Clipboard":             QCheckBox(),
-                    "RemoteFX":              QCheckBox(),
-                    "Smooth Fonts":          QCheckBox(),
-                    "Desktop Composition":   QCheckBox(),
-                    "Full Window Drag":      QCheckBox(),
-                    "Menu Animations":       QCheckBox(),
-                    "Disable Themes":        QCheckBox(),
-                    "Disable Wallpaper":     QCheckBox(),
-                    "Show certificate warning": QCheckBox(),
-                },
+            "Display": {
+                "Resolution": resolutionComboBox,
+                "Use all monitors": QCheckBox(),
+                "Start session in fullscreen": QCheckBox(),
+                "Fit session to window": QCheckBox(),
             },
-            "Networking": {
-                # WiFi tab only shown on Linux in launch_configurations, but we still keep widgets here
-                "WiFi": {
-                    "Interface":    QLineEdit(),
-                    "SSID":         QLineEdit(),
-                    "Password":     QLineEdit(),
-                    "Auto connect": QCheckBox(),
-                },
-                "OpenVPN": {
-                    "Config File":  QLineEdit(),
-                    "Auto connect": QCheckBox(),
-                },
-                "WireGuard": {
-                    "Config File":  QLineEdit(),
-                    "Auto connect": QCheckBox(),
-                }
+            "Audio": {
+                "Play sound": playSoundComboBox,
+                "Record sound": recordSoundComboBox,
+            },
+            "Devices": {
+                "Printers": QCheckBox(),
+                "Smart Cards": QCheckBox(),
+                "Ports": QCheckBox(),
+                "Drives": QCheckBox(),
+            },
+            "Folders": {
+                "Redirect": QCheckBox(),
+                "Folders": [],
+            },
+            "Experience": {
+                "Clipboard": QCheckBox(),
+                "RemoteFX": QCheckBox(),
+                "Smooth Fonts": QCheckBox(),
+                "Desktop Composition": QCheckBox(),
+                "Full Window Drag": QCheckBox(),
+                "Menu Animations": QCheckBox(),
+                "Disable Themes": QCheckBox(),
+                "Disable Wallpaper": QCheckBox(),
             },
             "Appearance": {
-                "Logo File":      self.logo_file_button,
-                "Logo Position":  logoPosCombo,
-                "Login Position": loginPosCombo,
-                "Hide Exit":      QCheckBox(),
-                "Hide Diagnostics": QCheckBox(),
-                "Hide Restart":   QCheckBox(),
-                "Hide Shutdown":  QCheckBox(),
-                "Fullscreen":     QCheckBox(),
-                "Gradient Start": gradient_start_btn,
-                "Gradient End":   gradient_end_btn,
+                "Logo File": self.logo_file_button,
+                "Logo Position": logoPositionComboBox,
+                "Login Position": loginPositionComboBox,
+                "Hide Exit": QCheckBox(),
+                "Hide Restart": QCheckBox(),
+                "Hide Shutdown": QCheckBox(),
+                "Fullscreen": QCheckBox(),
             },
             "Administration": {
-                "Password":       lockLineEdit,
-                "Debug logging":  QCheckBox(),
-                "Open log":       self.open_log_button,
-                "Update":         self.update_button,
-                "Import":         self.import_button,
-                "Export":         self.export_button,
+                "Password": lockLineEdit,
+                "Update": self.update_button,
+                "Import": self.import_button,
+                "Export": self.export_button,
             },
         }
 
-        # --- Apply current config values into widgets (supports nested dicts) ---
-        def _apply_values(widget_map, cfg):
-            for key, w in widget_map.items():
-                if isinstance(w, dict) and isinstance(cfg.get(key, None), dict):
-                    _apply_values(w, cfg[key])
-                elif isinstance(w, list):
-                    # folders list handled in launch_configurations (we only keep data here)
-                    pass
-                else:
-                    if w is not None and key in cfg:
-                        self.set_widget_value(w, cfg[key])
-
-        _apply_values(self.widgets, self.config)
+        # Load configuration files and set widget values
+        config_dir = os.path.join(self.root_dir, 'config')
+        for category in self.widgets.keys():
+            config_path = os.path.join(config_dir, f'{category.lower()}.cfg')
+            if os.path.exists(config_path):
+                with open(config_path, 'r') as f:
+                    category_config = json.load(f)
+                    for name, value in category_config.items():
+                        widget = self.get_widget_from_config(category, name)
+                        if widget:
+                            self.set_widget_value(widget, value)
 
     def init_properties(self):
 
@@ -1057,35 +362,11 @@ class Client(QMainWindow):
 
         # Set window title and icon
         self.setWindowTitle("Client")
-        self.setWindowIcon(QIcon(self.icon_path) if self.file_exists(self.icon_path) else QIcon())
-
-        # Apply gradient background based on configuration
-        start = self.config["Appearance"].get("Gradient Start", "#265162")
-        end   = self.config["Appearance"].get("Gradient End", "#002136")
-
-        # Retrieve the path of the icons directory
-        icons_dir = self.get_path('icons')
-        check_svg = os.path.join(icons_dir, 'check.svg') if icons_dir else None
-
-        # Create stylesheet overrides
-        override = (
-            "\n"
-            "#clientWindow {\n"
-            f"    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {start}, stop:1 {end});\n"
-            "}\n"
-            "QCheckBox::indicator:checked { "
-            f"image: {self.qss_url(check_svg)};"
-            " }\n"
-        )
+        self.setWindowIcon(QIcon(self.icon_path))
 
         # Load Style Sheets
-        style_path = self.get_path(os.path.join('styles', 'style.css'))
-        base_css = ""
-        if style_path and os.path.isfile(style_path):
-            with open(style_path, "r", encoding="utf-8") as f:
-                base_css = f.read()
-
-        self.setStyleSheet(base_css + override)
+        with open(self.get_path(os.path.join('styles/style.css')), 'r') as f:
+            self.setStyleSheet(f.read())
 
         # Set the object name for the stylesheet
         self.setObjectName("clientWindow")  # Set the object name for the stylesheet
@@ -1119,7 +400,7 @@ class Client(QMainWindow):
         logo_grid_pos = self.calculate_position(logo_pos)
 
         # Load and place the logo image
-        logo_file = self.config['Appearance'].get('Logo File') or self.get_path(os.path.join('img', 'logo.png'))
+        logo_file = self.config['Appearance']['Logo File']
         if logo_file and os.path.isfile(logo_file):
             logo_label = QLabel(central_widget)
             pixmap = QPixmap(logo_file)
@@ -1229,14 +510,6 @@ class Client(QMainWindow):
         self.config_button.clicked.connect(self.launch_prompt)
         buttons_layout.addWidget(self.config_button)
 
-        if not self.config['Appearance']['Hide Diagnostics']:
-            self.diagnostics_button = QPushButton("", self)
-            self.diagnostics_button.setObjectName("DiagnosticsBTN")
-            self.set_svg_icon(self.diagnostics_button, self.get_path(os.path.join("icons/activity.svg")))
-            self.diagnostics_button.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
-            self.diagnostics_button.clicked.connect(self.launch_diagnostics)
-            buttons_layout.addWidget(self.diagnostics_button)
-
         if not self.config['Appearance']['Hide Exit']:
             self.exit_button = QPushButton("", central_widget)
             self.exit_button.setObjectName("ExitBTN")
@@ -1292,8 +565,6 @@ class Client(QMainWindow):
             return widget.isChecked()
         elif isinstance(widget, QSpinBox):
             return widget.value()
-        elif isinstance(widget, ColorButton):
-            return widget.hex()
         else:
             return None  # Or some default value, or raise an exception
 
@@ -1316,17 +587,8 @@ class Client(QMainWindow):
             widget.setChecked(value)
         elif isinstance(widget, QSpinBox):
             widget.setValue(value)
-        elif isinstance(widget, ColorButton):
-            widget._color = QColor(value if value else "#000000")
-            widget._update_style()
 
     def set_svg_icon(self, button, svg_path, size=(18, 18)):
-
-        # Check if the SVG file exists
-        if not self.file_exists(svg_path):
-            button.setIcon(QIcon())  # no icon, still functional
-            return
-
         # Load SVG file
         renderer = QSvgRenderer(svg_path)
 
@@ -1381,26 +643,34 @@ class Client(QMainWindow):
             central_widget.deleteLater()
 
     def restart_system(self):
-        choice = self._msgbox("System Restart", "Are you sure you want to restart the system?", icon_key="question", buttons=("Yes","No"), default="No")
-        if choice == "Yes":
+        # Confirm with the user
+        reply = QMessageBox.question(self, 'System Restart',
+                                     'Are you sure you want to restart the system?',
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+
+        if reply == QMessageBox.Yes:
             try:
                 if sys.platform == "win32":
                     subprocess.run(["shutdown", "/r", "/t", "0"], check=True)
                 else:
                     subprocess.run(["sudo", "shutdown", "-r", "now"], check=True)
             except subprocess.CalledProcessError as e:
-                self._msgbox("Error", f"Failed to restart the system: {e}", icon_key="error")
+                QMessageBox.critical(self, "Error", f"Failed to restart the system: {e}")
 
     def shutdown_system(self):
-        choice = self._msgbox("System Shutdown", "Are you sure you want to shutdown the system?", icon_key="question", buttons=("Yes","No"), default="No")
-        if choice == "Yes":
+        # Confirm with the user
+        reply = QMessageBox.question(self, 'System Shutdown',
+                                     'Are you sure you want to shutdown the system?',
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+
+        if reply == QMessageBox.Yes:
             try:
                 if sys.platform == "win32":
                     subprocess.run(["shutdown", "/s", "/t", "0"], check=True)
                 else:
                     subprocess.run(["sudo", "shutdown", "-h", "now"], check=True)
             except subprocess.CalledProcessError as e:
-                self._msgbox("Error", f"Failed to shutdown the system: {e}", icon_key="error")
+                QMessageBox.critical(self, "Error", f"Failed to shutdown the system: {e}")
 
     def launch_prompt(self):
 
@@ -1453,59 +723,63 @@ class Client(QMainWindow):
     def select_folder(self):
         folder_dialog = QFileDialog(self)
         folder_dialog.setFileMode(QFileDialog.Directory)
+
         if folder_dialog.exec_():
             selected_folder = folder_dialog.selectedFiles()[0]
             folder_data = {"path": selected_folder, "enabled": True}
-            self.config["FreeRDP"]["Folders"]["Folders"].append(folder_data)
+            self.config["Folders"]["Folders"].append(folder_data)
             self.add_folder_to_list(folder_data)
+
+            # Call on_configuration_changed to highlight the Save button
             self.on_configuration_changed()
 
     def add_folder_to_list(self, folder_data):
         folder_widget = QWidget()
         folder_layout = QHBoxLayout(folder_widget)
 
+        # Add the folder path label
         folder_label = QLabel(folder_data["path"])
         folder_layout.addWidget(folder_label)
 
+        # Add the enable/disable checkbox
         folder_checkbox = QCheckBox("Enabled")
         folder_checkbox.setChecked(folder_data["enabled"])
         folder_layout.addWidget(folder_checkbox)
+
+        # Connect the checkbox to update folder_data["enabled"]
         folder_checkbox.stateChanged.connect(lambda state, fd=folder_data: self.update_folder_enabled(fd, state))
 
+        # Add a delete button
         delete_button = QPushButton("Delete")
         delete_button.clicked.connect(lambda: self.remove_folder(folder_widget, folder_data))
         folder_layout.addWidget(delete_button)
 
+        # Add the folder widget to the list layout
         self.folder_list_layout.addWidget(folder_widget)
+
+        # Call on_configuration_changed to highlight the Save button
         self.on_configuration_changed()
 
     def update_folder_enabled(self, folder_data, state):
         folder_data["enabled"] = bool(state)
+        # Call on_configuration_changed to highlight the Save button
         self.on_configuration_changed()
 
     def remove_folder(self, folder_widget, folder_data):
+
+        # Remove the folder from the list
         self.folder_list_layout.removeWidget(folder_widget)
         folder_widget.deleteLater()
-        self.config["FreeRDP"]["Folders"]["Folders"].remove(folder_data)
+        self.config["Folders"]["Folders"].remove(folder_data)
+
+        # Call on_configuration_changed to highlight the Save button
         self.on_configuration_changed()
 
-    def find_widget_index(self, layout, widget):
+    def find_widget_index(layout, widget):
         for row in range(layout.rowCount()):
             if layout.itemAt(row, QFormLayout.FieldRole).widget() == widget:
                 return row
         return None
-
-    def qss_url(self, p: str | None) -> str:
-        """
-        Return a quoted url("...") suitable for Qt stylesheets, or empty string.
-        """
-        if not p:
-            return 'url("")'
-        # Qt accepts forward slashes
-        return f'url("{p.replace(os.sep, "/")}")'
-
-    def file_exists(self, p: str | None) -> bool:
-        return isinstance(p, str) and os.path.isfile(p)
 
     def gen_logo_button(self, logo_file):
 
@@ -1544,29 +818,24 @@ class Client(QMainWindow):
 
     def update_logo_button(self, logo_file):
         """
-        Update the logo button with a 72px preview, falling back to bundled img/logo.png.
+        Update the logo file button with the current logo path and a small 72px preview.
         """
-        # Resolve fallback if needed
-        candidate = logo_file if isinstance(logo_file, str) else None
-        if not (candidate and os.path.isfile(candidate)):
-            candidate = self.get_path(os.path.join('img', 'logo.png'))
 
-        if candidate and os.path.isfile(candidate):
-            pixmap = QPixmap(candidate)
-            if not pixmap.isNull():
-                scaled = pixmap.scaled(72, 72, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                self.logo_file_button.setIcon(QIcon(scaled))
-                self.logo_file_button.setIconSize(scaled.size())
-                self.logo_file_button.setText("")
+        if os.path.isfile(logo_file):
+            pixmap = QPixmap(logo_file)
+            if not pixmap.isNull():  # Check if the pixmap is valid
+                scaled_pixmap = pixmap.scaled(72, 72, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                self.logo_file_button.setIcon(QIcon(scaled_pixmap))
+                self.logo_file_button.setIconSize(scaled_pixmap.size())
+                self.logo_file_button.setText("")  # Clear text, only show image
             else:
-                print(f"Failed to load logo: {candidate}")
-                self.logo_file_button.setIcon(QIcon())
+                print(f"Failed to load logo: {logo_file}")
                 self.logo_file_button.setText("Invalid Logo File")
         else:
-            print(f"File not found: {candidate}")
-            self.logo_file_button.setIcon(QIcon())
-            self.logo_file_button.setText("Select Logo File")
+            print(f"File not found: {logo_file}")
+            self.logo_file_button.setText("Select Logo File")  # Fallback if no valid file
 
+        # Force repaint
         self.logo_file_button.update()
         self.logo_file_button.repaint()
 
@@ -1590,112 +859,77 @@ class Client(QMainWindow):
     def update_application(self):
         try:
             subprocess.run(['git', 'pull'], check=True, cwd=self.root_dir)
-            self._msgbox("Update", "Application updated successfully. Restarting...", icon_key="success")
+            QMessageBox.information(self, "Update", "Application updated successfully. Restarting...")
             QApplication.quit()
             subprocess.run([sys.executable] + sys.argv)
         except subprocess.CalledProcessError as e:
-            self._msgbox("Error", f"Failed to update the application: {e}", icon_key="error")
+            QMessageBox.critical(self, "Error", f"Failed to update the application: {e}")
 
     def launch_configurations(self):
+
+        # Create a password prompt
         self.configurations_dialog = QDialog(self)
+        self.configurations_dialog.setWindowModality(Qt.WindowModal)
         self.configurations_dialog.setWindowFlags(Qt.Dialog | Qt.WindowTitleHint | Qt.CustomizeWindowHint | Qt.WindowCloseButtonHint)
         self.configurations_dialog.setObjectName("configurationsWindow")
 
+        # Set the layout to the configurations dialog
         self.configurations_layout = QVBoxLayout(self.configurations_dialog)
-        self.configurations_layout.setSpacing(0)
+        self.configurations_layout.setSpacing(0)  # Set spacing to 0 to remove space between rows
 
+        # Create a tab widget
         self.configurations_tab_widget = QTabWidget()
         self.configurations_layout.addWidget(self.configurations_tab_widget)
 
-        def bind_change_signals(w):
-            if isinstance(w, QLineEdit):
-                w.textChanged.connect(self.on_configuration_changed)
-            elif isinstance(w, QCheckBox):
-                w.stateChanged.connect(self.on_configuration_changed)
-            elif isinstance(w, QComboBox):
-                w.currentTextChanged.connect(self.on_configuration_changed)
-            elif isinstance(w, QSpinBox):
-                w.valueChanged.connect(self.on_configuration_changed)
-
-        def add_simple_form_tab(title, mapping):
+        # Create tabs for each category
+        for category, settings in self.widgets.items():
             tab = QWidget()
-            layout = QFormLayout(); tab.setLayout(layout)
-            for name, widget in mapping.items():
-                if isinstance(widget, dict):
-                    # shouldn't happen in simple tab
-                    continue
-                if isinstance(widget, list):
-                    # Folders list special case
-                    if title == "Folders" and name == "Folders":
-                        layout.addRow(QLabel(name), self.folder_add_button)
-                        for folder in self.config["FreeRDP"]["Folders"]["Folders"]:
+            layout = QFormLayout()
+            tab.setLayout(layout)
+
+            for name, widget in settings.items():
+                if category == "Appearance" and name == "Logo File":
+                    self.logo_layout = layout
+                    self.logo_row = layout.addRow(QLabel(name), widget)
+                elif isinstance(widget, dict):
+                    # For nested settings like in "Redirect" under "Devices"
+                    for sub_name, sub_widget in widget.items():
+                        layout.addRow(QLabel(f"{sub_name}"), sub_widget)
+                elif isinstance(widget, list):
+                    # Handle lists for folder redirection
+                    if name == "Folders":
+                        layout.addRow(QLabel(name), self.folder_add_button)  # Folder selection button
+                        for folder in self.config["Folders"]["Folders"]:
                             self.add_folder_to_list(folder)
                         layout.addRow(self.folder_list_layout)
-                    continue
-                layout.addRow(QLabel(name), widget)
-                bind_change_signals(widget)
-            return tab
+                else:
+                    layout.addRow(QLabel(name), widget)
 
-        def add_subtabbed_category(title, submaps, show_filter=None):
-            """
-            Creates a top-level tab that contains a QTabWidget with sub-tabs.
-            show_filter: optional callable(subname:str) -> bool to conditionally include a sub-tab.
-            """
-            top = QWidget()
-            v = QVBoxLayout(top)
-            sub = QTabWidget()
-            v.addWidget(sub)
+                # Connect signals for widget changes
+                if isinstance(widget, QLineEdit):
+                    widget.textChanged.connect(self.on_configuration_changed)
+                elif isinstance(widget, QCheckBox):
+                    widget.stateChanged.connect(self.on_configuration_changed)
+                elif isinstance(widget, QComboBox):
+                    widget.currentTextChanged.connect(self.on_configuration_changed)
+                elif isinstance(widget, QSpinBox):
+                    widget.valueChanged.connect(self.on_configuration_changed)
 
-            for subname, submap in submaps.items():
-                if callable(show_filter) and not show_filter(subname):
-                    continue
-                subtab = add_simple_form_tab(subname, submap)
-                sub.addTab(subtab, subname)
-            return top
+            self.configurations_tab_widget.addTab(tab, category)
 
-        # ---- Top-level tabs ----
-        # General (simple form)
-        general_tab = add_simple_form_tab("General", self.widgets["General"])
-        self.configurations_tab_widget.addTab(general_tab, "General")
-
-        # FreeRDP (subtabs: Display, Devices, Folders, Experience)
-        freerdp_tab = add_subtabbed_category("FreeRDP", self.widgets["FreeRDP"])
-        self.configurations_tab_widget.addTab(freerdp_tab, "FreeRDP")
-
-        # Networking (subtabs: WiFi (only Linux), OpenVPN, WireGuard)
-        def _net_filter(name: str) -> bool:
-            if name == "WiFi":
-                return self.get_os() == "linux"
-            return True
-        networking_tab = add_subtabbed_category("Networking", self.widgets["Networking"], show_filter=_net_filter)
-        self.configurations_tab_widget.addTab(networking_tab, "Networking")
-
-        # Appearance (simple form)
-        appearance_tab = add_simple_form_tab("Appearance", self.widgets["Appearance"])
-        self.configurations_tab_widget.addTab(appearance_tab, "Appearance")
-
-        # Administration (simple form)
-        admin_tab = add_simple_form_tab("Administration", self.widgets["Administration"])
-        self.configurations_tab_widget.addTab(admin_tab, "Administration")
-
-        # Save button
+        # Save Button
         self.save_button = QPushButton("Save")
         self.save_button.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
         self.configurations_layout.addWidget(self.save_button)
         self.save_button.clicked.connect(self.save_config)
 
-        # palettes for Save
+        # Initialize palettes for save button
         self.originalPalette = self.save_button.palette()
         self.highlightedPalette = QPalette(self.originalPalette)
         self.highlightedPalette.setColor(QPalette.Button, QColor("#198754"))
 
+        # show the dialog
         self.configurations_dialog.show()
-
-    def launch_diagnostics(self):
-        self.diag_window = DiagnosticsWindow(self)
-        self.diag_window.show()
-        # optionally auto-run:
-        self.diag_window.start()
 
     def on_configuration_changed(self):
 
@@ -1705,127 +939,110 @@ class Client(QMainWindow):
         self.save_button.style().polish(self.save_button)  # Re-apply the stylesheet
         self.save_button.update()  # Update the button's appearance
 
-        # Live preview: reapply stylesheet override using the current widget values
-        try:
-            with open(self.get_path(os.path.join('styles/style.css')), 'r') as f:
-                base_css = f.read()
-            # Pull values from current widgets if they exist
-            start_widget = self.get_widget_from_config("Appearance", "Gradient Start")
-            end_widget = self.get_widget_from_config("Appearance", "Gradient End")
-            if start_widget and end_widget:
-                self.config["Appearance"]["Gradient Start"] = self.get_widget_value(start_widget)
-                self.config["Appearance"]["Gradient End"]   = self.get_widget_value(end_widget)
-            self.apply_dynamic_client_stylesheet(base_css)
-        except Exception:
-            pass
-
     def save_config(self):
+
         """
-        Persist all settings to config/*.cfg (supports nested categories).
+        Save the current configuration, including the logo file path.
         """
+
+        # Ensure the configuration directory exists
         config_dir = os.path.join(self.root_dir, 'config')
-        os.makedirs(config_dir, exist_ok=True)
+        if not os.path.exists(config_dir):
+            os.makedirs(config_dir)
 
-        def _gather_values(mapping, cfg_ref):
-            out = {}
-            for name, w in mapping.items():
-                if isinstance(w, dict):
-                    out[name] = _gather_values(w, cfg_ref.get(name, {}))
-                elif isinstance(w, list):
-                    # only used for Folders list
-                    if "Folders" in cfg_ref:
-                        out[name] = cfg_ref["Folders"]
-                    else:
-                        out[name] = []
+        # Iterate over the widgets to save settings
+        for category, settings in self.widgets.items():
+            category_config = {}
+            for name, value in settings.items():
+                if name == "Folders":
+                    # Save the folders list from self.config
+                    category_config[name] = self.config["Folders"]["Folders"]
+                elif isinstance(value, dict):
+                    # For nested settings like in "Redirect" under "Devices"
+                    category_config[name] = {sub_name: self.get_widget_value(sub_widget) for sub_name, sub_widget in value.items()}
                 else:
-                    out[name] = self.get_widget_value(w)
-            return out
+                    category_config[name] = self.get_widget_value(value)
 
-        # Collect per top-category
-        to_write = {}
-        for topcat, mapping in self.widgets.items():
-            if topcat in ("FreeRDP","Networking"):
-                to_write[topcat] = _gather_values(mapping, self.config.get(topcat, {}))
-            else:
-                to_write[topcat] = _gather_values(mapping, self.config.get(topcat, {}))
+            # Ensure the default logo is saved if no file is selected
+            if category == "Appearance" and "Logo File" in category_config:
+                if hasattr(self, 'selected_logo_file'):
+                    if os.path.isfile(self.selected_logo_file):
+                        shutil.copyfile(self.selected_logo_file, os.path.join(config_dir, 'logo.png'))
+                        category_config["Logo File"] = os.path.join(config_dir, 'logo.png')
 
-        # Handle logo copy (same behavior as before)
-        if "Appearance" in to_write and "Logo File" in to_write["Appearance"]:
-            if hasattr(self, 'selected_logo_file') and os.path.isfile(self.selected_logo_file):
-                shutil.copyfile(self.selected_logo_file, os.path.join(config_dir, 'logo.png'))
-                to_write["Appearance"]["Logo File"] = os.path.join(config_dir, 'logo.png')
+            config_path = os.path.join(config_dir, f'{category.lower()}.cfg')
+            with open(config_path, 'w') as f:
+                json.dump(category_config, f)
 
-        # Write new style files
-        file_map = {
-            "General": "general.cfg",
-            "FreeRDP": "freerdp.cfg",
-            "Networking": "networking.cfg",
-            "Appearance": "appearance.cfg",
-            "Administration": "administration.cfg",
-        }
-        for top, fname in file_map.items():
-            p = os.path.join(config_dir, fname)
-            with open(p, "w") as f:
-                json.dump(to_write[top], f, indent=2)
+        # Reset background color of the save button to default
+        self.save_button.setObjectName("saveButton")  # Change object name back to default
+        self.save_button.style().unpolish(self.save_button)  # Unpolish to clear the unsaved styling
+        self.save_button.style().polish(self.save_button)  # Re-apply the stylesheet
+        self.save_button.update()  # Update the button's appearance
 
-        # Update in-memory config
-        self.config = to_write
-
-        # Reset Save button styling + refresh UI
-        self.save_button.setObjectName("saveButton")
-        self.save_button.style().unpolish(self.save_button)
-        self.save_button.style().polish(self.save_button)
-        self.save_button.update()
-
+        # Reset the UI
         self.reset_ui()
+
+        # hide the dialog
         self.configurations_dialog.hide()
 
     def import_settings(self):
         try:
+
+            # Ensure the configuration directory exists
             config_dir = os.path.join(self.root_dir, 'config')
-            os.makedirs(config_dir, exist_ok=True)
+            if not os.path.exists(config_dir):
+                os.makedirs(config_dir)
 
-            dlg = QFileDialog(self)
-            dlg.setAcceptMode(QFileDialog.AcceptOpen)
-            dlg.setNameFilter("JSON Files (*.json)")
+            # Open a file dialog to select the import file
+            file_dialog = QFileDialog(self)
+            file_dialog.setAcceptMode(QFileDialog.AcceptOpen)
+            file_dialog.setNameFilter("JSON Files (*.json)")
 
-            if not dlg.exec_():
-                return
+            if file_dialog.exec_():
+                import_file = file_dialog.selectedFiles()[0]
 
-            import_file = dlg.selectedFiles()[0]
-            with open(import_file, "r") as f:
-                imported = json.load(f)
+                # Load the imported JSON file
+                with open(import_file, "r") as f:
+                    imported_data = json.load(f)
 
-            def _apply(imported_dict, widgets_dict, config_ref):
-                for k, v in imported_dict.items():
-                    if isinstance(v, dict) and isinstance(widgets_dict.get(k), dict):
-                        # recurse
-                        _apply(v, widgets_dict[k], config_ref.setdefault(k, {}))
-                    else:
-                        w = widgets_dict.get(k)
-                        if w is not None and not isinstance(w, dict):
-                            self.set_widget_value(w, v)
-                        else:
-                            config_ref[k] = v
+                # Fill the fields with imported data, but don't save yet
+                for category, settings in imported_data.items():
+                    if category in self.config:
+                        for name, value in settings.items():
+                            widget = self.get_widget_from_config(category, name)
+                            if widget:
+                                self.set_widget_value(widget, value)
+                            else:
+                                # Update config dictionary for non-UI items like logo, folders, etc.
+                                self.config[category][name] = value
 
-            _apply(imported, self.widgets, self.config)
-
-            # handle logo (base64) if present
-            try:
-                logo_data = imported.get("Appearance", {}).get("Logo File")
+                # Handle the imported logo if it exists (base64 encoded)
+                logo_data = imported_data["Appearance"]["Logo File"]
                 if isinstance(logo_data, dict) and "content" in logo_data and "filename" in logo_data:
-                    logo_bytes = base64.b64decode(logo_data["content"])
+                    logo_content = base64.b64decode(logo_data["content"])
                     logo_path = os.path.join(config_dir, "import.png")
-                    with open(logo_path, "wb") as out:
-                        out.write(logo_bytes)
-                    self.config["Appearance"]["Logo File"] = logo_path
-                    self.selected_logo_file = logo_path
-                    self.gen_logo_button(logo_path)
-            except Exception as e:
-                print(f"Logo import warning: {e}")
 
-            self.on_configuration_changed()
-            QMessageBox.information(self, "Import Complete", "Settings successfully imported. Press 'Save' to apply changes.")
+                    # Save the decoded logo to the config directory as import.png
+                    with open(logo_path, "wb") as logo_file:
+                        logo_file.write(logo_content)
+
+                    # Update the path to the newly imported logo
+                    self.config["Appearance"]["Logo File"] = logo_path
+
+                    # Store the selected logo file path but don't save it yet
+                    self.selected_logo_file = os.path.join(logo_path)
+
+                    # Update the button to reflect the imported logo preview
+                    print("FILE:",logo_path)
+                    self.gen_logo_button(logo_path)
+
+                # Mark as configuration changed
+                self.on_configuration_changed()
+
+                # Notify the user to save the changes
+                QMessageBox.information(self, "Import Complete", "Settings successfully imported. Press 'Save' to apply changes.")
+
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to import settings: {e}")
 
@@ -1864,18 +1081,15 @@ class Client(QMainWindow):
 
     def get_freerdp_version(self, freerdp_path):
         try:
-            res = subprocess.run([freerdp_path, '+version'], capture_output=True, text=True)
-            if res.returncode != 0:
+            result = subprocess.run([freerdp_path, '+version'], capture_output=True, text=True)
+            version_line = result.stdout.splitlines()[0].strip()  # Get the first line of the output
+            version_parts = version_line.split()  # Split the line into words
+            if len(version_parts) > 4:  # Check if the version string is present
+                return version_parts[4]  # The version is the fifth element in the split output
+            elif len(version_parts) > 3:  # Check if the version string is present
+                return version_parts[3]  # The version is the fourth element in the split output
+            else:
                 return None
-            lines = [ln.strip() for ln in res.stdout.splitlines() if ln.strip()]
-            if not lines:
-                return None
-            parts = lines[0].split()
-            # Find something like 3.3.17 or 3.8 etc.
-            for token in parts:
-                if re.match(r'^\d+\.\d+(\.\d+)?$', token):
-                    return token
-            return None
         except Exception as e:
             print(f"Error retrieving FreeRDP version: {e}")
             return None
@@ -1945,38 +1159,13 @@ class Client(QMainWindow):
         else:
             return None
 
-    def get_freerdp_bin_path(self):
-        """
-        Prefer the repo-bundled xfreerdp for the current OS/arch, then PATH.
-        """
-        osname = self.get_os()
-
-        # Map OS -> bundled path
-        if osname == 'macos':
-            cand = self.get_path('freerdp/macos/xfreerdp')
-        elif osname == 'linux':
-            cand = self.get_path('freerdp/linux/xfreerdp')
-        else:
-            cand = None
-
-        if cand and os.path.exists(cand) and os.access(cand, os.X_OK):
-            return cand
-
-        # If present but not executable, try to make it so
-        if cand and os.path.exists(cand) and not os.access(cand, os.X_OK):
-            try:
-                os.chmod(cand, 0o755)
-                return cand
-            except Exception:
-                pass
-
-        # Fallback to PATH
-        return shutil.which('xfreerdp') or 'xfreerdp'
-
     def gen_command(self):
 
         # Get the path to the bundled xfreerdp
-        freerdp_path = self.get_freerdp_bin_path()
+        if self.get_os() == "macos":
+            freerdp_path = self.get_path('freerdp/'+self.get_os()+'/xfreerdp')
+        else:
+            freerdp_path = "xfreerdp"
 
         # Get FreeRDP version
         freerdp_version = self.get_freerdp_version(freerdp_path)
@@ -1987,44 +1176,32 @@ class Client(QMainWindow):
         # Construct the command using the bundled xfreerdp
         command = [freerdp_path]
 
-        # ---- Safe defaults to avoid activation stalls ----
-        command += [
-            "/cert:ignore",     # ignore certificate by default
-            "/sec:nla",         # explicit security (same as most servers expect)
-            "-multitransport",  # avoid RDPEUDP weirdness through NAT/middleboxes
-            "/timeout:30000",   # 30 second connection timeout
-        ]
-
-        # Enable debug logging if set
-        if self.config["Administration"]["Debug logging"]:
-            command += ["/log-level:DEBUG"]
-
         # Gather the configuration values, retrieving from widgets if necessary
         general_server_address = self.config["General"]["Server Address"] or self.server_edit.text()
         general_port = self.config["General"]["Port"] or self.port_edit.value()
         general_username = self.config["General"]["Username"] or self.username_edit.text()
         general_password = self.config["General"]["Password"] or self.password_edit.text()
         general_domain = self.config["General"]["Domain"] or self.domain_edit.text()
-        display_resolution = self.config["FreeRDP"]["Display"]["Resolution"]
-        display_use_all_monitors = self.config["FreeRDP"]["Display"]["Use all monitors"]
-        display_fullscreen = self.config["FreeRDP"]["Display"]["Start session in fullscreen"]
-        display_fit_window = self.config["FreeRDP"]["Display"]["Fit session to window"]
-        audio_play_sound = self.config["FreeRDP"]["Devices"]["Play sound"]
-        audio_record_sound = self.config["FreeRDP"]["Devices"]["Record sound"]
-        devices_printers = self.config["FreeRDP"]["Devices"]["Printers"]
-        devices_smart_cards = self.config["FreeRDP"]["Devices"]["Smart Cards"]
-        devices_ports = self.config["FreeRDP"]["Devices"]["Ports"]
-        devices_drives = self.config["FreeRDP"]["Devices"]["Drives"]
-        folders_redirect = self.config["FreeRDP"]["Folders"]["Redirect"]
-        folders_folders = self.config["FreeRDP"]["Folders"]["Folders"]
-        experience_clipboard = self.config["FreeRDP"]["Experience"]["Clipboard"]
-        experience_remotefx = self.config["FreeRDP"]["Experience"]["RemoteFX"]
-        experience_smooth_fonts = self.config["FreeRDP"]["Experience"]["Smooth Fonts"]
-        experience_desktop_composition = self.config["FreeRDP"]["Experience"]["Desktop Composition"]
-        experience_full_window_drag = self.config["FreeRDP"]["Experience"]["Full Window Drag"]
-        experience_menu_animations = self.config["FreeRDP"]["Experience"]["Menu Animations"]
-        experience_disable_themes = self.config["FreeRDP"]["Experience"]["Disable Themes"]
-        experience_disable_wallpaper = self.config["FreeRDP"]["Experience"]["Disable Wallpaper"]
+        display_resolution = self.config["Display"]["Resolution"]
+        display_use_all_monitors = self.config["Display"]["Use all monitors"]
+        display_fullscreen = self.config["Display"]["Start session in fullscreen"]
+        display_fit_window = self.config["Display"]["Fit session to window"]
+        audio_play_sound = self.config["Audio"]["Play sound"]
+        audio_record_sound = self.config["Audio"]["Record sound"]
+        devices_printers = self.config["Devices"]["Printers"]
+        devices_smart_cards = self.config["Devices"]["Smart Cards"]
+        devices_ports = self.config["Devices"]["Ports"]
+        devices_drives = self.config["Devices"]["Drives"]
+        folders_redirect = self.config["Folders"]["Redirect"]
+        folders_folders = self.config["Folders"]["Folders"]
+        experience_clipboard = self.config["Experience"]["Clipboard"]
+        experience_remotefx = self.config["Experience"]["RemoteFX"]
+        experience_smooth_fonts = self.config["Experience"]["Smooth Fonts"]
+        experience_desktop_composition = self.config["Experience"]["Desktop Composition"]
+        experience_full_window_drag = self.config["Experience"]["Full Window Drag"]
+        experience_menu_animations = self.config["Experience"]["Menu Animations"]
+        experience_disable_themes = self.config["Experience"]["Disable Themes"]
+        experience_disable_wallpaper = self.config["Experience"]["Disable Wallpaper"]
 
         # Add server address and port
         if general_port:
@@ -2040,10 +1217,7 @@ class Client(QMainWindow):
 
         # Add password securely
         if general_password:
-            if major_version and major_version >= 3:
-                command.append("/from-stdin:force")
-            else:
-                command.append("/from-stdin")
+            command.append(f"/p:{general_password}")
 
         # Add display settings
         if display_resolution:
@@ -2077,8 +1251,6 @@ class Client(QMainWindow):
             command.append("/printer")
         if devices_drives:
             command.append("/drives")
-        if devices_ports:
-            command.append("/usb:auto")
         # if major_version and major_version < 3:
         #     if devices_smart_cards:
         #         command.append("/smartcard")
@@ -2095,7 +1267,7 @@ class Client(QMainWindow):
         if experience_clipboard:
             command.append("+clipboard")
         if experience_remotefx:
-            command.append("/rfx /gfx /gfx-h264 /gdi:hw")
+            command.append("/rfx")
         if experience_smooth_fonts:
             command.append("+fonts")
         if experience_desktop_composition:
@@ -2109,117 +1281,17 @@ class Client(QMainWindow):
         if experience_disable_wallpaper:
             command.append("-wallpaper")
 
+        # Ignore Certificate
+        if major_version and major_version < 3:
+            command.append("/cert-ignore")
+        else:
+            command.append("/cert:ignore")
+
         # Debugging: Print the final command
-        if self.config["Administration"]["Debug logging"]:
-            print(f"Generated freerdp({freerdp_version}) command:")
-            debug_cmd = []
-            for tok in command:
-                if tok.startswith("/p:"):
-                    debug_cmd.append("/p:********")
-                else:
-                    debug_cmd.append(tok)
-            print(" ".join(debug_cmd))
+        print(f"Generated freerdp({freerdp_version}) command:")
+        print(" ".join(command))
 
         return command
-
-    def _svg_to_pixmap(self, svg_path: str, size: QSize = QSize(42, 42)) -> QPixmap:
-        """
-        Render an SVG to a hi-DPI-aware QPixmap for use in QMessageBox.
-        """
-        renderer = QSvgRenderer(svg_path)
-        dpr = self.devicePixelRatioF() if hasattr(self, "devicePixelRatioF") else 1.0
-        w = max(1, int(size.width()  * dpr))
-        h = max(1, int(size.height() * dpr))
-        pm = QPixmap(w, h)
-        pm.fill(Qt.transparent)
-        painter = QPainter(pm)
-        renderer.render(painter)
-        painter.end()
-        if dpr != 1.0:
-            pm.setDevicePixelRatio(dpr)
-        return pm
-
-    def _msgbox(self, title: str, text: str, icon_key: str = "info", buttons: tuple = ("OK",), default: str | None = None, parent=None) -> str:
-        parent = parent or self
-        m = QMessageBox(parent)
-        m.setWindowTitle(title)
-        m.setText(text)
-        m.setObjectName("customMsgBox")  # lets your QSS style it
-
-        # map logical keys to your Bootstrap-ish icon file names (adjust to your set)
-        icon_map = {
-            "info":     "info-circle.svg",
-            "success":  "check-circle.svg",
-            "warning":  "exclamation-triangle.svg",
-            "error":    "x-octagon.svg",
-            "question": "question-circle.svg",
-        }
-        svg = self.get_path(os.path.join("icons", icon_map.get(icon_key, icon_map["info"])))
-        if svg and os.path.exists(svg):
-            m.setIconPixmap(self._svg_to_pixmap(svg, QSize(42, 42)))
-        else:
-            # graceful fallback to a built-in icon
-            builtins = {
-                "info": QMessageBox.Information,
-                "success": QMessageBox.Information,
-                "warning": QMessageBox.Warning,
-                "error": QMessageBox.Critical,
-                "question": QMessageBox.Question,
-            }
-            m.setIcon(builtins.get(icon_key, QMessageBox.Information))
-
-        # buttons
-        label_to_std = {
-            "OK": QMessageBox.Ok,
-            "Cancel": QMessageBox.Cancel,
-            "Yes": QMessageBox.Yes,
-            "No": QMessageBox.No,
-            "Retry": QMessageBox.Retry,
-            "Ignore": QMessageBox.Ignore,
-            "Close": QMessageBox.Close,
-            "Open log": QMessageBox.ActionRole,  # special, will add as an action button
-        }
-        clicked_label = None
-        added = []
-        for b in buttons:
-            if b == "Open log":
-                btn = m.addButton("Open log", QMessageBox.ActionRole)
-            else:
-                btn = m.addButton(label_to_std.get(b, QMessageBox.Ok))
-            added.append((b, btn))
-
-        if default:
-            for lbl, btn in added:
-                if lbl == default:
-                    m.setDefaultButton(btn if isinstance(btn, QMessageBox.StandardButton) else None)
-                    try:
-                        m.setEscapeButton(btn)
-                    except Exception:
-                        pass
-
-        m.exec_()
-        which = m.clickedButton()
-        for lbl, btn in added:
-            if btn is which:
-                clicked_label = lbl
-                break
-        return clicked_label or ""
-
-    def show_log(self, text: str, focus: str = None):
-        # focus becomes initial filter; lines not matching are hidden; matches are yellow
-        self.log_window = LogWindow(self, text=text, filter_text=focus)
-        self.log_window.show()
-        self.log_window.raise_()
-        self.log_window.activateWindow()
-
-    def open_last_log(self):
-        text = self.last_log_text or ""
-        if not text.strip():
-            self._msgbox("No log available",
-                        "There is no connection log yet. Try connecting first.",
-                        icon_key="info")
-            return
-        self.show_log(text, focus="ERROR")
 
     def connect_to_server(self):
 
@@ -2245,42 +1317,30 @@ class Client(QMainWindow):
         self.connect()
 
     def connect(self):
+
+        # Construct the freerdp3 command using the dedicated method
         command = self.gen_command()
-        show_cert_warning = self.config["FreeRDP"]["Experience"].get("Show certificate warning", False)
-        debug_enabled = self.config.get("Administration", {}).get("Debug logging", False)
-        general_password = self.config["General"]["Password"] or getattr(self, "password_edit", QLineEdit()).text()
-        stdin_password = general_password if any(arg.startswith("/from-stdin") for arg in command) else None
-        self.connection_thread = ConnectionThread(command, show_cert_warning=show_cert_warning, stdin_password=stdin_password, debug_enabled=debug_enabled)
+
+        # Create a thread for the connection process
+        self.connection_thread = ConnectionThread(command)
+
+        # Connect the success and failure signals to appropriate slots
         self.connection_thread.connection_success.connect(self.on_connection_success)
         self.connection_thread.connection_failed.connect(self.on_connection_failed)
-        self.connection_thread.connection_info.connect(self.on_connection_info)
+
+        # Start the connection thread
         self.connection_thread.start()
 
-    def on_connection_info(self, line: str):
-        try:
-            self.connection_dialog.setLabelText(f"Connecting…\n{line}")
-        except Exception:
-            pass
-
     def on_connection_success(self):
+        # Handle successful connection
         self.connection_dialog.hide()
-        self._msgbox("Connected", "Connection to the server was successful.", icon_key="success")
+        QMessageBox.information(self, "Connected", "Connection to the server was successful.")
         self.reset_ui()
 
-    def on_connection_failed(self, title: str, details: str, raw_log: str):
-        self.last_log_text = raw_log or ""
+    def on_connection_failed(self, error_message):
+        # Handle failed connection
         self.connection_dialog.hide()
-        debug_enabled = self.config.get("Administration", {}).get("Debug logging", False)
-
-        # choose icon
-        icon_key = "info" if title.lower().startswith("disconnected") else "error"
-        # include Open log when debugging
-        btns = ("Open log","OK") if debug_enabled and self.last_log_text.strip() else ("OK",)
-        choice = self._msgbox(title, details, icon_key=icon_key, buttons=btns, default="OK")
-
-        if choice == "Open log":
-            self.show_log(self.last_log_text)
-
+        QMessageBox.critical(self, "Error", f"Failed to connect to the server: {error_message}")
         self.reset_ui()
 
     def connection_timeout(self):
@@ -2295,7 +1355,6 @@ class Client(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication([])
-    QApplication.setStyle('Fusion')
     client_window = Client()
     client_window.show()
     sys.exit(app.exec_())
