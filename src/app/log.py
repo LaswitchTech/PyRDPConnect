@@ -106,6 +106,12 @@ class Log:
             return "\n".join(self._buffers[channel])
 
     def clear(self, channel: Optional[str] = None) -> None:
+
+        # Check if clearing is allowed
+        if not self._configuration.get("log.clear"):
+            return
+
+        # Clear all channels if channel is None
         with self._lock:
             if channel is None:
                 self._buffers.clear()
