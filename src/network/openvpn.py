@@ -1125,6 +1125,11 @@ class OpenVPN(QObject):
         overrides: Optional[Dict[str, Any]] = None,
         on_success: Optional[Callable[[], None]] = None,
     ) -> None:
+
+        # Reset channel for this new attempt
+        self._logger.clear(self._log_channel)
+
+        # Log entry
         self._logger.append(f"[DEBUG OpenVPN] connect() called.", channel=self._log_channel, level="debug")
 
         if not self.is_configured():
@@ -1155,9 +1160,6 @@ class OpenVPN(QObject):
                 icon_lookup_fn=self._helper.get_path,
             )
             return
-
-        # Reset channel for this new attempt
-        self._logger.clear(self._log_channel)
 
         debug_enabled = bool(self._configuration.get("log.enabled", False))
         if debug_enabled:

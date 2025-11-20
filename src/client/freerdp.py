@@ -215,7 +215,7 @@ class FreeRDPConnection(QThread):
                         collected.append(ln)
                         # Append to central logger
                         if self._logger is not None:
-                            self._logger.append(ln, channel=self._log_channel)
+                            self._logger.append(ln, channel=self._log_channel, level="debug")
                         # Optionally emit live info
                         if self._debug_enabled:
                             self.connection_info.emit(ln)
@@ -351,6 +351,13 @@ class FreeRDP(QObject):
         # Helper
         self._helper: Helper = helper
 
+        # Logger
+        self._logger: Log = logger
+        self._log_channel = "freerdp"
+
+        # Retrieve the number of monitors early for config defaults
+        self._num_monitors = self._get_num_monitors()
+
         # Configuration
         self._configuration: Configuration = configuration
         self._configuration.add("general.host", None, "text", placeholder="Server Address")
@@ -360,9 +367,10 @@ class FreeRDP(QObject):
         self._configuration.add("general.domain", None, "text", placeholder="Domain")
         self._configuration.label("freerdp", "FreeRDP")
         self._configuration.add("freerdp.display.resolution", None, "select", choices=["800x600", "1024x768", "1280x720", "1366x768", "1920x1080", "3840x2160"])
-        self._configuration.add("freerdp.display.fullscreen", False, "checkbox", label="Fullscreen")
         self._configuration.add("freerdp.display.fit", False, "checkbox", label="Fit to window")
+        self._configuration.add("freerdp.display.fullscreen", False, "checkbox", label="Fullscreen")
         self._configuration.add("freerdp.display.all", False, "checkbox", label="All monitors")
+        self._configuration.add("freerdp.display.monitor",None,"number",label="Monitor (fullscreen)",min=1,max=self._num_monitors)
         self._configuration.add("freerdp.devices.output", "On this computer", "select", label="Play Sound", choices=["Never", "On this computer", "On the remote computer"])
         self._configuration.add("freerdp.devices.input", "On this computer", "select", label="Record Sound", choices=["Never", "On this computer", "On the remote computer"])
         self._configuration.add("freerdp.devices.printers", False, "checkbox")
@@ -379,13 +387,14 @@ class FreeRDP(QObject):
         self._configuration.add("freerdp.experience.disable_themes", False, "checkbox", label="Disable Themes")
         self._configuration.add("freerdp.experience.disable_wallpaper", False, "checkbox", label="Disable Wallpaper")
         self._configuration.add("freerdp.experience.show_certificate_warning", False, "checkbox", label="Show Certificate Warning")
+        self._configuration.add("freerdp.advanced.timeout",30,"number",label="Connection Timeout",min=10,max=300)
+        self._configuration.add("freerdp.advanced.secure_connection",True,"checkbox",label="Use NLA Security")
+        self._configuration.add("freerdp.advanced.multitransport",True,"checkbox",label="Enable Multitransport")
+        self._configuration.add("freerdp.advanced.workarea",False,"checkbox",label="Use Workarea Size")
+        self._configuration.add("freerdp.advanced.decorations",True,"checkbox",label="Window Decorations")
 
         # Save any new defaults
         self._configuration.save()
-
-        # Logger
-        self._logger: Log = logger
-        self._log_channel = "freerdp"
 
         # Internal state
         self._dialog: Optional[FreeRDPDialog] = None
@@ -438,6 +447,60 @@ class FreeRDP(QObject):
             print(f"[FreeRDP] Error retrieving version: {e}")
             return None
 
+    def _get_num_monitors(self) -> int:
+        # Use FreeRDP’s own monitor detection via CLI
+        freerdp_path = self._binary_path()
+
+        try:
+            # Query monitor list from FreeRDP
+            result = subprocess.run(
+                [freerdp_path, "/list:monitor"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+
+            if result.returncode != 0:
+                # If the command failed, assume a single monitor
+                if self._logger:
+                    self._logger.append(
+                        f"[FreeRDP] /list:monitor failed (rc={result.returncode}), "
+                        "defaulting to 1 monitor",
+                        channel="freerdp",
+                        level="debug",
+                    )
+                return 1
+
+            count = 0
+            for line in result.stdout.splitlines():
+                line = line.strip()
+                # Lines look like: [0] 3648x1117   +0+0
+                if re.match(r"^\[\d+\]", line):
+                    count += 1
+
+            if count <= 0:
+                count = 1  # Always at least one
+
+            if self._logger:
+                self._logger.append(
+                    f"[FreeRDP] Detected {count} monitor(s) via /list:monitor",
+                    channel="freerdp",
+                    level="debug",
+                )
+
+            return count
+
+        except Exception as e:
+            # On any error, be conservative and assume a single monitor
+            if self._logger:
+                self._logger.append(
+                    f"[FreeRDP] Error detecting monitors via /list:monitor: "
+                    f"{type(e).__name__}: {e} (defaulting to 1)",
+                    channel="freerdp",
+                    level="debug",
+                )
+            return 1
+
     # ------------------------------------------------------------------
     # Command generation
     # ------------------------------------------------------------------
@@ -460,12 +523,7 @@ class FreeRDP(QObject):
         cmd: list[str] = [freerdp_path]
 
         # Safe defaults
-        cmd += [
-            "/cert:ignore",     # TODO: later this could be toggled by config
-            "/sec:nla",
-            "-multitransport",
-            "/timeout:30000",   # 30s
-        ]
+        cmd += []
 
         debug_enabled = bool(val("log.enabled", False))
         if debug_enabled:
@@ -480,9 +538,36 @@ class FreeRDP(QObject):
 
         # Display
         resolution = val("freerdp.display.resolution", "")
-        use_all_mon = bool(val("freerdp.display.all", False))
-        fullscreen = bool(val("freerdp.display.fullscreen", False))
         fit_window = bool(val("freerdp.display.fit", False))
+        fullscreen = bool(val("freerdp.display.fullscreen", False))
+        use_all_mon = bool(val("freerdp.display.all", False))
+        monitor_cfg = val("freerdp.display.monitor", None)
+        monitor_id: Optional[int] = None
+        try:
+            if monitor_cfg not in (None, "", False):
+                monitor_id = int(monitor_cfg) - 1
+                if monitor_id < 0:
+                    monitor_id = 0
+        except (TypeError, ValueError):
+            monitor_id = None
+
+        # Sanitize monitor_id based on what FreeRDP actually sees
+        if self._num_monitors <= 1:
+            # FreeRDP only reports a single monitor: ignore any specific monitor selection
+            monitor_id = None
+        elif monitor_id is not None:
+            # Clamp to valid range [0, self._num_monitors - 1]
+            if monitor_id < 0:
+                monitor_id = 0
+            elif monitor_id >= self._num_monitors:
+                if self._logger:
+                    self._logger.append(
+                        f"[FreeRDP] Monitor index {monitor_cfg} out of range, "
+                        f"clamping to {self._num_monitors}",
+                        channel=self._log_channel,
+                        level="debug",
+                    )
+                monitor_id = self._num_monitors - 1
 
         # Devices / audio
         play_sound = val("freerdp.devices.output", "Never")
@@ -502,6 +587,32 @@ class FreeRDP(QObject):
         disable_themes = bool(val("freerdp.experience.disable_themes", False))
         disable_wallpaper = bool(val("freerdp.experience.disable_wallpaper", False))
         show_cert_warning = bool(val("freerdp.experience.show_certificate_warning", False))
+
+        # Advanced
+        timeout = int(val("freerdp.advanced.timeout", 30))
+        secure_connection = bool(val("freerdp.advanced.secure_connection", True))
+        multitransport = bool(val("freerdp.advanced.multitransport", True))
+        use_workarea = bool(val("freerdp.advanced.workarea", False))
+        use_decorations = bool(val("freerdp.advanced.decorations", True))
+
+        if secure_connection:
+            cmd.append("/sec:nla")
+        else:
+            cmd.append("/sec:rdp")
+
+        if multitransport:
+            cmd.append("-multitransport")
+
+        cmd.append(f"/timeout:{int(timeout * 1000)}")
+
+        if use_workarea:
+            cmd.append("+workarea")
+
+        if not use_decorations:
+            cmd.append("-decorations")
+
+        if show_cert_warning:
+            cmd.append("/cert:ignore")
 
         # ---- Server / user ----
         if server:
@@ -524,14 +635,29 @@ class FreeRDP(QObject):
             stdin_password = str(password)
 
         # ---- Display options ----
-        if resolution:
-            cmd.append(f"/size:{resolution}")
+
+        # Multi-monitor / single monitor selection
         if use_all_mon:
+            # All monitors
             cmd.append("/multimon")
+
         if fullscreen:
+            # Fullscreen on either all monitors (/multimon) or the selected one
+            # (we *don't* set /size in fullscreen mode, to keep native resolution)
             cmd.append("/f")
-        if fit_window:
-            cmd.append("/smart-sizing")
+
+            # If a specific monitor is configured, tell FreeRDP which one to use
+            # /monitors:<id>[,<id>...] is only effective in fullscreen or multimon mode
+            if monitor_id is not None:
+                cmd.append(f"/monitors:{monitor_id}")
+        else:
+            # Windowed mode: honor the configured resolution, if any
+            if resolution:
+                cmd.append(f"/size:{resolution}")
+
+            # Fit window → use smart-sizing only in windowed mode
+            if fit_window:
+                cmd.append("/smart-sizing")
 
         # ---- Audio ----
         if major_version and major_version < 3:
@@ -583,14 +709,14 @@ class FreeRDP(QObject):
 
         # Debug safe-print
         if debug_enabled:
-            self._logger.append(f"[FreeRDP] Generated command (xfreerdp {freerdp_version}):", channel=self._log_channel)
+            self._logger.append(f"[FreeRDP] Generated command (xfreerdp {freerdp_version}):", channel=self._log_channel, level="debug")
             safe = []
             for tok in cmd:
                 if tok.startswith("/p:"):
                     safe.append("/p:********")
                 else:
                     safe.append(tok)
-            self._logger.append(" ".join(safe), channel=self._log_channel)
+            self._logger.append(" ".join(safe), channel=self._log_channel, level="debug")
 
         return cmd, stdin_password, show_cert_warning, debug_enabled
 
@@ -609,10 +735,12 @@ class FreeRDP(QObject):
         Creates a progress dialog, spawns FreeRDPConnection, and handles
         success/failure/log windows with MsgBox + central Log.
         """
-        cmd, stdin_password, show_cert_warning, debug_enabled = self.build_command(overrides)
 
         # Reset channel for this new attempt
         self._logger.clear(self._log_channel)
+
+        # Build command
+        cmd, stdin_password, show_cert_warning, debug_enabled = self.build_command(overrides)
 
         # Progress dialog
         self._dialog = FreeRDPDialog(parent)
@@ -699,6 +827,7 @@ class FreeRDP(QObject):
                 self._logger.append(
                     f"[FreeRDP] Session disconnected, return code={rc}",
                     channel=self._log_channel,
+                    level="debug"
                 )
             except Exception:
                 pass
