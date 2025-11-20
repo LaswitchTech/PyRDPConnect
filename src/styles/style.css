@@ -176,7 +176,8 @@ QPushButton {
     background-color: #414344;
     color: #FFFFFF;
 
-    selection-background-color: transparent;
+    selection-border-color: #414344;
+    selection-background-color: #414344;
     selection-color: #FFFFFF;
 }
 QPushButton:focus {
