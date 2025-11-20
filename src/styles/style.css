@@ -178,12 +178,11 @@ QPushButton, QTabBar::tab {
 }
 QPushButton:focus, QTabBar::tab:focus {
     border-color: #0d6efd;
-    background-color: #414344;
 }
 QPushButton QLabel,
 QPushButton QLabel:focus,
 QPushButton:focus QLabel {
-    background-color: transparent;
+    background-color: #414344;
 }
 
 QTabWidget::tab-bar, QTabBar {
