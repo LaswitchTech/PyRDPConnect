@@ -86,6 +86,18 @@ class Client(QMainWindow):
         # OpenVPN
         self._openvpn = OpenVPN(parent=self)
 
+        # When RDP disconnects, stop VPN if it was auto-started
+        try:
+            self._freerdp.disconnected.connect(self._on_rdp_disconnected)
+        except AttributeError:
+            # If disconnected signal doesn't exist yet, you'll add it in FreeRDP
+            self._logger.append(
+                "[Client] FreeRDP.disconnected signal not available. "
+                "Add it to FreeRDP to auto-stop VPN on session end.",
+                channel="client",
+                level="warning",
+            )
+
     # ------------------------------------------------------------------
     # Callbacks / overrides
     # ------------------------------------------------------------------
@@ -112,7 +124,33 @@ class Client(QMainWindow):
         super().show()
 
     def exit(self):
-        exit(0)
+        self.close()
+
+    # ------------------------------------------------------------------
+    # Events
+    # ------------------------------------------------------------------
+
+    def closeEvent(self, event):
+        """
+        Ensure VPN is stopped when the window closes.
+        """
+        try:
+            if hasattr(self, "_openvpn") and self._openvpn is not None:
+                if self._openvpn.is_running():
+                    self._logger.append(
+                        "[Client] Window closing → stopping OpenVPN.",
+                        channel="client",
+                    )
+                    self._openvpn.stop()
+        except Exception as e:
+            if hasattr(self, "_logger") and self._logger is not None:
+                self._logger.append(
+                    f"[Client] Exception during closeEvent OpenVPN cleanup: {e}",
+                    channel="client",
+                    level="error",
+                )
+
+        super().closeEvent(event)
 
     # ------------------------------------------------------------------
     # UI helpers
@@ -302,6 +340,23 @@ class Client(QMainWindow):
         # Add the form layout to the grid layout
         form_widget.setLayout(form_layout)
         grid_layout.addWidget(form_widget, *login_grid_pos, 1, 1, Qt.AlignCenter)
+
+    # ------------------------------------------------------------------
+    # Callbacks
+    # ------------------------------------------------------------------
+
+    def _on_rdp_disconnected(self, rc: int):
+        self._logger.append(
+            f"[Client] FreeRDP session ended with code {rc}.",
+            channel="client",
+        )
+
+        if self._configuration.get("network.openvpn.auto"):
+            self._logger.append(
+                "[Client] Auto-VPN enabled → stopping OpenVPN.",
+                channel="client",
+            )
+            self._openvpn.stop()
 
     # ------------------------------------------------------------------
     # Actions

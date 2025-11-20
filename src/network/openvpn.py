@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import os
 import base64
+import time
+import shlex
 import signal
 import subprocess
 import threading
@@ -54,70 +56,282 @@ class OpenVPNConnection(QThread):
         self._stop_flag = False
         self._connected_emitted = False
 
+        # macOS elevated mode tracking
+        self._root_pid: Optional[int] = None
+        self._log_path: Optional[str] = None
+        self._pid_path: Optional[str] = None
+
     def run(self):
         collected: list[str] = []
         text = ""
 
         try:
             env = os.environ.copy()
+            osname = self._owner._helper.get_os()
+            is_macos = (osname == "macos")
 
-            self._logger.append(f"[OpenVPN] Starting OpenVPN with command: {' '.join(self.command)}", channel=self._log_channel, level="debug")
-            self._proc = subprocess.Popen(
-                self.command,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                stdin=subprocess.PIPE,
-                text=True,
-                env=env,
-                bufsize=1,
-                universal_newlines=True,
-                cwd=self._owner._runtime_dir(),
-            )
+            if is_macos:
+                # ----------------------------------------------------------
+                # macOS path: run OpenVPN via AppleScript with root
+                # ----------------------------------------------------------
+                run_dir = self._owner._runtime_dir()
+                self._log_path = os.path.join(run_dir, "openvpn.log")
+                self._pid_path = os.path.join(run_dir, "openvpn.pid")
 
-            # Expose process to owner for is_running()/stop()
-            self._owner._proc = self._proc
-            self._owner.stateChanged.emit("starting")
+                # Clean previous log/pid
+                for p in (self._log_path, self._pid_path):
+                    try:
+                        if p and os.path.exists(p):
+                            os.remove(p)
+                    except Exception:
+                        pass
 
-            def pump(stream):
-                for line in iter(stream.readline, ""):
+                # Build shell command:
+                #   cd runtime &&
+                #   <openvpn command> >> openvpn.log 2>&1 &
+                #   echo $! > openvpn.pid
+                shell_cmd = " ".join(shlex.quote(arg) for arg in self.command)
+                sh = (
+                    f"cd {shlex.quote(run_dir)}; "
+                    f"{shell_cmd} >> {shlex.quote(self._log_path)} 2>&1 & "
+                    f"echo $! > {shlex.quote(self._pid_path)}"
+                )
+
+                # Escape for AppleScript string literal
+                # (Escape backslashes and double quotes)
+                as_cmd = sh.replace("\\", "\\\\").replace('"', '\\"')
+                applescript = (
+                    f'do shell script "{as_cmd}" with administrator privileges'
+                )
+
+                self._logger.append(
+                    f"[OpenVPN] macOS elevated launch via AppleScript:\n{sh}",
+                    channel=self._log_channel,
+                    level="debug",
+                )
+
+                # This osascript call returns quickly after the background job is started.
+                self._proc = subprocess.Popen(
+                    ["osascript", "-e", applescript],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    env=env,
+                    bufsize=1,
+                    universal_newlines=True,
+                )
+
+                # Owner only really cares about the "real" OpenVPN, but we still expose _proc
+                self._owner._proc = self._proc
+                self._owner.stateChanged.emit("starting")
+
+                # Wait for osascript to finish starting the background process
+                osa_stdout, osa_stderr = self._proc.communicate()
+                self._logger.append(
+                    f"[OpenVPN] osascript exited, stdout={osa_stdout!r}, stderr={osa_stderr!r}",
+                    channel=self._log_channel,
+                    level="debug",
+                )
+
+                # Now we follow the log + pid to infer connection state
+                last_line_count = 0
+                start_time = time.time()
+
+                self._owner.stateChanged.emit("starting")
+
+                while True:
                     if self._stop_flag:
+                        self._logger.append(
+                            "[OpenVPN] Stop flag set while monitoring macOS OpenVPN log.",
+                            channel=self._log_channel,
+                            level="debug",
+                        )
                         break
-                    ln = line.rstrip()
-                    if ln:
-                        collected.append(ln)
 
-                        # Central logger
-                        if self._logger is not None:
-                            self._logger.append(ln, channel=self._log_channel)
+                    # Read PID if available
+                    if self._root_pid is None and self._pid_path and os.path.exists(self._pid_path):
+                        try:
+                            with open(self._pid_path, "r", encoding="utf-8") as f:
+                                pid_str = f.read().strip()
+                            if pid_str:
+                                self._root_pid = int(pid_str)
+                                self._logger.append(
+                                    f"[OpenVPN] macOS elevated OpenVPN PID={self._root_pid}",
+                                    channel=self._log_channel,
+                                    level="debug",
+                                )
+                        except Exception as e:
+                            self._logger.append(
+                                f"[OpenVPN] Failed to read OpenVPN PID file: {e}",
+                                channel=self._log_channel,
+                                level="warning",
+                            )
 
-                        # Emit live info if desired
-                        if self._debug_enabled:
-                            self.info.emit(ln)
+                    # Read any new log lines
+                    if self._log_path and os.path.exists(self._log_path):
+                        try:
+                            with open(self._log_path, "r", encoding="utf-8", errors="ignore") as f:
+                                lines = f.readlines()
+                            new_lines = lines[last_line_count:]
+                            last_line_count = len(lines)
 
-                        # Detect successful init
-                        if "Initialization Sequence Completed" in ln:
-                            if not self._connected_emitted:
-                                self._logger.append(f"[OpenVPN] Detected successful connection.", channel=self._log_channel, level="info")
-                                self._connected_emitted = True
-                                self._owner.stateChanged.emit("running")
-                                self.connected.emit()
-                try:
-                    stream.close()
-                except Exception:
-                    pass
+                            for raw in new_lines:
+                                ln = raw.rstrip()
+                                if not ln:
+                                    continue
+                                collected.append(ln)
 
-            t_out = threading.Thread(target=pump, args=(self._proc.stdout,))
-            t_err = threading.Thread(target=pump, args=(self._proc.stderr,))
-            t_out.start()
-            t_err.start()
+                                if self._logger is not None:
+                                    self._logger.append(ln, channel=self._log_channel)
 
-            rc = self._proc.wait()
-            self._logger.append(f"[OpenVPN] OpenVPN subprocess exited with return code: {rc}", channel=self._log_channel, level="debug")
-            t_out.join()
-            t_err.join()
+                                if self._debug_enabled:
+                                    self.info.emit(ln)
 
-            text = "\n".join(collected)
+                                if "Initialization Sequence Completed" in ln:
+                                    if not self._connected_emitted:
+                                        self._logger.append(
+                                            "[OpenVPN] Detected successful connection (macOS elevated).",
+                                            channel=self._log_channel,
+                                            level="info",
+                                        )
+                                        self._connected_emitted = True
+                                        self._owner.stateChanged.emit("running")
+                                        self.connected.emit()
+                        except Exception as e:
+                            self._logger.append(
+                                f"[OpenVPN] Error reading macOS OpenVPN log: {e}",
+                                channel=self._log_channel,
+                                level="warning",
+                            )
 
+                    # Check if the root OpenVPN process is still alive (if we know PID)
+                    alive = None
+                    if self._root_pid is not None:
+                        try:
+                            ps = subprocess.run(
+                                ["ps", "-p", str(self._root_pid), "-o", "pid="],
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.DEVNULL,
+                                text=True,
+                            )
+                            alive = bool(ps.stdout.strip())
+                        except Exception as e:
+                            self._logger.append(
+                                f"[OpenVPN] ps check failed for PID {self._root_pid}: {e}",
+                                channel=self._log_channel,
+                                level="warning",
+                            )
+
+                    now = time.time()
+                    elapsed = now - start_time
+
+                    # Decide if we should break out of monitoring loop
+                    if self._connected_emitted:
+                        # If connected and process is no longer alive, we're done
+                        if alive is False:
+                            self._logger.append(
+                                "[OpenVPN] macOS elevated OpenVPN process exited after successful connection.",
+                                channel=self._log_channel,
+                                level="info",
+                            )
+                            break
+                    else:
+                        # Not connected yet – see if process already exited or we timed out
+                        if alive is False and elapsed > 3:
+                            self._logger.append(
+                                "[OpenVPN] macOS elevated OpenVPN process exited before connection.",
+                                channel=self._log_channel,
+                                level="error",
+                            )
+                            break
+                        if elapsed > 30:
+                            self._logger.append(
+                                "[OpenVPN] macOS elevated OpenVPN connection timeout (no 'Initialization Sequence Completed').",
+                                channel=self._log_channel,
+                                level="error",
+                            )
+                            break
+
+                    time.sleep(0.3)
+
+                text = "\n".join(collected)
+
+            else:
+                # ----------------------------------------------------------
+                # Non-macOS path: original behavior with direct Popen
+                # ----------------------------------------------------------
+                self._logger.append(
+                    f"[OpenVPN] Starting OpenVPN with command: {' '.join(self.command)}",
+                    channel=self._log_channel,
+                    level="debug",
+                )
+                self._proc = subprocess.Popen(
+                    self.command,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    stdin=subprocess.PIPE,
+                    text=True,
+                    env=env,
+                    bufsize=1,
+                    universal_newlines=True,
+                    cwd=self._owner._runtime_dir(),
+                )
+
+                # Expose process to owner for is_running()/stop()
+                self._owner._proc = self._proc
+                self._owner.stateChanged.emit("starting")
+
+                def pump(stream):
+                    for line in iter(stream.readline, ""):
+                        if self._stop_flag:
+                            break
+                        ln = line.rstrip()
+                        if ln:
+                            collected.append(ln)
+
+                            # Central logger
+                            if self._logger is not None:
+                                self._logger.append(ln, channel=self._log_channel)
+
+                            # Emit live info if desired
+                            if self._debug_enabled:
+                                self.info.emit(ln)
+
+                            # Detect successful init
+                            if "Initialization Sequence Completed" in ln:
+                                if not self._connected_emitted:
+                                    self._logger.append(
+                                        "[OpenVPN] Detected successful connection.",
+                                        channel=self._log_channel,
+                                        level="info",
+                                    )
+                                    self._connected_emitted = True
+                                    self._owner.stateChanged.emit("running")
+                                    self.connected.emit()
+                    try:
+                        stream.close()
+                    except Exception:
+                        pass
+
+                t_out = threading.Thread(target=pump, args=(self._proc.stdout,))
+                t_err = threading.Thread(target=pump, args=(self._proc.stderr,))
+                t_out.start()
+                t_err.start()
+
+                rc = self._proc.wait()
+                self._logger.append(
+                    f"[OpenVPN] OpenVPN subprocess exited with return code: {rc}",
+                    channel=self._log_channel,
+                    level="debug",
+                )
+                t_out.join()
+                t_err.join()
+
+                text = "\n".join(collected)
+
+            # ------------------------------------------------------
+            # Common cleanup / result handling for both paths
+            # ------------------------------------------------------
             # Reset process handle on owner
             self._owner._proc = None
 
@@ -125,22 +339,38 @@ class OpenVPNConnection(QThread):
             try:
                 self._owner._cleanup_temp_files()
             except Exception as e:
-                self._logger.append(f"[OpenVPN] Failed to clean up temporary files: {e}", channel=self._log_channel, level="warning")
+                self._logger.append(
+                    f"[OpenVPN] Failed to clean up temporary files: {e}",
+                    channel=self._log_channel,
+                    level="warning",
+                )
 
             if self._stop_flag:
                 # User-cancelled; do not treat as error
-                self._logger.append(f"[OpenVPN] Connection cancelled by user.", channel=self._log_channel, level="info")
+                self._logger.append(
+                    "[OpenVPN] Connection cancelled by user.",
+                    channel=self._log_channel,
+                    level="info",
+                )
                 self._owner.stateChanged.emit("stopped")
                 return
 
             # If we already signaled connected, silently ignore later exit
             if self._connected_emitted:
-                self._logger.append(f"[OpenVPN] Process exited after successful connection.", channel=self._log_channel, level="info")
+                self._logger.append(
+                    "[OpenVPN] Process exited after successful connection.",
+                    channel=self._log_channel,
+                    level="info",
+                )
                 self._owner.stateChanged.emit("stopped")
                 return
 
             # Connection failed before init completed
-            self._logger.append(f"[OpenVPN] Connection failed before initialization completed.", channel=self._log_channel, level="error")
+            self._logger.append(
+                "[OpenVPN] Connection failed before initialization completed.",
+                channel=self._log_channel,
+                level="error",
+            )
             self._owner.stateChanged.emit("error")
 
             # Try to classify a couple of common cases
@@ -157,16 +387,19 @@ class OpenVPNConnection(QThread):
                     "OpenVPN could not create a VPN tunnel (TUN/TAP/utun interface).\n\n"
                     "On macOS this usually means the process does not have permission to "
                     "create network tunnel devices.\n\n"
-                    "You may need to:\n"
-                    "  • Run PyRDPConnect (or the OpenVPN binary) with elevated privileges, or\n"
-                    "  • Use your system VPN client (e.g. Tunnelblick) to establish the VPN\n"
-                    "    first, then use PyRDPConnect only for the RDP connection."
+                    "PyRDPConnect now attempts to launch OpenVPN with administrator privileges "
+                    "on macOS. If this error persists, please verify system security settings "
+                    "and that you allowed the helper when prompted."
                 )
 
             self.failed.emit(title, details, text)
 
         except Exception as e:
-            self._logger.append(f"[OpenVPN] Exception in OpenVPNConnection.run: {e}", channel=self._log_channel, level="error")
+            self._logger.append(
+                f"[OpenVPN] Exception in OpenVPNConnection.run: {e}",
+                channel=self._log_channel,
+                level="error",
+            )
             self._owner._proc = None
             self._owner.stateChanged.emit("error")
             if not text:
@@ -180,16 +413,96 @@ class OpenVPNConnection(QThread):
                 text,
             )
 
-    # ------------------------------------------------------------------
-
     def stop(self):
         self._stop_flag = True
+
+        osname = self._owner._helper.get_os()
+        is_macos = (osname == "macos")
+
+        if is_macos and self._root_pid is not None:
+            # Ask macOS to kill the root-owned OpenVPN process
+            try:
+                kill_cmd = f"kill {self._root_pid}"
+                as_cmd = kill_cmd.replace("\\", "\\\\").replace('"', '\\"')
+                applescript = f'do shell script "{as_cmd}" with administrator privileges'
+                self._logger.append(
+                    f"[OpenVPN] Requesting termination of elevated OpenVPN PID {self._root_pid} via AppleScript.",
+                    channel=self._log_channel,
+                    level="debug",
+                )
+                proc = subprocess.Popen(
+                    ["osascript", "-e", applescript],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                # Wait a bit for the kill to complete (or fail)
+                try:
+                    out, err = proc.communicate(timeout=10)
+                except Exception:
+                    out, err = "", ""
+                self._logger.append(
+                    f"[OpenVPN] AppleScript kill result: returncode={proc.returncode}, "
+                    f"stdout={out!r}, stderr={err!r}",
+                    channel=self._log_channel,
+                    level="debug",
+                )
+
+                # Double-check with ps if the process is still alive
+                try:
+                    ps = subprocess.run(
+                        ["ps", "-p", str(self._root_pid), "-o", "pid="],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.DEVNULL,
+                        text=True,
+                    )
+                    alive = bool(ps.stdout.strip())
+                except Exception as e:
+                    alive = None
+                    self._logger.append(
+                        f"[OpenVPN] ps check failed after kill attempt: {e}",
+                        channel=self._log_channel,
+                        level="warning",
+                    )
+
+                if alive:
+                    self._logger.append(
+                        f"[OpenVPN] WARNING: Elevated OpenVPN PID {self._root_pid} still appears alive after kill.",
+                        channel=self._log_channel,
+                        level="warning",
+                    )
+                else:
+                    self._logger.append(
+                        f"[OpenVPN] Elevated OpenVPN PID {self._root_pid} no longer appears in ps after kill.",
+                        channel=self._log_channel,
+                        level="info",
+                    )
+
+            except Exception as e:
+                self._logger.append(
+                    f"[OpenVPN] Failed to terminate elevated OpenVPN PID {self._root_pid}: {e}",
+                    channel=self._log_channel,
+                    level="error",
+                )
+
+            # We tried; avoid reusing a stale PID
+            self._root_pid = None
+
+        # Original behavior for directly-owned subprocess
         if self._proc:
             try:
-                self._logger.append(f"[OpenVPN] Terminating OpenVPN subprocess from stop().", channel=self._log_channel, level="debug")
+                self._logger.append(
+                    "[OpenVPN] Terminating OpenVPN subprocess from stop().",
+                    channel=self._log_channel,
+                    level="debug",
+                )
                 self._proc.terminate()
             except Exception as e:
-                self._logger.append(f"[OpenVPN] Exception terminating subprocess in stop(): {e}", channel=self._log_channel, level="error")
+                self._logger.append(
+                    f"[OpenVPN] Exception terminating subprocess in stop(): {e}",
+                    channel=self._log_channel,
+                    level="error",
+                )
 
 
 # ---------------------------------------------------------------------------
@@ -672,6 +985,79 @@ class OpenVPN(QObject):
         self._auth_file = None
         self._temp_files.clear()
 
+        # ------------------------------------------------------------------
+
+    # ------------------------------------------------------------------
+    # Process management
+    # ------------------------------------------------------------------
+
+    def is_running(self) -> bool:
+        running = False
+
+        # If worker thread is still alive, we consider VPN running
+        if self._thread and self._thread.isRunning():
+            running = True
+        elif self._proc is not None and self._proc.poll() is None:
+            running = True
+
+        self._logger.append(
+            f"[DEBUG OpenVPN] is_running(): {running}",
+            channel=self._log_channel,
+            level="debug",
+        )
+        return running
+
+    def stop(self) -> None:
+        self._logger.append(
+            "[DEBUG OpenVPN] stop() called.",
+            channel=self._log_channel,
+            level="debug",
+        )
+
+        # 1) Prefer to go through the worker thread so it can:
+        #    - set _stop_flag
+        #    - kill the elevated PID (macOS)
+        #    - cleanup temp files
+        if self._thread and self._thread.isRunning():
+            self._logger.append(
+                "[OpenVPN] Requesting worker thread to stop.",
+                channel=self._log_channel,
+            )
+            try:
+                self._thread.stop()
+                self._thread.wait()
+            except Exception as e:
+                self._logger.append(
+                    f"[OpenVPN] Exception stopping worker thread: {e}",
+                    channel=self._log_channel,
+                    level="error",
+                )
+            finally:
+                self._thread = None
+
+        # 2) Fallback: if we still have a process we own directly, terminate it
+        if self._proc and self._proc.poll() is None:
+            try:
+                self._logger.append(
+                    "[OpenVPN] Terminating OpenVPN subprocess from OpenVPN.stop().",
+                    channel=self._log_channel,
+                )
+                self._proc.terminate()
+            except Exception as e:
+                self._logger.append(
+                    f"[OpenVPN] Failed to terminate OpenVPN subprocess: {e}",
+                    channel=self._log_channel,
+                    level="error",
+                )
+        else:
+            self._logger.append(
+                "[DEBUG OpenVPN] stop(): no active subprocess to terminate.",
+                channel=self._log_channel,
+                level="debug",
+            )
+
+        # 3) Emit final state
+        self.stateChanged.emit("stopped")
     # ------------------------------------------------------------------
     # Command generation
     # ------------------------------------------------------------------
@@ -811,18 +1197,19 @@ class OpenVPN(QObject):
     def _on_success(self, parent, on_success: Optional[Callable[[], None]] = None):
         if self._dialog:
             self._dialog.hide()
-        MsgBox.show(
-            parent=parent,
-            title="VPN connected",
-            message="OpenVPN connection established successfully.",
-            icon="info",
-            buttons=("OK",),
-            default="OK",
-            icon_lookup_fn=self._helper.get_path,
-        )
 
         if callable(on_success):
             on_success()
+        else:
+            MsgBox.show(
+                parent=parent,
+                title="VPN connected",
+                message="OpenVPN connection established successfully.",
+                icon="info",
+                buttons=("OK",),
+                default="OK",
+                icon_lookup_fn=self._helper.get_path,
+            )
 
     def _on_failed(self, parent, title: str, details: str, raw_log: str):
         _ = raw_log  # canonical log is already in self._logger
@@ -850,16 +1237,12 @@ class OpenVPN(QObject):
             self._logger.show(parent=parent, channel=self._log_channel)
 
     def _on_user_cancel(self):
-        self._logger.append(f"[DEBUG OpenVPN] _on_user_cancel() called by user.", channel=self._log_channel, level="debug")
-        if self._thread and self._thread.isRunning():
-            self._thread.stop()
-            self._thread.wait()
+        self._logger.append(
+            "[DEBUG OpenVPN] _on_user_cancel() called by user.",
+            channel=self._log_channel,
+            level="debug",
+        )
+        # Just use the same logic as the public stop()
+        self.stop()
         if self._dialog:
             self._dialog.hide()
-        # We only stop process; temp files cleaned by worker on exit
-        if self._proc:
-            try:
-                self._logger.append(f"[DEBUG OpenVPN] Sending SIGTERM to OpenVPN process from _on_user_cancel.", channel=self._log_channel, level="debug")
-                self._proc.terminate()
-            except Exception as e:
-                self._logger.append(f"[DEBUG OpenVPN] Exception terminating process in _on_user_cancel: {e}", channel=self._log_channel, level="error")

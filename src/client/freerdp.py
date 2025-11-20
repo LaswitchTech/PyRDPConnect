@@ -11,7 +11,7 @@ import sys
 import threading
 from typing import Any, Dict, Optional, Iterable
 
-from PyQt5.QtCore import QThread, pyqtSignal, Qt
+from PyQt5.QtCore import QThread, pyqtSignal, Qt, QObject
 from PyQt5.QtWidgets import (
     QPushButton, QProgressDialog, QApplication
 )
@@ -134,6 +134,7 @@ class FreeRDPConnection(QThread):
     connection_success = pyqtSignal()
     connection_failed = pyqtSignal(str, str, str)  # title, details, raw_log
     connection_info = pyqtSignal(str)             # optional live status/lines
+    disconnected = pyqtSignal(int)                # return code
 
     def __init__(
         self,
@@ -234,6 +235,9 @@ class FreeRDPConnection(QThread):
 
             text = "\n".join(collected)
 
+            # always announce that the process ended
+            self.disconnected.emit(rc)
+
             if self._stop_flag:
                 # treat as user cancel
                 return
@@ -319,14 +323,19 @@ class FreeRDPDialog(QProgressDialog):
 # High-level FreeRDP façade
 # ---------------------------------------------------------------------------
 
-class FreeRDP:
+class FreeRDP(QObject):
+
+    disconnected = pyqtSignal(int)
 
     def __init__(
         self,
         helper: Optional[Helper] = None,
         configuration: Optional[Configuration] = None,
         logger: Optional[Log] = None,
+        parent: Optional[QObject] = None,
     ):
+
+        super().__init__(parent)
 
         # --- auto-wire from QApplication if not provided ---
         if helper is None or configuration is None or logger is None:
@@ -624,6 +633,7 @@ class FreeRDP:
             lambda title, details, raw: self._on_failed(parent, title, details, raw)
         )
         self._thread.connection_info.connect(self._on_info)
+        self._thread.disconnected.connect(self._on_disconnected)
 
         self._thread.start()
         self._dialog.show()
@@ -682,6 +692,19 @@ class FreeRDP:
             self._thread.wait()
         if self._dialog:
             self._dialog.hide()
+
+    def _on_disconnected(self, rc: int):
+        if self._logger is not None:
+            try:
+                self._logger.append(
+                    f"[FreeRDP] Session disconnected, return code={rc}",
+                    channel=self._log_channel,
+                )
+            except Exception:
+                pass
+
+        # Re-emit so Client (or others) can react, e.g. to stop OpenVPN
+        self.disconnected.emit(rc)
 
     # ------------------------------------------------------------------
     # Log helpers
