@@ -293,15 +293,6 @@ class Client(QMainWindow):
             tab_order_widgets.append(self.diagnostics_button)
             buttons_layout.addWidget(self.diagnostics_button)
 
-        if self._configuration.get("customize.controls.exit"):
-            self.exit_button = Form.button(
-                label="Exit",
-                icon="x-octagon",
-                action=self.exit
-            )
-            tab_order_widgets.append(self.exit_button)
-            buttons_layout.addWidget(self.exit_button)
-
         if self._configuration.get("customize.controls.restart"):
             self.restart_button = Form.button(
                 label="Restart",
@@ -320,22 +311,41 @@ class Client(QMainWindow):
             tab_order_widgets.append(self.shutdown_button)
             buttons_layout.addWidget(self.shutdown_button)
 
+        if self._configuration.get("customize.controls.exit"):
+            self.exit_button = Form.button(
+                label="Exit",
+                icon="x-octagon",
+                action=self.exit
+            )
+            tab_order_widgets.append(self.exit_button)
+            buttons_layout.addWidget(self.exit_button)
+
         # Add buttons to view
         form_layout.addRow(button_layout)
         form_layout.addRow(buttons_layout)
 
-        # After all widgets have been created, set the tab order based on the list
-        for i in range(len(tab_order_widgets) - 1):
-            self.setTabOrder(tab_order_widgets[i], tab_order_widgets[i + 1])
+        # Build explicit tab order chain: fields → connect → config → diagnostics → restart → shutdown → exit
+        tab_chain = []
 
-        # Set the tab order from the last form field to the first button
-        if tab_order_widgets:
-            self.setTabOrder(tab_order_widgets[-1], self.connect_button)
+        # First, all input widgets (username, password, etc.) in the order they were added
+        tab_chain.extend(tab_order_widgets)
 
-        # Set the tab order for the buttons
-        self.setTabOrder(self.connect_button, self.config_button)
-        if self._configuration.get("customize.controls.exit"):
-            self.setTabOrder(self.config_button, self.exit_button)
+        # Then the buttons, in the desired order
+        tab_chain.append(self.connect_button)
+        tab_chain.append(self.config_button)
+
+        if hasattr(self, "diagnostics_button"):
+            tab_chain.append(self.diagnostics_button)
+        if hasattr(self, "restart_button"):
+            tab_chain.append(self.restart_button)
+        if hasattr(self, "shutdown_button"):
+            tab_chain.append(self.shutdown_button)
+        if hasattr(self, "exit_button"):
+            tab_chain.append(self.exit_button)
+
+        # Apply the tab order sequence
+        for i in range(len(tab_chain) - 1):
+            self.setTabOrder(tab_chain[i], tab_chain[i + 1])
 
         # Add the form layout to the grid layout
         form_widget.setLayout(form_layout)
