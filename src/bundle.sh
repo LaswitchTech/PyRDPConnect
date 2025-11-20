@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ $# -ne 1 ]]; then
+    echo "Usage: $0 <binary-name>" >&2
+    exit 1
+fi
+
+TARGET_BIN="$1"
+
 # Root of your project (adjust if needed)
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
@@ -20,21 +27,20 @@ case "$ARCH" in
         ;;
 esac
 
-DEST_DIR="$PROJECT_ROOT/src/bin/openvpn/${OS}/${ARCH}"
+DEST_DIR="$PROJECT_ROOT/src/bin/${TARGET_BIN}/${OS}/${ARCH}"
 mkdir -p "$DEST_DIR"
 
-OPENVPN_BIN="$(command -v openvpn || true)"
+SOURCE_BIN="$(command -v "${TARGET_BIN}" || true)"
 
-if [[ -z "$OPENVPN_BIN" ]]; then
-    echo "openvpn not found in PATH. Install it first, e.g.:" >&2
-    echo "  sudo apt update && sudo apt install openvpn" >&2
+if [[ -z "$SOURCE_BIN" ]]; then
+    echo "${TARGET_BIN} not found in PATH. Install it first." >&2
     exit 1
 fi
 
-echo "Found openvpn at: $OPENVPN_BIN"
-echo "Copying to: $DEST_DIR/openvpn"
+echo "Found ${TARGET_BIN} at: $SOURCE_BIN"
+echo "Copying to: $DEST_DIR/${TARGET_BIN}"
 
-cp "$OPENVPN_BIN" "$DEST_DIR/openvpn"
-chmod 755 "$DEST_DIR/openvpn"
+cp "$SOURCE_BIN" "$DEST_DIR/${TARGET_BIN}"
+chmod 755 "$DEST_DIR/${TARGET_BIN}"
 
 echo "Done."
