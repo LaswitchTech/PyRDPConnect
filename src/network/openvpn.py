@@ -61,6 +61,7 @@ class OpenVPNConnection(QThread):
         try:
             env = os.environ.copy()
 
+            self._logger.append(f"[OpenVPN] Starting OpenVPN with command: {' '.join(self.command)}", channel=self._log_channel, level="debug")
             self._proc = subprocess.Popen(
                 self.command,
                 stdout=subprocess.PIPE,
@@ -96,6 +97,7 @@ class OpenVPNConnection(QThread):
                         # Detect successful init
                         if "Initialization Sequence Completed" in ln:
                             if not self._connected_emitted:
+                                self._logger.append(f"[OpenVPN] Detected successful connection.", channel=self._log_channel, level="info")
                                 self._connected_emitted = True
                                 self._owner.stateChanged.emit("running")
                                 self.connected.emit()
@@ -110,6 +112,7 @@ class OpenVPNConnection(QThread):
             t_err.start()
 
             rc = self._proc.wait()
+            self._logger.append(f"[OpenVPN] OpenVPN subprocess exited with return code: {rc}", channel=self._log_channel, level="debug")
             t_out.join()
             t_err.join()
 
@@ -121,21 +124,23 @@ class OpenVPNConnection(QThread):
             # Always clean up temporary files (auth file etc.)
             try:
                 self._owner._cleanup_temp_files()
-            except Exception:
-                pass
+            except Exception as e:
+                self._logger.append(f"[OpenVPN] Failed to clean up temporary files: {e}", channel=self._log_channel, level="warning")
 
             if self._stop_flag:
                 # User-cancelled; do not treat as error
+                self._logger.append(f"[OpenVPN] Connection cancelled by user.", channel=self._log_channel, level="info")
                 self._owner.stateChanged.emit("stopped")
                 return
 
             # If we already signaled connected, silently ignore later exit
-            # (the app will show state via Stop/Disconnect actions).
             if self._connected_emitted:
+                self._logger.append(f"[OpenVPN] Process exited after successful connection.", channel=self._log_channel, level="info")
                 self._owner.stateChanged.emit("stopped")
                 return
 
             # Connection failed before init completed
+            self._logger.append(f"[OpenVPN] Connection failed before initialization completed.", channel=self._log_channel, level="error")
             self._owner.stateChanged.emit("error")
 
             # Try to classify a couple of common cases
@@ -147,10 +152,21 @@ class OpenVPNConnection(QThread):
                 details = "Authentication failed.\n\nCheck your username and password."
             elif "cannot resolve host address" in lowered or "resolv" in lowered:
                 details = "Could not resolve the VPN host.\n\nVerify the configured hostname and DNS."
+            elif "cannot allocate tun/tap dev" in lowered or "opening utun" in lowered or "failed to open utun device" in lowered:
+                details = (
+                    "OpenVPN could not create a VPN tunnel (TUN/TAP/utun interface).\n\n"
+                    "On macOS this usually means the process does not have permission to "
+                    "create network tunnel devices.\n\n"
+                    "You may need to:\n"
+                    "  • Run PyRDPConnect (or the OpenVPN binary) with elevated privileges, or\n"
+                    "  • Use your system VPN client (e.g. Tunnelblick) to establish the VPN\n"
+                    "    first, then use PyRDPConnect only for the RDP connection."
+                )
 
             self.failed.emit(title, details, text)
 
         except Exception as e:
+            self._logger.append(f"[OpenVPN] Exception in OpenVPNConnection.run: {e}", channel=self._log_channel, level="error")
             self._owner._proc = None
             self._owner.stateChanged.emit("error")
             if not text:
@@ -170,9 +186,11 @@ class OpenVPNConnection(QThread):
         self._stop_flag = True
         if self._proc:
             try:
+                self._logger.append(f"[OpenVPN] Terminating OpenVPN subprocess from stop().", channel=self._log_channel, level="debug")
                 self._proc.terminate()
-            except Exception:
-                pass
+            except Exception as e:
+                self._logger.append(f"[OpenVPN] Exception terminating subprocess in stop(): {e}", channel=self._log_channel, level="error")
+
 
 # ---------------------------------------------------------------------------
 # Connection progress dialog
@@ -291,19 +309,28 @@ class OpenVPN(QObject):
 
         self.stateChanged.emit("stopped")
 
+        # --- DEBUG: initial config snapshot ---
+        cfg_val = self._configuration.get("network.openvpn.file")
+        self._logger.append(f"[OpenVPN] __init__: network.openvpn.file type={type(cfg_val)} value={repr(cfg_val)[:200]}", channel=self._log_channel, level="debug")
+
     # ------------------------------------------------------------------
     # Configuration helpers
     # ------------------------------------------------------------------
 
     def is_configured(self) -> bool:
         cfg = self._configuration.get("network.openvpn.file")
-        return bool(cfg)
+        configured = bool(cfg)
+        self._logger.append(f"[OpenVPN] is_configured(): configured={configured}, type={type(cfg)}, value={repr(cfg)[:200]}", channel=self._log_channel, level="debug")
+        return configured
 
     def auto_connect(self) -> bool:
-        return bool(self._configuration.get("network.openvpn.auto"))
+        val = bool(self._configuration.get("network.openvpn.auto"))
+        self._logger.append(f"[OpenVPN] auto_connect(): {val}", channel=self._log_channel, level="debug")
+        return val
 
     def config_file(self) -> Optional[str]:
         cfg = self._configuration.get("network.openvpn.file")
+        self._logger.append(f"[OpenVPN] config_file(): raw value={repr(cfg)[:200]}", channel=self._log_channel, level="debug")
         if not cfg:
             return None
         return str(cfg)
@@ -314,7 +341,13 @@ class OpenVPN(QObject):
         os.makedirs(run_dir, exist_ok=True)
         return run_dir
 
+    def _register_temp(self, path: str) -> None:
+        if path:
+            self._temp_files.add(path)
+            self._logger.append(f"[OpenVPN] Registered temp file: {path}", channel=self._log_channel, level="debug")
+
     def _on_config_file_changed(self, value: Any) -> None:
+        self._logger.append(f"[OpenVPN] _on_config_file_changed called with type={type(value)}, value={repr(value)[:200]}", channel=self._log_channel, level="debug")
         host: Optional[str] = None
         port: Optional[int] = None
         auth_user_pass = False
@@ -327,9 +360,11 @@ class OpenVPN(QObject):
         if isinstance(value, str) and "::" in value:
             try:
                 _, b64 = value.split("::", 1)
+                self._logger.append(f"[DEBUG OpenVPN] Decoding string-based config, b64 length={len(b64)}", channel=self._log_channel, level="debug")
                 data = base64.b64decode(b64)
                 text = data.decode("utf-8", errors="ignore")
             except Exception as e:
+                self._logger.append(f"[DEBUG OpenVPN] Exception decoding string value in _on_config_file_changed: {e}", channel=self._log_channel, level="error")
                 self._logger.append(
                     f"[OpenVPN] Failed to decode inline config (string) in _on_config_file_changed: {e}",
                     channel=self._log_channel,
@@ -337,18 +372,27 @@ class OpenVPN(QObject):
 
         elif isinstance(value, dict):
             try:
-                b64 = value.get("data") or value.get("base64") or value.get("b64") or ""
+                self._logger.append(f"[DEBUG OpenVPN] Decoding dict-based config in _on_config_file_changed", channel=self._log_channel, level="debug")
+                b64 = (
+                    value.get("data")
+                    or value.get("base64")
+                    or value.get("b64")
+                    or value.get("file")
+                    or value.get("value")
+                    or ""
+                )
                 if b64:
+                    self._logger.append(f"[DEBUG OpenVPN] Decoding dict-based config, b64 length={len(b64)}", channel=self._log_channel, level="debug")
                     data = base64.b64decode(b64)
                     text = data.decode("utf-8", errors="ignore")
             except Exception as e:
-                self._logger.append(
-                    f"[OpenVPN] Failed to decode inline config (dict) in _on_config_file_changed: {e}",
-                    channel=self._log_channel,
-                )
+                self._logger.append(f"[DEBUG OpenVPN] Exception decoding dict value in _on_config_file_changed: {e}", channel=self._log_channel, level="error")
 
         if not text:
+            self._logger.append(f"[DEBUG OpenVPN] No text decoded in _on_config_file_changed, returning early.", channel=self._log_channel, level="debug")
             return
+
+        self._logger.append(f"[DEBUG OpenVPN] _on_config_file_changed: first 200 chars of config:\n{text[:200]}", channel=self._log_channel, level="debug")
 
         try:
             for raw in text.splitlines():
@@ -375,11 +419,11 @@ class OpenVPN(QObject):
                 elif key in ("tls-auth", "tls-crypt") and len(parts) >= 2:
                     key_rel = parts[1]
         except Exception as e:
-            self._logger.append(
-                f"[OpenVPN] Failed to parse inline config in _on_config_file_changed: {e}",
-                channel=self._log_channel,
-            )
+            self._logger.append(f"[DEBUG OpenVPN] Exception parsing config text in _on_config_file_changed: {e}", channel=self._log_channel, level="error")
             return
+
+        self._logger.append(f"[DEBUG OpenVPN] _on_config_file_changed: Parsed values from config file.", channel=self._log_channel, level="debug")
+        self._logger.append(f"[DEBUG OpenVPN] host={host}, port={port}, auth_user_pass={auth_user_pass}, ca_rel={ca_rel}, key_rel={key_rel}", channel=self._log_channel, level="debug")
 
         # --- Apply values into configuration + visible widgets ---
 
@@ -391,50 +435,7 @@ class OpenVPN(QObject):
             self._configuration.reload("network.openvpn.global", True)
             self._on_global_changed(True)
 
-        # For CA/TLS files, we *only* auto-import them when we know the actual
-        # directory on disk (i.e., when cfg_path_for_rel is available).
-        if cfg_path_for_rel and (ca_rel or key_rel):
-            cfg_dir = os.path.dirname(cfg_path_for_rel)
-
-            if ca_rel:
-                ca_path = os.path.join(cfg_dir, ca_rel)
-                if os.path.isfile(ca_path):
-                    try:
-                        with open(ca_path, "rb") as f:
-                            data = f.read()
-                        b64 = base64.b64encode(data).decode("ascii")
-                        fname = os.path.basename(ca_path)
-                        stored = f"{fname}::{b64}"
-                        self._configuration.reload("network.openvpn.certificate", stored)
-                        self._logger.append(
-                            f"[OpenVPN] Loaded CA certificate from '{ca_path}' into configuration.",
-                            channel=self._log_channel,
-                        )
-                    except Exception as e:
-                        self._logger.append(
-                            f"[OpenVPN] Failed to load CA certificate '{ca_path}': {e}",
-                            channel=self._log_channel,
-                        )
-
-            if key_rel:
-                key_path = os.path.join(cfg_dir, key_rel)
-                if os.path.isfile(key_path):
-                    try:
-                        with open(key_path, "rb") as f:
-                            data = f.read()
-                        b64 = base64.b64encode(data).decode("ascii")
-                        fname = os.path.basename(key_path)
-                        stored = f"{fname}::{b64}"
-                        self._configuration.reload("network.openvpn.key", stored)
-                        self._logger.append(
-                            f"[OpenVPN] Loaded TLS key from '{key_path}' into configuration.",
-                            channel=self._log_channel,
-                        )
-                    except Exception as e:
-                        self._logger.append(
-                            f"[OpenVPN] Failed to load TLS key '{key_path}': {e}",
-                            channel=self._log_channel,
-                        )
+        # (CA/TLS auto-import only when we know cfg_path_for_rel; currently None)
 
         self._configuration.save()
 
@@ -447,6 +448,7 @@ class OpenVPN(QObject):
 
     def _on_global_changed(self, value: Any) -> None:
         use_global = bool(value)
+        self._logger.append(f"[DEBUG OpenVPN] _on_global_changed called with value={value} interpreted as use_global={use_global}", channel=self._log_channel, level="debug")
         try:
             self._configuration.visibility("network.openvpn.username", not use_global)
             self._configuration.visibility("network.openvpn.password", not use_global)
@@ -463,6 +465,7 @@ class OpenVPN(QObject):
     def _binary_path(self) -> str:
         osname = self._helper.get_os()
         arch = self._helper.get_arch()
+        self._logger.append(f"[DEBUG OpenVPN] _binary_path(): os={osname}, arch={arch}", channel=self._log_channel, level="debug")
 
         if osname in ("macos", "linux"):
             rel = f"bin/openvpn/{osname}/{arch}/openvpn"
@@ -474,13 +477,15 @@ class OpenVPN(QObject):
             if not os.access(cand, os.X_OK):
                 try:
                     os.chmod(cand, 0o755)
-                except Exception:
-                    pass
+                except Exception as e:
+                    self._logger.append(f"[DEBUG OpenVPN] chmod failed on {cand}: {e}", channel=self._log_channel, level="warning")
+            self._logger.append(f"[DEBUG OpenVPN] Using bundled openvpn binary at: {cand}", channel=self._log_channel, level="debug")
             return cand
 
-        # Fallback to PATH
         from shutil import which
-        return which("openvpn") or "openvpn"
+        resolved = which("openvpn") or "openvpn"
+        self._logger.append(f"[DEBUG OpenVPN] Using PATH openvpn binary: {resolved}", channel=self._log_channel, level="debug")
+        return resolved
 
     # ------------------------------------------------------------------
     # Credential helpers
@@ -495,6 +500,7 @@ class OpenVPN(QObject):
             return self._configuration.get(key, default)
 
         use_global = bool(val("network.openvpn.global", False))
+        self._logger.append(f"[DEBUG OpenVPN] _resolve_credentials: use_global={use_global}", channel=self._log_channel, level="debug")
 
         if use_global:
             username = val("general.username") or val("network.openvpn.username", "")
@@ -503,11 +509,13 @@ class OpenVPN(QObject):
             username = val("network.openvpn.username") or val("general.username", "")
             password = val("network.openvpn.password") or val("general.password", "")
 
+        self._logger.append(f"[DEBUG OpenVPN] _resolve_credentials: Retrieved username and password.", channel=self._log_channel, level="debug")
         return str(username or ""), str(password or "")
 
     def _write_auth_file(self, username: str, password: str) -> str:
         run_dir = self._runtime_dir()
         path = os.path.join(run_dir, "openvpn-auth.txt")
+        self._logger.append(f"[DEBUG OpenVPN] _write_auth_file: Writing auth file at {path}", channel=self._log_channel, level="debug")
         try:
             with open(path, "w", encoding="utf-8") as f:
                 f.write(username + "\n" + password + "\n")
@@ -516,23 +524,35 @@ class OpenVPN(QObject):
             self._register_temp(path)
             self._logger.append(f"[OpenVPN] Created auth file at {path}", channel=self._log_channel)
         except Exception as e:
+            self._logger.append(f"[DEBUG OpenVPN] Exception in _write_auth_file: {e}", channel=self._log_channel, level="error")
             self._logger.append(f"[OpenVPN] Failed to create auth file: {e}", channel=self._log_channel)
         return path
 
     def _materialize_config(self) -> Optional[str]:
         stored = self._configuration.get("network.openvpn.file")
+        self._logger.append(f"[DEBUG OpenVPN] _materialize_config: stored type={type(stored)}, value={repr(stored)[:200]}", channel=self._log_channel, level="debug")
         if not stored:
+            self._logger.append(f"[DEBUG OpenVPN] _materialize_config: no stored value.", channel=self._log_channel, level="debug")
             return None
 
         run_dir = self._runtime_dir()
 
         if isinstance(stored, dict):
             name = stored.get("name") or "openvpn.ovpn"
-            b64 = stored.get("data") or stored.get("base64") or stored.get("b64") or ""
+            b64 = (
+                stored.get("data")
+                or stored.get("base64")
+                or stored.get("b64")
+                or stored.get("file")
+                or stored.get("value")
+                or ""
+            )
+            self._logger.append(f"[DEBUG OpenVPN] _materialize_config(dict): name={name}, b64_len={len(b64)}", channel=self._log_channel, level="debug")
             if not b64:
                 self._logger.append(
                     "[OpenVPN] Config dict is missing base64 data.",
                     channel=self._log_channel,
+                    level="error",
                 )
                 return None
             try:
@@ -541,46 +561,61 @@ class OpenVPN(QObject):
                 with open(cfg_path, "wb") as f:
                     f.write(data)
                 self._register_temp(cfg_path)
+                self._logger.append(f"[DEBUG OpenVPN] _materialize_config(dict): wrote {cfg_path}, size={os.path.getsize(cfg_path)}", channel=self._log_channel, level="debug")
                 return cfg_path
             except Exception as e:
                 self._logger.append(
                     f"[OpenVPN] Failed to materialize inline config (dict): {e}",
                     channel=self._log_channel,
+                    level="error",
                 )
                 return None
 
         if isinstance(stored, str) and "::" in stored:
             name, b64 = stored.split("::", 1)
             name = name or "openvpn.ovpn"
+            self._logger.append(f"[DEBUG OpenVPN] _materialize_config(str):: name={name}, b64_len={len(b64)}", channel=self._log_channel, level="debug")
             try:
                 data = base64.b64decode(b64)
                 cfg_path = os.path.join(run_dir, name)
                 with open(cfg_path, "wb") as f:
                     f.write(data)
                 self._register_temp(cfg_path)
+                self._logger.append(f"[DEBUG OpenVPN] _materialize_config(str):: wrote {cfg_path}, size={os.path.getsize(cfg_path)}", channel=self._log_channel, level="debug")
                 return cfg_path
             except Exception as e:
                 self._logger.append(
                     f"[OpenVPN] Failed to materialize inline config from 'network.openvpn.file': {e}",
                     channel=self._log_channel,
+                    level="error",
                 )
                 return None
 
         self._logger.append(
             "[OpenVPN] Unknown format for 'network.openvpn.file' (no config materialized).",
             channel=self._log_channel,
+            level="error",
         )
         return None
 
     def _materialize_aux(self, cfg_key: str, default_name: str) -> Optional[str]:
         stored = self._configuration.get(cfg_key)
+        self._logger.append(f"[DEBUG OpenVPN] _materialize_aux({cfg_key}): stored type={type(stored)}, value={repr(stored)[:200]}", channel=self._log_channel, level="debug")
         if not stored:
             return None
 
         try:
             if isinstance(stored, dict):
                 name = stored.get("name") or default_name
-                b64 = stored.get("data") or stored.get("base64") or stored.get("b64") or ""
+                b64 = (
+                    stored.get("data")
+                    or stored.get("base64")
+                    or stored.get("b64")
+                    or stored.get("file")
+                    or stored.get("value")
+                    or ""
+                )
+                self._logger.append(f"[DEBUG OpenVPN] _materialize_aux(dict): name={name}, b64_len={len(b64)}", channel=self._log_channel, level="debug")
                 if not b64:
                     self._logger.append(
                         f"[OpenVPN] {cfg_key} dict missing base64 data.",
@@ -590,14 +625,17 @@ class OpenVPN(QObject):
 
             elif isinstance(stored, str) and "::" in stored:
                 name, b64 = stored.split("::", 1)
+                self._logger.append(f"[DEBUG OpenVPN] _materialize_aux(str):: name={name}, b64_len={len(b64)}", channel=self._log_channel, level="debug")
 
             elif isinstance(stored, str):
                 name, b64 = default_name, stored
+                self._logger.append(f"[DEBUG OpenVPN] _materialize_aux(str-simple): name={name}, b64_len={len(b64)}", channel=self._log_channel, level="debug")
 
             else:
                 self._logger.append(
                     f"[OpenVPN] Unsupported type for {cfg_key}: {type(stored).__name__}",
                     channel=self._log_channel,
+                    level="error",
                 )
                 return None
 
@@ -607,16 +645,18 @@ class OpenVPN(QObject):
             with open(path, "wb") as f:
                 f.write(data)
             self._register_temp(path)
+            self._logger.append(f"[DEBUG OpenVPN] _materialize_aux: wrote {path}, size={os.path.getsize(path)}", channel=self._log_channel, level="debug")
             return path
         except Exception as e:
             self._logger.append(
                 f"[OpenVPN] Failed to materialize {cfg_key}: {e}",
                 channel=self._log_channel,
+                level="error",
             )
             return None
 
     def _cleanup_temp_files(self) -> None:
-        # Include auth file in the temp set for safety
+        self._logger.append(f"[DEBUG OpenVPN] _cleanup_temp_files called.", channel=self._log_channel, level="debug")
         paths = set(self._temp_files)
         if self._auth_file:
             paths.add(self._auth_file)
@@ -625,8 +665,9 @@ class OpenVPN(QObject):
             if p and os.path.exists(p):
                 try:
                     os.remove(p)
-                except Exception:
-                    pass
+                    self._logger.append(f"[OpenVPN] Deleted temp file: {p}", channel=self._log_channel, level="debug")
+                except Exception as e:
+                    self._logger.append(f"[OpenVPN] Failed to delete temp file {p}: {e}", channel=self._log_channel, level="warning")
 
         self._auth_file = None
         self._temp_files.clear()
@@ -639,11 +680,13 @@ class OpenVPN(QObject):
         self,
         overrides: Optional[Dict[str, Any]] = None
     ) -> list[str]:
+        self._logger.append(f"[DEBUG OpenVPN] build_command() called with overrides={overrides}", channel=self._log_channel, level="debug")
         overrides = overrides or {}
 
         def val(key: str, default: Any = None) -> Any:
-            if key in overrides and overrides[key] not in ("", None):
-                return overrides[key]
+            v = overrides.get(key)
+            if v not in ("", None):
+                return v
             return self._configuration.get(key, default)
 
         bin_path = self._binary_path()
@@ -655,9 +698,9 @@ class OpenVPN(QObject):
                 "[OpenVPN] No config file materialized; aborting command.",
                 channel=self._log_channel,
             )
+            self._logger.append(f"[DEBUG OpenVPN] build_command(): cfg_path is None → returning [].", channel=self._log_channel, level="debug")
             return []
 
-        # Even if we don't pass these on CLI, ensure the files exist
         self._materialize_aux("network.openvpn.certificate", "ca.crt")
         self._materialize_aux("network.openvpn.key", "ta.key")
 
@@ -666,6 +709,8 @@ class OpenVPN(QObject):
         # Optional host/port override
         host = val("network.openvpn.host", "")
         port = val("network.openvpn.port", 1194)
+        self._logger.append(f"[DEBUG OpenVPN] build_command(): resolved host={host}, port={port}", channel=self._log_channel, level="debug")
+
         if host:
             try:
                 port_int = int(port) if port is not None else 1194
@@ -678,7 +723,10 @@ class OpenVPN(QObject):
         if username and password:
             auth_file = self._write_auth_file(username, password)
             cmd += ["--auth-user-pass", auth_file]
+        else:
+            self._logger.append(f"[DEBUG OpenVPN] build_command(): no username/password supplied.", channel=self._log_channel, level="debug")
 
+        self._logger.append(f"[DEBUG OpenVPN] build_command(): constructed command: {' '.join(cmd)}", channel=self._log_channel, level="debug")
         return cmd
 
     # ------------------------------------------------------------------
@@ -691,8 +739,8 @@ class OpenVPN(QObject):
         overrides: Optional[Dict[str, Any]] = None,
         on_success: Optional[Callable[[], None]] = None,
     ) -> None:
+        self._logger.append(f"[DEBUG OpenVPN] connect() called.", channel=self._log_channel, level="debug")
 
-        # If not configured, show error dialog
         if not self.is_configured():
             MsgBox.show(
                 parent=parent,
@@ -757,7 +805,6 @@ class OpenVPN(QObject):
     # ------------------------------------------------------------------
 
     def _on_info(self, line: str):
-        # Hook if you ever want to update the dialog with live status
         _ = line
         return
 
@@ -803,9 +850,16 @@ class OpenVPN(QObject):
             self._logger.show(parent=parent, channel=self._log_channel)
 
     def _on_user_cancel(self):
+        self._logger.append(f"[DEBUG OpenVPN] _on_user_cancel() called by user.", channel=self._log_channel, level="debug")
         if self._thread and self._thread.isRunning():
             self._thread.stop()
             self._thread.wait()
         if self._dialog:
             self._dialog.hide()
-        self.stop()
+        # We only stop process; temp files cleaned by worker on exit
+        if self._proc:
+            try:
+                self._logger.append(f"[DEBUG OpenVPN] Sending SIGTERM to OpenVPN process from _on_user_cancel.", channel=self._log_channel, level="debug")
+                self._proc.terminate()
+            except Exception as e:
+                self._logger.append(f"[DEBUG OpenVPN] Exception terminating process in _on_user_cancel: {e}", channel=self._log_channel, level="error")

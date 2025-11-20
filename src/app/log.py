@@ -38,7 +38,7 @@ class Log:
 
         # Configuration
         self._configuration: Configuration = configuration
-        self._configuration.add("log.level", "info", "select", choices=["debug", "info", "warning", "error"])
+        self._configuration.add("log.level", "info", "select", choices=["debug", "info", "warning", "error", "none"])
         self._configuration.add("log.enabled", True, "checkbox")
         self._configuration.add("log.open", None, "button", label="Open Log", action=self.show)
 
@@ -57,8 +57,18 @@ class Log:
 
     # ---------- core storage ----------
 
-    def append(self, message: str, channel: str = "default") -> None:
+    def append(self, message: str, channel: str = "default", level: str = "info") -> None:
         if not self._configuration.get("log.enabled"):
+            return
+        if self._configuration.get("log.level") == "none":
+            return
+        if self._configuration.get("log.level") == "error" and level != "error":
+            return
+        if self._configuration.get("log.level") == "warning" and level not in ("warning", "error"):
+            return
+        if self._configuration.get("log.level") == "info" and level not in ("info", "warning", "error"):
+            return
+        if self._configuration.get("log.level") == "debug" and level not in ("debug", "info", "warning", "error"):
             return
         if not message:
             return
