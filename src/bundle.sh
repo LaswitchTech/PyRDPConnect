@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 1 ]]; then
-    echo "Usage: $0 <binary-name>" >&2
+if [[ $# -lt 1 || $# -gt 2 ]]; then
+    echo "Usage: $0 <binary-name> [folder-name]" >&2
     exit 1
 fi
 
 TARGET_BIN="$1"
+TARGET_DIR="${2:-$TARGET_BIN}"
 
 # Root of your project (adjust if needed)
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -28,10 +29,10 @@ esac
 ARCH="$(uname -m)"
 
 case "$ARCH" in
-    armv6l|armv7l)
+    armv6l|armv7l|armhf)
         ARCH="armhf"
         ;;
-    aarch64)
+    aarch64|arm64)
         ARCH="arm64"
         ;;
     *)
@@ -40,7 +41,7 @@ case "$ARCH" in
         ;;
 esac
 
-DEST_DIR="$PROJECT_ROOT/src/bin/${TARGET_BIN}/${OS}/${ARCH}"
+DEST_DIR="$PROJECT_ROOT/src/bin/${TARGET_DIR}/${OS}/${ARCH}"
 mkdir -p "$DEST_DIR"
 
 SOURCE_BIN="$(command -v "${TARGET_BIN}" || true)"
