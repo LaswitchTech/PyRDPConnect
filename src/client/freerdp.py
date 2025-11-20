@@ -366,7 +366,28 @@ class FreeRDP(QObject):
         self._configuration.add("general.password", None, "password", placeholder="Password")
         self._configuration.add("general.domain", None, "text", placeholder="Domain")
         self._configuration.label("freerdp", "FreeRDP")
-        self._configuration.add("freerdp.display.resolution", None, "select", choices=["800x600", "1024x768", "1280x720", "1366x768", "1920x1080", "3840x2160"])
+        self._configuration.add(
+            "freerdp.display.resolution",
+            None,
+            "select",
+            choices=[
+                # 4:3 / 5:4 / existing
+                "800x600",
+                "1024x768",
+                # 16:9
+                "1280x720",
+                "1366x768",
+                "1920x1080",
+                "3840x2160",
+                # 16:10
+                "1280x800",
+                "1440x900",
+                "1680x1050",
+                "1920x1200",
+                "2560x1600",
+                "3840x2400",
+            ]
+        )
         self._configuration.add("freerdp.display.fit", False, "checkbox", label="Fit to window")
         self._configuration.add("freerdp.display.fullscreen", False, "checkbox", label="Fullscreen")
         self._configuration.add("freerdp.display.all", False, "checkbox", label="All monitors")
@@ -611,7 +632,7 @@ class FreeRDP(QObject):
         if not use_decorations:
             cmd.append("-decorations")
 
-        if show_cert_warning:
+        if not show_cert_warning:
             cmd.append("/cert:ignore")
 
         # ---- Server / user ----
