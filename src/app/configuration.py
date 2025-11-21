@@ -6,7 +6,7 @@ import os
 import json
 import shutil
 from collections import defaultdict
-from typing import Any, Tuple, Optional
+from typing import Any, Tuple, Optional, TYPE_CHECKING
 
 from PyQt5.QtCore import pyqtSignal, QObject
 from PyQt5.QtWidgets import (
@@ -16,6 +16,10 @@ from PyQt5.QtWidgets import (
 
 from .helper import Helper
 from .ui import Form
+
+if TYPE_CHECKING:
+    # For type hints only, avoids circular import at runtime
+    from app.application import Application
 
 class Configuration(QObject):
 
@@ -31,14 +35,18 @@ class Configuration(QObject):
         # Initialize QObject
         super().__init__()
 
+        # Retrieve the application instance
+        self._app: Application = QApplication.instance()
+
+        # Ensure Configuration is created after Application
+        if self._app is None:
+            raise RuntimeError("Configuration must be created after QApplication/Application.")
+
         # --- auto-wire from QApplication if not provided ---
         if helper is None:
-            app = QApplication.instance()
-            if app is None:
-                raise RuntimeError("Client must be created after QApplication/Application.")
             # narrow the type for linters / IDEs
             # no runtime import to avoid circular imports
-            helper = helper or app.helper          # type: ignore[attr-defined]
+            helper = helper or self._app.helper          # type: ignore[attr-defined]
 
         # Helper
         self._helper: Helper = helper
@@ -77,7 +85,7 @@ class Configuration(QObject):
         if file is not None:
             self._filename = file
 
-        config_dir = os.path.join(self.root_dir, "config")
+        config_dir = self._get_config_dir()
         os.makedirs(config_dir, exist_ok=True)
 
         path = os.path.join(config_dir, self._filename)
@@ -98,7 +106,7 @@ class Configuration(QObject):
             self._data = {}
 
     def save(self) -> None:
-        config_dir = os.path.join(self.root_dir, "config")
+        config_dir = self._get_config_dir()
         os.makedirs(config_dir, exist_ok=True)
 
         path = os.path.join(config_dir, self._filename)
@@ -409,7 +417,7 @@ class Configuration(QObject):
         # Ensure latest config is written to disk
         self.save()
 
-        config_dir = os.path.join(self.root_dir, "config")
+        config_dir = self._get_config_dir()
         src = os.path.join(config_dir, self._filename)
 
         try:
@@ -420,7 +428,7 @@ class Configuration(QObject):
             return False
 
     # ------------------------------------------------------------------
-    # Internal helpers for dialog
+    # Internal helpers
     # ------------------------------------------------------------------
 
     def _build_widget_for_key(self, full_key: str) -> Tuple[QWidget, str]:
@@ -557,3 +565,40 @@ class Configuration(QObject):
                     continue
 
             self.set(key, value)
+
+    def _get_config_dir(self) -> str:
+        """
+        Determine the directory where configuration files should be stored.
+
+        On Linux, we follow an XDG-style convention and store configurations
+        under `~/.config/{APP_NAME}` (where APP_NAME is the QApplication name).
+        On other OSes we keep the legacy behavior and use
+        `{self.root_dir}/config`.
+        """
+        # Legacy default (macOS, Windows, etc.)
+        default_dir = os.path.join(self.root_dir, "config")
+
+        # Try to get OS name from helper to stay consistent with Application
+        try:
+            os_name = self._helper.get_os()
+        except Exception:
+            os_name = None
+
+        # Only change behavior on Linux and when we have an application name
+        if os_name == "linux":
+            app_name = ""
+            try:
+                # Prefer the Application.name property if available
+                if hasattr(self._app, "name"):
+                    app_name = self._app.name  # type: ignore[attr-defined]
+                else:
+                    app_name = self._app.applicationName()
+            except Exception:
+                app_name = ""
+
+            if app_name:
+                home = os.path.expanduser("~")
+                if home:
+                    return os.path.join(home, ".config", app_name)
+
+        return default_dir

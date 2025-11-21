@@ -2,6 +2,7 @@
 # src/app/application.py
 from __future__ import annotations
 
+from typing import Optional
 from PyQt5.QtWidgets import QProxyStyle, QStyle, QApplication
 
 from .helper import Helper
@@ -17,10 +18,14 @@ class NoFocusRectStyle(QProxyStyle):
 
 class Application(QApplication):
 
-    def __init__(self, argv=None):
+    def __init__(self, name: Optional[str] = None, argv=None):
 
         # Initialize QApplication
         super().__init__(argv or [])
+
+        # Application name
+        if name:
+            self.setApplicationName(name)
 
         # Set application style
         self.setStyle('Fusion')
@@ -63,6 +68,10 @@ class Application(QApplication):
     @property
     def mainWindow(self):
         return self._mainWindow
+
+    @property
+    def name(self) -> str:
+        return self.applicationName()
 
     # ------------------------------------------------------------------
     # Main window management
