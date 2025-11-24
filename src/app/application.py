@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import QProxyStyle, QStyle, QApplication
 from .helper import Helper
 from .configuration import Configuration
 from .log import Log
+import os
 import subprocess
 
 class NoFocusRectStyle(QProxyStyle):
@@ -42,6 +43,14 @@ class Application(QApplication):
         # Configuration manager
         self._configuration = Configuration()
         self._configuration.configChanged.connect(self.reset)
+
+        # Default configuration entries
+        self._configuration.add("administration.update", None, "button", label="Check for Updates", action=self.update)
+        self._configuration.add("administration.import", None, "button", label="Import Configuration", action=self._configuration.import_cfg)
+        self._configuration.add("administration.export", None, "button", label="Export Configuration", action=self._configuration.export_cfg)
+
+        # Save any new defaults
+        self._configuration.save()
 
         # Logger
         self._logger = Log()
@@ -187,4 +196,18 @@ class Application(QApplication):
     # ------------------------------------------------------------------
 
     def update(self):
-        pass
+        # Determine repo root based on this file location
+        try:
+            here = os.path.abspath(os.path.dirname(__file__))
+            repo_root = os.path.abspath(os.path.join(here, "..", ".."))
+        except Exception as e:
+            if self._logger:
+                self._logger.append(
+                    f"[Application] Failed to determine repository root for update: {e}",
+                    channel="system",
+                    level="error",
+                )
+            return
+
+        # Delegate to the generic system command runner so we inherit logging and OS checks
+        self._run_system_command(["sudo", "git", "-C", repo_root, "pull"])
