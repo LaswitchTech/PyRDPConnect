@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import QProxyStyle, QStyle, QApplication
 from .helper import Helper
 from .configuration import Configuration
 from .log import Log
+from .ui import MsgBox
 import os
 import subprocess
 
@@ -211,3 +212,14 @@ class Application(QApplication):
 
         # Delegate to the generic system command runner so we inherit logging and OS checks
         self._run_system_command(["sudo", "git", "-C", repo_root, "pull"])
+
+        # Notify user to restart application
+        MsgBox.show(
+            parent=self,
+            title="Update Successful",
+            message="The application has been updated. Please restart the application to apply the latest changes.",
+            icon="info",
+            buttons=("OK"),
+            default="OK",
+            icon_lookup_fn=self._helper.get_path,
+        )
