@@ -121,7 +121,6 @@ class Client(QMainWindow):
 
     def show(self):
         self.init()
-        # self.playground()
         super().show()
 
     def exit(self):
