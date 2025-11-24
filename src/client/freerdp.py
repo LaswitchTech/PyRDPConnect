@@ -145,6 +145,7 @@ class FreeRDPConnection(QThread):
         debug_enabled: bool = False,
         logger: Optional[Log] = None,
         log_channel: str = "freerdp",
+        env: Optional[Dict[str, str]] = None,
     ):
         super().__init__(parent)
         self.command = command
@@ -156,36 +157,14 @@ class FreeRDPConnection(QThread):
 
         self._logger = logger
         self._log_channel = log_channel
+        self._env = env
 
     def run(self):
         collected: list[str] = []
         text = ""
 
         try:
-            env = os.environ.copy()
-            freerdp_bin = self.command[0]
-            base_dir = os.path.dirname(freerdp_bin)
-
-            # Bundled runtime dirs
-            lib_dir = os.path.join(base_dir, "lib")
-            plugins_dir = os.path.join(base_dir, "plugins")
-
-            # Library search paths
-            if sys.platform == "darwin":
-                if os.path.isdir(lib_dir):
-                    env["DYLD_LIBRARY_PATH"] = lib_dir + (
-                        ":" + env.get("DYLD_LIBRARY_PATH", "")
-                        if env.get("DYLD_LIBRARY_PATH") else ""
-                    )
-            elif sys.platform.startswith("linux"):
-                if os.path.isdir(lib_dir):
-                    env["LD_LIBRARY_PATH"] = lib_dir + (
-                        ":" + env.get("LD_LIBRARY_PATH", "")
-                        if env.get("LD_LIBRARY_PATH") else ""
-                    )
-
-            if os.path.isdir(plugins_dir):
-                env["FREERDP_PLUGIN_PATH"] = plugins_dir
+            env = self._env or os.environ.copy()
 
             self.freerdp_process = subprocess.Popen(
                 self.command,
@@ -447,12 +426,44 @@ class FreeRDP(QObject):
         from shutil import which
         return which("xfreerdp") or "xfreerdp"
 
+    def _get_env(self, freerdp_path: str) -> Dict[str, str]:
+        """
+        Build the environment for FreeRDP, wiring bundled lib/ and plugins/ if present.
+        """
+        env = os.environ.copy()
+        base_dir = os.path.dirname(freerdp_path)
+
+        lib_dir = os.path.join(base_dir, "lib")
+        plugins_dir = os.path.join(base_dir, "plugins")
+
+        # Library search paths
+        if sys.platform == "darwin":
+            if os.path.isdir(lib_dir):
+                env["DYLD_LIBRARY_PATH"] = lib_dir + (
+                    ":" + env.get("DYLD_LIBRARY_PATH", "")
+                    if env.get("DYLD_LIBRARY_PATH") else ""
+                )
+        elif sys.platform.startswith("linux"):
+            if os.path.isdir(lib_dir):
+                env["LD_LIBRARY_PATH"] = lib_dir + (
+                    ":" + env.get("LD_LIBRARY_PATH", "")
+                    if env.get("LD_LIBRARY_PATH") else ""
+                )
+
+        # Plugin path
+        if os.path.isdir(plugins_dir):
+            env["FREERDP_PLUGIN_PATH"] = plugins_dir
+
+        return env
+
     def _get_freerdp_version(self, freerdp_path: str) -> Optional[str]:
         try:
+            env = self._get_env(freerdp_path)
             res = subprocess.run(
                 [freerdp_path, "+version"],
                 capture_output=True,
                 text=True,
+                env=env,
             )
             if res.returncode != 0:
                 self._logger.append(
@@ -501,6 +512,7 @@ class FreeRDP(QObject):
     def _get_num_monitors(self) -> int:
         # Use FreeRDP’s own monitor detection via CLI
         freerdp_path = self._binary_path()
+        env = self._get_env(freerdp_path)
 
         try:
             # Query monitor list from FreeRDP
@@ -509,6 +521,7 @@ class FreeRDP(QObject):
                 capture_output=True,
                 text=True,
                 timeout=5,
+                env=env,
             )
 
             if result.returncode != 0:
@@ -792,6 +805,7 @@ class FreeRDP(QObject):
 
         # Build command
         cmd, stdin_password, show_cert_warning, debug_enabled = self.build_command(overrides)
+        env = self._get_env(cmd[0])
 
         # Progress dialog
         self._dialog = FreeRDPDialog(parent)
@@ -806,6 +820,7 @@ class FreeRDP(QObject):
             debug_enabled=debug_enabled,
             logger=self._logger,
             log_channel=self._log_channel,
+            env=env,
         )
         self._thread.connection_success.connect(lambda: self._on_success(parent))
         self._thread.connection_failed.connect(
