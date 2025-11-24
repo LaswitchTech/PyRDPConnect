@@ -2,7 +2,7 @@
 # src/app/application.py
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, Iterable
 from PyQt5.QtWidgets import QProxyStyle, QStyle, QApplication
 
 from .helper import Helper
@@ -214,12 +214,16 @@ class Application(QApplication):
         self._run_system_command(["sudo", "git", "-C", repo_root, "pull"])
 
         # Notify user to restart application
-        MsgBox.show(
+        buttons = Iterable[str] = ("Exit", "OK")
+        choice = MsgBox.show(
             parent=self,
             title="Update Successful",
             message="The application has been updated. Please restart the application to apply the latest changes.",
             icon="info",
-            buttons=("OK"),
+            buttons=buttons,
             default="OK",
             icon_lookup_fn=self._helper.get_path,
         )
+
+        if choice == "Exit":
+            self.quit()
