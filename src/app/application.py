@@ -47,8 +47,6 @@ class Application(QApplication):
 
         # Default configuration entries
         self._configuration.add("administration.update", None, "button", label="Check for Updates", action=self.update)
-        self._configuration.add("administration.import", None, "button", label="Import Configuration", action=self._configuration.import_cfg)
-        self._configuration.add("administration.export", None, "button", label="Export Configuration", action=self._configuration.export_cfg)
 
         # Save any new defaults
         self._configuration.save()
