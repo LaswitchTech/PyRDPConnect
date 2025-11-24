@@ -78,8 +78,8 @@ class Configuration(QObject):
         self.load()
 
         # Add built-in administration actions
-        self._configuration.add("administration.import", None, "button", label="Import Configuration", action=self._configuration.import_cfg)
-        self._configuration.add("administration.export", None, "button", label="Export Configuration", action=self._configuration.export_cfg)
+        self.add("administration.import", None, "button", label="Import Configuration", action=self.import_cfg)
+        self.add("administration.export", None, "button", label="Export Configuration", action=self.export_cfg)
 
     # ------------------------------------------------------------------
     # Core API
