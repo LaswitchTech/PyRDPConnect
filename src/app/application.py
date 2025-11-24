@@ -214,9 +214,9 @@ class Application(QApplication):
         self._run_system_command(["sudo", "git", "-C", repo_root, "pull"])
 
         # Notify user to restart application
-        buttons = Iterable[str] = ("Exit", "OK")
+        buttons: Iterable[str] = ("Exit", "OK")
         choice = MsgBox.show(
-            parent=self,
+            parent=self._mainWindow,
             title="Update Successful",
             message="The application has been updated. Please restart the application to apply the latest changes.",
             icon="info",
