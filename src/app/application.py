@@ -154,7 +154,8 @@ class Application(QApplication):
     # System Helpers
     # ------------------------------------------------------------------
 
-    def _run_system_command(self, args: list[str]) -> None:
+    def _run_system_command(self, args: list[str], wait: bool = False) -> int | None:
+
         # Only attempt on Linux; ignore silently on other platforms
         try:
             os_name = self._helper.get_os()
@@ -168,17 +169,28 @@ class Application(QApplication):
                     channel="system",
                     level="warning",
                 )
-            return
+            return None
 
         try:
-            # Use Popen so we don't block the UI; systemd will take over.
-            subprocess.Popen(args)
-            if self._logger:
-                self._logger.append(
-                    f"[Application] Executed system command: {' '.join(args)}",
-                    channel="system",
-                    level="info",
-                )
+            if wait:
+                proc = subprocess.Popen(args)
+                rc = proc.wait()
+                if self._logger:
+                    self._logger.append(
+                        f"[Application] (wait) Command finished ({rc}): {' '.join(args)}",
+                        channel="system",
+                        level="info",
+                    )
+                return rc
+            else:
+                subprocess.Popen(args)
+                if self._logger:
+                    self._logger.append(
+                        f"[Application] Executed system command: {' '.join(args)}",
+                        channel="system",
+                        level="info",
+                    )
+                return None
         except Exception as e:
             if self._logger:
                 self._logger.append(
@@ -186,6 +198,7 @@ class Application(QApplication):
                     channel="system",
                     level="error",
                 )
+            return None
 
     def shutdown(self) -> None:
         self._run_system_command(["systemctl", "poweroff"])
@@ -211,10 +224,26 @@ class Application(QApplication):
                 )
             return
 
-        # Delegate to the generic system command runner so we inherit logging and OS checks
-        self._run_system_command(["sudo", "git", "-C", repo_root, "pull"])
+        # Run git pull synchronously
+        rc = self._run_system_command(
+            ["sudo", "git", "-C", repo_root, "pull"],
+            wait=True,
+        )
 
-        # Emit signal that update has occurred
+        if rc not in (0, None):
+            # Non-zero exit → error
+            MsgBox.show(
+                parent=self._mainWindow,
+                title="Update Failed",
+                message=f"Update failed with exit code {rc}. Check the logs for details.",
+                icon="error",
+                buttons=("OK",),
+                default="OK",
+                icon_lookup_fn=self._helper.get_path,
+            )
+            return
+
+        # Emit signal that update has occurred, so external code can do extra tasks
         self.updating.emit()
 
         # Notify user to restart application

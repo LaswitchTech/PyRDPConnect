@@ -255,7 +255,7 @@ class Configuration(QObject):
         if parent is not None and isinstance(parent, QWidget):
             self._parent = parent
 
-        dlg = QDialog(self._parent)
+        dlg = QDialog(parent)
         dlg.setWindowTitle("Configuration")
         dlg.setObjectName("configurationWindow")
 
