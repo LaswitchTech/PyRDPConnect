@@ -140,8 +140,17 @@ class Log:
     # ---------- UI helper ----------
 
     def show(self, parent=None, channel: Optional[str] = None, filter_text: str | None = None):
+        # If called from a clicked(bool) signal, parent may be a bool; ignore non-widget parents
+        if not isinstance(parent, QWidget):
+            parent = None
+
         if parent is not None and isinstance(parent, QWidget):
             self._parent = parent
+        elif self._parent is None:
+            # Try to parent to the currently active window (e.g. the configuration dialog)
+            aw = QApplication.activeWindow()
+            if isinstance(aw, QWidget):
+                self._parent = aw
 
         # Remember last requested channel (can be None = all)
         self._channel = channel
@@ -191,9 +200,8 @@ class Log:
             channels_text=channels_text,
             initial_channel=channel,
         )
-        dlg.show()
-        dlg.raise_()
-        dlg.activateWindow()
+        # Run the log window as a modal dialog so it appears on top and is interactive
+        dlg.exec_()
         return dlg
 
 class LogDialog(QDialog):
@@ -286,6 +294,7 @@ class LogDialog(QDialog):
     # ------ filtering + highlighting ------
 
     def apply_filter(self):
+
         needle = self.find_box.text().strip()
         if not needle:
             self._set_view_text(self._full_text)
@@ -304,6 +313,7 @@ class LogDialog(QDialog):
         self.text.blockSignals(False)
 
     def _highlight_all(self, needle: str):
+
         if not needle:
             return
 
