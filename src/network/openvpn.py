@@ -563,9 +563,9 @@ class OpenVPN(QObject):
 
         # Configuration
         self._configuration: Configuration = configuration
-        self._configuration.label("network.openvpn", "OpenVPN")
+        self._configuration.label("vpn.openvpn", "OpenVPN")
         self._configuration.add(
-            "network.openvpn.file",
+            "vpn.openvpn.file",
             None,
             "file",
             label="Config File",
@@ -573,20 +573,20 @@ class OpenVPN(QObject):
             on_changed=self._on_config_file_changed,
             as_base64=True,
         )
-        self._configuration.add("network.openvpn.auto", False, "checkbox", label="Auto Connect")
-        self._configuration.add("network.openvpn.host", "", "text", label="Host")
-        self._configuration.add("network.openvpn.port", 1194, "number", label="Port")
+        self._configuration.add("vpn.openvpn.auto", False, "checkbox", label="Auto Connect")
+        self._configuration.add("vpn.openvpn.host", "", "text", label="Host")
+        self._configuration.add("vpn.openvpn.port", 1194, "number", label="Port")
         self._configuration.add(
-            "network.openvpn.global",
+            "vpn.openvpn.global",
             False,
             "checkbox",
             label="Use Global Credentials",
             on_changed=self._on_global_changed,
         )
-        self._configuration.add("network.openvpn.username", "", "text", label="Username")
-        self._configuration.add("network.openvpn.password", "", "password", label="Password")
+        self._configuration.add("vpn.openvpn.username", "", "text", label="Username")
+        self._configuration.add("vpn.openvpn.password", "", "password", label="Password")
         self._configuration.add(
-            "network.openvpn.certificate",
+            "vpn.openvpn.certificate",
             None,
             "file",
             label="Certificate File",
@@ -594,7 +594,7 @@ class OpenVPN(QObject):
             as_base64=True,
         )
         self._configuration.add(
-            "network.openvpn.key",
+            "vpn.openvpn.key",
             None,
             "file",
             label="TLS Key File",
@@ -623,26 +623,26 @@ class OpenVPN(QObject):
         self.stateChanged.emit("stopped")
 
         # --- DEBUG: initial config snapshot ---
-        cfg_val = self._configuration.get("network.openvpn.file")
-        self._logger.append(f"[OpenVPN] __init__: network.openvpn.file type={type(cfg_val)} value={repr(cfg_val)[:200]}", channel=self._log_channel, level="debug")
+        cfg_val = self._configuration.get("vpn.openvpn.file")
+        self._logger.append(f"[OpenVPN] __init__: vpn.openvpn.file type={type(cfg_val)} value={repr(cfg_val)[:200]}", channel=self._log_channel, level="debug")
 
     # ------------------------------------------------------------------
     # Configuration helpers
     # ------------------------------------------------------------------
 
     def is_configured(self) -> bool:
-        cfg = self._configuration.get("network.openvpn.file")
+        cfg = self._configuration.get("vpn.openvpn.file")
         configured = bool(cfg)
         self._logger.append(f"[OpenVPN] is_configured(): configured={configured}, type={type(cfg)}, value={repr(cfg)[:200]}", channel=self._log_channel, level="debug")
         return configured
 
     def auto_connect(self) -> bool:
-        val = bool(self._configuration.get("network.openvpn.auto"))
+        val = bool(self._configuration.get("vpn.openvpn.auto"))
         self._logger.append(f"[OpenVPN] auto_connect(): {val}", channel=self._log_channel, level="debug")
         return val
 
     def config_file(self) -> Optional[str]:
-        cfg = self._configuration.get("network.openvpn.file")
+        cfg = self._configuration.get("vpn.openvpn.file")
         self._logger.append(f"[OpenVPN] config_file(): raw value={repr(cfg)[:200]}", channel=self._log_channel, level="debug")
         if not cfg:
             return None
@@ -741,11 +741,11 @@ class OpenVPN(QObject):
         # --- Apply values into configuration + visible widgets ---
 
         if host:
-            self._configuration.reload("network.openvpn.host", host)
+            self._configuration.reload("vpn.openvpn.host", host)
         if port is not None:
-            self._configuration.reload("network.openvpn.port", port)
+            self._configuration.reload("vpn.openvpn.port", port)
         if auth_user_pass:
-            self._configuration.reload("network.openvpn.global", True)
+            self._configuration.reload("vpn.openvpn.global", True)
             self._on_global_changed(True)
 
         # (CA/TLS auto-import only when we know cfg_path_for_rel; currently None)
@@ -763,8 +763,8 @@ class OpenVPN(QObject):
         use_global = bool(value)
         self._logger.append(f"[DEBUG OpenVPN] _on_global_changed called with value={value} interpreted as use_global={use_global}", channel=self._log_channel, level="debug")
         try:
-            self._configuration.visibility("network.openvpn.username", not use_global)
-            self._configuration.visibility("network.openvpn.password", not use_global)
+            self._configuration.visibility("vpn.openvpn.username", not use_global)
+            self._configuration.visibility("vpn.openvpn.password", not use_global)
         except Exception as e:
             self._logger.append(
                 f"[OpenVPN] _on_global_changed error: {e}",
@@ -812,15 +812,15 @@ class OpenVPN(QObject):
                 return overrides[key]
             return self._configuration.get(key, default)
 
-        use_global = bool(val("network.openvpn.global", False))
+        use_global = bool(val("vpn.openvpn.global", False))
         self._logger.append(f"[DEBUG OpenVPN] _resolve_credentials: use_global={use_global}", channel=self._log_channel, level="debug")
 
         if use_global:
-            username = val("general.username") or val("network.openvpn.username", "")
-            password = val("general.password") or val("network.openvpn.password", "")
+            username = val("general.username") or val("vpn.openvpn.username", "")
+            password = val("general.password") or val("vpn.openvpn.password", "")
         else:
-            username = val("network.openvpn.username") or val("general.username", "")
-            password = val("network.openvpn.password") or val("general.password", "")
+            username = val("vpn.openvpn.username") or val("general.username", "")
+            password = val("vpn.openvpn.password") or val("general.password", "")
 
         self._logger.append(f"[DEBUG OpenVPN] _resolve_credentials: Retrieved username and password.", channel=self._log_channel, level="debug")
         return str(username or ""), str(password or "")
@@ -842,7 +842,7 @@ class OpenVPN(QObject):
         return path
 
     def _materialize_config(self) -> Optional[str]:
-        stored = self._configuration.get("network.openvpn.file")
+        stored = self._configuration.get("vpn.openvpn.file")
         self._logger.append(f"[DEBUG OpenVPN] _materialize_config: stored type={type(stored)}, value={repr(stored)[:200]}", channel=self._log_channel, level="debug")
         if not stored:
             self._logger.append(f"[DEBUG OpenVPN] _materialize_config: no stored value.", channel=self._log_channel, level="debug")
@@ -898,14 +898,14 @@ class OpenVPN(QObject):
                 return cfg_path
             except Exception as e:
                 self._logger.append(
-                    f"[OpenVPN] Failed to materialize inline config from 'network.openvpn.file': {e}",
+                    f"[OpenVPN] Failed to materialize inline config from 'vpn.openvpn.file': {e}",
                     channel=self._log_channel,
                     level="error",
                 )
                 return None
 
         self._logger.append(
-            "[OpenVPN] Unknown format for 'network.openvpn.file' (no config materialized).",
+            "[OpenVPN] Unknown format for 'vpn.openvpn.file' (no config materialized).",
             channel=self._log_channel,
             level="error",
         )
@@ -1087,14 +1087,14 @@ class OpenVPN(QObject):
             self._logger.append(f"[DEBUG OpenVPN] build_command(): cfg_path is None → returning [].", channel=self._log_channel, level="debug")
             return []
 
-        self._materialize_aux("network.openvpn.certificate", "ca.crt")
-        self._materialize_aux("network.openvpn.key", "ta.key")
+        self._materialize_aux("vpn.openvpn.certificate", "ca.crt")
+        self._materialize_aux("vpn.openvpn.key", "ta.key")
 
         cmd: list[str] = [bin_path, "--config", cfg_path]
 
         # Optional host/port override
-        host = val("network.openvpn.host", "")
-        port = val("network.openvpn.port", 1194)
+        host = val("vpn.openvpn.host", "")
+        port = val("vpn.openvpn.port", 1194)
         self._logger.append(f"[DEBUG OpenVPN] build_command(): resolved host={host}, port={port}", channel=self._log_channel, level="debug")
 
         if host:
