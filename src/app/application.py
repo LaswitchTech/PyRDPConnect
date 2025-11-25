@@ -21,7 +21,7 @@ class NoFocusRectStyle(QProxyStyle):
 
 class Application(QApplication):
 
-    updating = pyqtSignal(dict)
+    updating = pyqtSignal()
 
     def __init__(self, name: Optional[str] = None, argv=None):
 
