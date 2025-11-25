@@ -6,6 +6,7 @@ import platform
 import subprocess
 
 from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QApplication
 
 class Helper:
     """
@@ -80,6 +81,15 @@ class Helper:
         if arch in ("i386", "i686", "x86", "i86pc"):
             return "x86"
         return "unknown"
+
+    @staticmethod
+    def get_screen_resolution() -> tuple[int, int]:
+        app = QApplication.instance()
+        if not app:
+            return (0, 0)
+        screen = app.primaryScreen()
+        size = screen.size()
+        return (size.width(), size.height())
 
     @staticmethod
     def file_exists(path: str | None) -> bool:
