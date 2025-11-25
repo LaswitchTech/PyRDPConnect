@@ -215,7 +215,7 @@ class Application(QApplication):
         self._run_system_command(["sudo", "git", "-C", repo_root, "pull"])
 
         # Emit signal that update has occurred
-        self.updating.emit(self._data)
+        self.updating.emit()
 
         # Notify user to restart application
         buttons: Iterable[str] = ("Exit", "OK")
