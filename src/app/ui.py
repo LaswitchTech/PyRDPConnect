@@ -19,7 +19,11 @@ from PyQt5.QtSvg import QSvgWidget, QSvgRenderer
 import os
 import base64
 
-from .helper import Helper
+# Allow this module to be used both as part of the 'app' package and as a standalone script
+try:
+    from .helper import Helper
+except ImportError:  # likely running as a top-level script
+    from helper import Helper
 
 class MsgBox(QDialog):
 
@@ -159,6 +163,14 @@ class ColorButton(QPushButton):
     def hex(self) -> str:
         return self._color.name()
 
+    def setHex(self, value: str):
+        if not value:
+            return
+        c = QColor(value)
+        if c.isValid():
+            self._color = c
+            self.update()  # repaint
+
     def _styleOption(self):
         option = QStyleOptionButton()
         option.initFrom(self)
@@ -210,6 +222,15 @@ class PictureButton(QPushButton):
         Return the stored base64 string (or "" if none).
         """
         return self._b64
+
+    def setValue(self, raw: str):
+        # Reset visuals first
+        self._b64 = ""
+        self.setIcon(QIcon())
+        self.setText("Select Logo")
+
+        if raw:
+            self._init_from_value(raw)
 
     # ----- internals -----
 

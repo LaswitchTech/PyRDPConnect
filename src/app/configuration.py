@@ -5,17 +5,24 @@ from __future__ import annotations
 import os
 import json
 import shutil
+import sys
 from collections import defaultdict
 from typing import Any, Tuple, Optional, TYPE_CHECKING
 
 from PyQt5.QtCore import pyqtSignal, QObject
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QTabWidget, QWidget, QFormLayout,
-    QLabel, QPushButton, QHBoxLayout, QApplication, QFileDialog
+    QLabel, QPushButton, QHBoxLayout, QApplication, QFileDialog,
+    QLineEdit, QComboBox, QCheckBox, QSpinBox
 )
 
-from .helper import Helper
-from .ui import Form
+# Allow this module to be used both as part of the 'app' package and as a standalone script
+try:
+    from .helper import Helper
+    from .ui import Form
+except ImportError:  # likely running as a top-level script
+    from helper import Helper
+    from ui import Form
 
 if TYPE_CHECKING:
     # For type hints only, avoids circular import at runtime
@@ -35,18 +42,20 @@ class Configuration(QObject):
         # Initialize QObject
         super().__init__()
 
-        # Retrieve the application instance
-        self._app: Application = QApplication.instance()
+        # Retrieve the application instance (may be None in CLI usage)
+        self._app: Application | None = QApplication.instance()  # type: ignore[valid-type]
 
-        # Ensure Configuration is created after Application
-        if self._app is None:
-            raise RuntimeError("Configuration must be created after QApplication/Application.")
+        # Ensure we have either an Application or an explicit Helper
+        if self._app is None and helper is None:
+            raise RuntimeError(
+                "Configuration must be created after QApplication/Application or with an explicit Helper."
+            )
 
         # --- auto-wire from QApplication if not provided ---
-        if helper is None:
+        if helper is None and self._app is not None:
             # narrow the type for linters / IDEs
             # no runtime import to avoid circular imports
-            helper = helper or self._app.helper          # type: ignore[attr-defined]
+            helper = self._app.helper          # type: ignore[attr-defined]
 
         # Helper
         self._helper: Helper = helper
@@ -203,8 +212,6 @@ class Configuration(QObject):
         if w is None:
             return
 
-        from PyQt5.QtWidgets import QLineEdit, QComboBox, QCheckBox, QSpinBox
-
         if isinstance(w, QLineEdit):
             w.setText(str(value) if value is not None else "")
         elif isinstance(w, QComboBox):
@@ -220,7 +227,11 @@ class Configuration(QObject):
                 pass
         else:
             # Custom widgets (ColorButton, FileInput, PictureButton, etc.)
-            if hasattr(w, "setValue") and callable(getattr(w, "setValue")):
+            # Prefer a color-specific API if available, then fall back to a generic setter.
+            if hasattr(w, "setHex") and callable(getattr(w, "setHex")):
+                # Color button / color-like widget
+                w.setHex(value)
+            elif hasattr(w, "setValue") and callable(getattr(w, "setValue")):
                 w.setValue(value)
 
     def visibility(self, key: str, visible: bool) -> None:
@@ -231,6 +242,27 @@ class Configuration(QObject):
         lbl = self._widget_labels.get(key)
         if lbl is not None:
             lbl.setVisible(visible)
+
+    def reset(self, save: bool = False) -> None:
+        # Start with a clean configuration dict
+        self._data = {}
+
+        # 1) Rebuild data from schema defaults
+        for key, meta in self._schema.items():
+            default = meta.get("default")
+            self.set(key, default)
+
+        # 2) Push defaults into widgets so the UI reflects the new values
+        for key in self._schema.keys():
+            try:
+                value = self.get(key, _no_fallback=True)
+            except KeyError:
+                continue
+            self.reload(key, value)
+
+        # 3) Optionally persist and notify listeners
+        if save:
+            self.save()
 
     # ------------------------------------------------------------------
     # Convenience properties
@@ -326,11 +358,13 @@ class Configuration(QObject):
 
             tabs.addTab(cat_widget, self.label(category))
 
-        # Buttons row (Save / Cancel)
+        # Buttons row (Reset / Cancel / Save)
         btn_row = QHBoxLayout()
         btn_row.addStretch(1)
+        reset_btn = QPushButton("Reset")
         save_btn = QPushButton("Save")
         cancel_btn = QPushButton("Cancel")
+        btn_row.addWidget(reset_btn)
         btn_row.addWidget(cancel_btn)
         btn_row.addWidget(save_btn)
         root.addLayout(btn_row)
@@ -344,14 +378,63 @@ class Configuration(QObject):
         def on_cancel():
             dlg.reject()
 
+        def on_reset():
+            # Reset all values back to their defaults and keep the dialog open.
+            # Do not save immediately; let the user confirm with Save.
+            self.reset(save=False)
+
         save_btn.clicked.connect(on_save)
         cancel_btn.clicked.connect(on_cancel)
+        reset_btn.clicked.connect(on_reset)
 
         dlg.exec_()
 
     # ------------------------------------------------------------------
     # Import / Export
     # ------------------------------------------------------------------
+
+    def _import_dict(self, imported: dict[str, Any]) -> bool:
+        if not isinstance(imported, dict):
+            print(f"[Configuration] Imported configuration is not a dict: {type(imported)}")
+            return False
+
+        collected_keys: list[str] = []
+
+        def _apply(prefix: str, node: dict[str, Any]) -> None:
+            for key, value in node.items():
+                if isinstance(value, dict):
+                    new_prefix = f"{prefix}.{key}" if prefix else key
+                    _apply(new_prefix, value)
+                else:
+                    full_key = f"{prefix}.{key}" if prefix else key
+                    # Use the existing setter so we don't stomp entire blocks
+                    self.set(full_key, value)
+                    collected_keys.append(full_key)
+
+        _apply("", imported)
+
+        # After applying, reload each key recursively with imported values
+        for full_key in collected_keys:
+            node = imported
+            parts = full_key.split(".")
+            for part in parts[:-1]:
+                node = node.get(part, {})
+            value = node.get(parts[-1], None)
+            self.reload(full_key, value)
+
+        # Persist and notify listeners via save()
+        self.save()
+        return True
+
+    def import_from_path(self, path: str) -> bool:
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                imported = json.load(f)
+        except Exception as e:
+            print(f"[Configuration] Failed importing configuration from {path}: {e}")
+            return False
+
+        return self._import_dict(imported)
 
     def import_cfg(self, parent: Optional[QWidget] = None) -> bool:
         # Allow this method to be called as a Qt slot callback (clicked(bool)), where parent might be a bool
@@ -373,37 +456,7 @@ class Configuration(QObject):
             print(f"[Configuration] Failed importing configuration from {path}: {e}")
             return False
 
-        if not isinstance(imported, dict):
-            print(f"[Configuration] Imported configuration is not a dict: {type(imported)}")
-            return False
-
-        collected_keys = []
-        def _apply(prefix: str, node: dict[str, Any]) -> None:
-            for key, value in node.items():
-                if isinstance(value, dict):
-                    new_prefix = f"{prefix}.{key}" if prefix else key
-                    _apply(new_prefix, value)
-                else:
-                    full_key = f"{prefix}.{key}" if prefix else key
-                    # Use the existing setter so we don't stomp entire blocks
-                    self.set(full_key, value)
-                    collected_keys.append(full_key)
-
-        _apply("", imported)
-
-        # After applying, reload each key recursively with imported values
-        for key in collected_keys:
-            # Traverse imported dict to get the value for the full key
-            node = imported
-            parts = key.split(".")
-            for part in parts[:-1]:
-                node = node.get(part, {})
-            value = node.get(parts[-1], None)
-            self.reload(key, value)
-
-        # Persist and notify listeners via save()
-        self.save()
-        return True
+        return self._import_dict(imported)
 
     def export_cfg(self, parent: Optional[QWidget] = None) -> bool:
         # Allow this method to be called as a Qt slot callback (clicked(bool)), where parent might be a bool
@@ -546,9 +599,6 @@ class Configuration(QObject):
         return s[0].upper() + s[1:]
 
     def _update_from_widgets(self) -> None:
-        from PyQt5.QtWidgets import QLineEdit, QComboBox, QCheckBox, QSpinBox
-        from .ui import Form
-
         for key, widget in self._widgets.items():
             value: Any
 
@@ -571,14 +621,6 @@ class Configuration(QObject):
             self.set(key, value)
 
     def _get_config_dir(self) -> str:
-        """
-        Determine the directory where configuration files should be stored.
-
-        On Linux, we follow an XDG-style convention and store configurations
-        under `~/.config/{APP_NAME}` (where APP_NAME is the QApplication name).
-        On other OSes we keep the legacy behavior and use
-        `{self.root_dir}/config`.
-        """
         # Legacy default (macOS, Windows, etc.)
         default_dir = os.path.join(self.root_dir, "config")
 
@@ -591,14 +633,24 @@ class Configuration(QObject):
         # Only change behavior on Linux and when we have an application name
         if os_name == "linux":
             app_name = ""
-            try:
-                # Prefer the Application.name property if available
-                if hasattr(self._app, "name"):
-                    app_name = self._app.name  # type: ignore[attr-defined]
-                else:
-                    app_name = self._app.applicationName()
-            except Exception:
-                app_name = ""
+
+            # If we have an Application instance, try to use its name
+            if self._app is not None:
+                try:
+                    # Prefer the Application.name property if available
+                    if hasattr(self._app, "name"):
+                        app_name = self._app.name  # type: ignore[attr-defined]
+                    else:
+                        app_name = self._app.applicationName()
+                except Exception:
+                    app_name = ""
+
+            # In CLI usage there may be no Application; fall back to the root_dir name
+            if not app_name:
+                try:
+                    app_name = os.path.basename(self.root_dir) or ""
+                except Exception:
+                    app_name = ""
 
             if app_name:
                 home = os.path.expanduser("~")
@@ -606,3 +658,40 @@ class Configuration(QObject):
                     return os.path.join(home, ".config", app_name)
 
         return default_dir
+
+# ------------------------------------------------------------------
+# CLI entrypoint
+# ------------------------------------------------------------------
+
+def _cli_main(argv: list[str] | None = None) -> int:
+    if argv is None:
+        argv = sys.argv[1:]
+
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Configuration helper")
+    parser.add_argument(
+        "--import",
+        dest="import_path",
+        metavar="PATH",
+        help="Import configuration from the given file and save it to the default configuration location.",
+    )
+    args = parser.parse_args(argv)
+
+    if not args.import_path:
+        parser.print_help()
+        return 0
+
+    # Instantiate a helper and configuration without requiring a full Application
+    helper = Helper()
+    cfg = Configuration(helper=helper)
+
+    if not os.path.exists(args.import_path):
+        print(f"[Configuration] Config file not found: {args.import_path}", file=sys.stderr)
+        return 1
+
+    ok = cfg.import_from_path(args.import_path)
+    return 0 if ok else 1
+
+if __name__ == "__main__":
+    raise SystemExit(_cli_main())

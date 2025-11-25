@@ -41,7 +41,7 @@ class Log:
         self._configuration.add("log.level", "info", "select", choices=["debug", "info", "warning", "error", "none"])
         self._configuration.add("log.enabled", True, "checkbox")
         self._configuration.add("log.open", None, "button", label="Open Log", action=self.show)
-        self._configuration.add("log.clear", True, "checkbox", label="Allow clearing log")
+        self._configuration.add("log.clear", False, "checkbox", label="Allow clearing log")
         self._configuration.add("log.verbose", False, "checkbox", label="Verbose logging")
 
         # Save any new defaults
