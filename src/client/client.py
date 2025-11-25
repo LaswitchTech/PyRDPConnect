@@ -57,13 +57,10 @@ class Client(QMainWindow):
 
         # Configuration
         self._configuration: Configuration = configuration
-        if(self._helper.get_os() == "linux"):
-            self._configuration.label("network.wifi", "WiFi")
-            self._configuration.add("network.wifi.ssid", None, "text", label="SSID")
-            self._configuration.add("network.wifi.passphrase", None, "password")
-        self._configuration.label("network.wireguard", "WireGuard")
-        self._configuration.add("network.wireguard.file", None, "text", label="Config File")
-        self._configuration.add("network.wireguard.auto", False, "checkbox", label="Auto Connect")
+        self._configuration.label("vpn", "VPN")
+        self._configuration.label("vpn.wireguard", "WireGuard")
+        self._configuration.add("vpn.wireguard.file", None, "text", label="Config File")
+        self._configuration.add("vpn.wireguard.auto", False, "checkbox", label="Auto Connect")
         self._configuration.add("customize.window.logo_file", None, "picture", label="Logo File")
         self._configuration.add("customize.window.logo_position", "top-center", "select", label="Logo Position", choices=["top-left", "top-center", "top-right", "center-left", "center-center", "center-right", "bottom-left", "bottom-center", "bottom-right"])
         self._configuration.add("customize.window.form_position", "center-center", "select", label="Form Position", choices=["top-left", "top-center", "top-right", "center-left", "center-center", "center-right", "bottom-left", "bottom-center", "bottom-right"])
