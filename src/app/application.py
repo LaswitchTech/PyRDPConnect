@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Optional, Iterable
+from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtWidgets import QProxyStyle, QStyle, QApplication
 
 from .helper import Helper
@@ -19,6 +20,8 @@ class NoFocusRectStyle(QProxyStyle):
         super().drawPrimitive(element, option, painter, widget)
 
 class Application(QApplication):
+
+    updating = pyqtSignal(dict)
 
     def __init__(self, name: Optional[str] = None, argv=None):
 
@@ -210,6 +213,9 @@ class Application(QApplication):
 
         # Delegate to the generic system command runner so we inherit logging and OS checks
         self._run_system_command(["sudo", "git", "-C", repo_root, "pull"])
+
+        # Emit signal that update has occurred
+        self.updating.emit(self._data)
 
         # Notify user to restart application
         buttons: Iterable[str] = ("Exit", "OK")
