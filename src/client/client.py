@@ -165,11 +165,9 @@ class Client(QMainWindow):
     def init(self):
 
         # Set window title and icon
-        # self.setWindowTitle(self._app.name)
-        self.setWindowTitle("Client")
+        self.setWindowTitle(self._app.name)
         icon_path = self._helper.join(self._helper.get_path("icons"),"play-fill.ico")
         self.setWindowIcon(QIcon(icon_path) if self._helper.file_exists(icon_path) else QIcon())
-        # self.setObjectName(self._app.name)
         self.setObjectName("Client")
 
         # Make the window fullscreen and borderless
