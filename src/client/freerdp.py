@@ -724,6 +724,7 @@ class FreeRDP(QObject):
                 cmd.append("/smart-sizing")
 
         # ---- Audio ----
+        # Output (audio playback)
         if major_version and major_version < 3:
             if play_sound == "Never":
                 cmd.append("/sound:off")
@@ -732,15 +733,21 @@ class FreeRDP(QObject):
             elif play_sound == "On the remote computer":
                 cmd.append("/sound:sys:rdpsnd")
         else:
-            # 3.x audio-mode
+            # FreeRDP 3.x and later
             if play_sound == "Never":
+                # Explicitly disable audio
                 cmd.append("/audio-mode:2")
             elif play_sound == "On this computer":
+                # Redirect sound to this client
+                cmd.append("/sound")
                 cmd.append("/audio-mode:0")
             elif play_sound == "On the remote computer":
+                # Keep audio on the remote host
                 cmd.append("/audio-mode:1")
-
-        # record_sound currently not handled in detail; can be extended later
+        # ---- Microphone (audio input) ----
+        if record_sound == "On the remote computer":
+            # Redirect local microphone to the remote session
+            cmd.append("/microphone")
 
         # ---- Devices ----
         if printers:
