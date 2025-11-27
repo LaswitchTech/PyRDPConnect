@@ -206,6 +206,8 @@ cp "${INSTALL_DIR}/bin/xfreerdp" "${BIN_DEST}/"
 echo "  - Copying core libraries..."
 cp "${INSTALL_DIR}/lib/"libfreerdp* "${LIB_DEST}/" 2>/dev/null || true
 cp "${INSTALL_DIR}/lib/"libwinpr* "${LIB_DEST}/" 2>/dev/null || true
+cp "${INSTALL_DIR}/lib/"libuwac* "${LIB_DEST}/" 2>/dev/null || true
+cp "${INSTALL_DIR}/lib/"libfreerdp-client* "${LIB_DEST}/" 2>/dev/null || true
 
 echo "  - Copying client plugins..."
 # For FreeRDP 3, plugins live in lib/freerdp3
