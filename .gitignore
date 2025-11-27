@@ -130,3 +130,7 @@ celerybeat.pid
 src/bin/freerdp/source
 src/bin/freerdp/install
 src/bin/freerdp/build
+
+# Exclusions
+!src/bin/freerdp/*/*/lib/
+!src/bin/freerdp/*/*/xfreerdp
