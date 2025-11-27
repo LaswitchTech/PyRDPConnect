@@ -44,9 +44,6 @@ class FreeRDPEvent:
 # ---------------------------------------------------------------------------
 
 class FreeRDPInterpreter:
-    """
-    Interprets FreeRDP stdout/stderr text into higher-level events.
-    """
 
     def __init__(self, show_cert_warning: bool = False):
         self.show_cert_warning = show_cert_warning
@@ -128,9 +125,6 @@ class FreeRDPInterpreter:
 # ---------------------------------------------------------------------------
 
 class FreeRDPConnection(QThread):
-    """
-    Runs xfreerdp in a background thread, collects logs, and classifies the result.
-    """
     connection_success = pyqtSignal()
     connection_failed = pyqtSignal(str, str, str)  # title, details, raw_log
     connection_info = pyqtSignal(str)             # optional live status/lines
@@ -303,7 +297,6 @@ class FreeRDPDialog(QProgressDialog):
 # ---------------------------------------------------------------------------
 
 class FreeRDP(QObject):
-
     disconnected = pyqtSignal(int)
 
     def __init__(
@@ -350,40 +343,37 @@ class FreeRDP(QObject):
             None,
             "select",
             choices=[
-                # 4:3 / 5:4 / existing
-                "800x600",
-                "1024x768",
-                # 16:9
-                "1280x720",
-                "1366x768",
-                "1920x1080",
-                "3840x2160",
-                # 16:10
-                "1280x800",
-                "1440x900",
-                "1680x1050",
-                "1920x1200",
-                "2560x1600",
-                "3840x2400",
+                "800x600", # 4:3
+                "1024x768", # 4:3
+                "1280x720", # 16:9
+                "1280x800", # 16:10
+                "1366x768", # 16:9
+                "1440x900", # 16:10
+                "1680x1050", # 16:10
+                "1920x1080", # 16:9
+                "1920x1200", # 16:10
+                "2560x1600", # 16:10
+                "3840x2160", # 16:9
+                "3840x2400", # 16:10
             ]
         )
-        self._configuration.add("freerdp.display.fit", False, "checkbox", label="Fit to window")
-        self._configuration.add("freerdp.display.fullscreen", False, "checkbox", label="Fullscreen")
-        self._configuration.add("freerdp.display.all", False, "checkbox", label="All monitors")
+        self._configuration.add("freerdp.display.fit", True, "checkbox", label="Fit to window")
+        self._configuration.add("freerdp.display.fullscreen", True, "checkbox", label="Fullscreen")
+        self._configuration.add("freerdp.display.all", True, "checkbox", label="All monitors")
         self._configuration.add("freerdp.display.monitor",None,"number",label="Monitor (fullscreen)",min=1,max=self._num_monitors)
         self._configuration.add("freerdp.devices.output", "On this computer", "select", label="Play Sound", choices=["Never", "On this computer", "On the remote computer"])
         self._configuration.add("freerdp.devices.input", "On this computer", "select", label="Record Sound", choices=["Never", "On this computer", "On the remote computer"])
         self._configuration.add("freerdp.devices.printers", False, "checkbox")
         self._configuration.add("freerdp.devices.smart_cards", False, "checkbox", label="Smart Cards")
-        self._configuration.add("freerdp.devices.ports", False, "checkbox")
-        self._configuration.add("freerdp.devices.drives", False, "checkbox")
+        self._configuration.add("freerdp.devices.ports", True, "checkbox")
+        self._configuration.add("freerdp.devices.drives", True, "checkbox")
         self._configuration.add("freerdp.folders.redirect", False, "checkbox")
-        self._configuration.add("freerdp.experience.clipboard", False, "checkbox")
+        self._configuration.add("freerdp.experience.clipboard", True, "checkbox")
         self._configuration.add("freerdp.experience.remotefx", False, "checkbox", label="RemoteFX")
-        self._configuration.add("freerdp.experience.smooth_fonts", False, "checkbox", label="Smooth Fonts")
-        self._configuration.add("freerdp.experience.desktop_composition", False, "checkbox", label="Desktop Composition")
-        self._configuration.add("freerdp.experience.full_window_drag", False, "checkbox", label="Full Window Drag")
-        self._configuration.add("freerdp.experience.menu_animations", False, "checkbox", label="Menu Animations")
+        self._configuration.add("freerdp.experience.smooth_fonts", True, "checkbox", label="Smooth Fonts")
+        self._configuration.add("freerdp.experience.desktop_composition", True, "checkbox", label="Desktop Composition")
+        self._configuration.add("freerdp.experience.full_window_drag", True, "checkbox", label="Full Window Drag")
+        self._configuration.add("freerdp.experience.menu_animations", True, "checkbox", label="Menu Animations")
         self._configuration.add("freerdp.experience.disable_themes", False, "checkbox", label="Disable Themes")
         self._configuration.add("freerdp.experience.disable_wallpaper", False, "checkbox", label="Disable Wallpaper")
         self._configuration.add("freerdp.experience.show_certificate_warning", False, "checkbox", label="Show Certificate Warning")

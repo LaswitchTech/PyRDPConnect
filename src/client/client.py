@@ -67,10 +67,10 @@ class Client(QMainWindow):
         self._configuration.add("customize.window.fullscreen", False, "checkbox")
         self._configuration.add("customize.window.gradient_start", "#265162", "color", label="Gradient Start")
         self._configuration.add("customize.window.gradient_end", "#002136", "color", label="Gradient End")
-        self._configuration.add("customize.controls.exit", False, "checkbox")
+        self._configuration.add("customize.controls.exit", True, "checkbox")
         self._configuration.add("customize.controls.restart", False, "checkbox")
         self._configuration.add("customize.controls.shutdown", False, "checkbox")
-        self._configuration.add("customize.controls.diagnostics", False, "checkbox")
+        self._configuration.add("customize.controls.diagnostics", True, "checkbox")
 
         # Save any new defaults
         self._configuration.save()
