@@ -16,7 +16,7 @@ from app.ui import Form
 from app.configuration import Configuration
 from app.log import Log
 from network.diagnostic import Diagnostic
-from vpn.openvpn import OpenVPN
+from network.openvpn import OpenVPN
 from .freerdp import FreeRDP
 
 if TYPE_CHECKING:
