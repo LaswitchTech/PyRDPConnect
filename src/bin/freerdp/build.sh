@@ -69,27 +69,68 @@ BIN_DIR="${PROJECT_ROOT}/src/bin/freerdp/${OS}/${ARCH}"
 if [[ "$OS" == "linux" ]]; then
     echo "==> Installing build dependencies (requires sudo)..."
     sudo apt update
-    sudo apt install -y \
+    sudo apt-get install -y \
+        ninja-build \
         build-essential \
         git \
+        git-core \
+        debhelper \
+        cdbs \
+        dpkg-dev \
         cmake \
-        ninja-build \
+        cmake-curses-gui \
+        clang-format \
+        ccache \
+        opencl-c-headers \
+        ocl-icd-opencl-dev \
+        libmp3lame-dev \
+        libopus-dev \
+        libsoxr-dev \
+        libpam0g-dev \
         pkg-config \
+        xmlto \
         libssl-dev \
-        libx11-dev \
-        libxext-dev \
-        libxinerama-dev \
+        docbook-xsl \
+        xsltproc \
         libxkbfile-dev \
+        libx11-dev \
+        libwayland-dev \
         libxrandr-dev \
         libxi-dev \
+        libxrender-dev \
+        libxext-dev \
+        libxinerama-dev \
+        libxfixes-dev \
         libxcursor-dev \
         libxv-dev \
+        libxdamage-dev \
+        libxtst-dev \
         libcups2-dev \
+        libpcsclite-dev \
         libasound2-dev \
         libpulse-dev \
+        libgsm1-dev \
         libusb-1.0-0-dev \
+        uuid-dev \
+        libxml2-dev \
+        libfaad-dev \
+        libfaac-dev \
+        libsdl2-dev \
+        libsdl2-ttf-dev \
+        libcjson-dev \
+        libpkcs11-helper-dev \
+        liburiparser-dev \
+        libkrb5-dev \
+        libsystemd-dev \
+        libfuse3-dev \
+        libswscale-dev \
+        libcairo2-dev \
+        libavutil-dev \
+        libavcodec-dev \
+        libswresample-dev \
+        libwebkit2gtk-4.0-dev \
+        libpkcs11-helper1-dev \
         libudev-dev \
-        libpcsclite-dev \
         libgstreamer1.0-dev \
         libgstreamer-plugins-base1.0-dev \
         libv4l-dev \
