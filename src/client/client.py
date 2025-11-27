@@ -16,7 +16,7 @@ from app.ui import Form
 from app.configuration import Configuration
 from app.log import Log
 from network.diagnostic import Diagnostic
-from network.openvpn import OpenVPN
+from vpn.openvpn import OpenVPN
 from .freerdp import FreeRDP
 
 if TYPE_CHECKING:
@@ -358,7 +358,7 @@ class Client(QMainWindow):
             channel="client",
         )
 
-        if self._configuration.get("network.openvpn.auto"):
+        if self._configuration.get("vpn.openvpn.auto"):
             self._logger.append(
                 "[Client] Auto-VPN enabled → stopping OpenVPN.",
                 channel="client",
@@ -397,7 +397,7 @@ class Client(QMainWindow):
                 overrides[f"general.{name}"] = value
 
         # Make sure VPN is up if needed; only start RDP after VPN connects
-        if self._configuration.get("network.openvpn.auto"):
+        if self._configuration.get("vpn.openvpn.auto"):
             self._openvpn.connect(
                 parent=self,
                 overrides=overrides,
