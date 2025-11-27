@@ -92,7 +92,9 @@ if [[ "$OS" == "linux" ]]; then
         libpcsclite-dev \
         libgstreamer1.0-dev \
         libgstreamer-plugins-base1.0-dev \
-        libv4l-dev
+        libv4l-dev \
+        libusbredirparser-dev \
+        libusbredirhost-dev
     echo
 else
     echo "==> Skipping automatic dependency installation (OS=${OS})."
