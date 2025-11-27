@@ -80,6 +80,8 @@ class Helper:
             return "arm64"
         if arch in ("i386", "i686", "x86", "i86pc"):
             return "x86"
+        if arch in ("armv7l", "armv8l", "arm"):
+            return "armhf"
         return "unknown"
 
     @staticmethod
