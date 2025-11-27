@@ -226,6 +226,14 @@ echo
 echo "==> Running basic tests on the built xfreerdp..."
 echo
 
+# Ensure our private libs & plugins are found when running xfreerdp
+export LD_LIBRARY_PATH="${LIB_DEST}:${LD_LIBRARY_PATH:-}"
+export FREERDP_PLUGIN_PATH="${PLUGIN_DEST}"
+
+echo "Using LD_LIBRARY_PATH=${LD_LIBRARY_PATH}"
+echo "Using FREERDP_PLUGIN_PATH=${FREERDP_PLUGIN_PATH}"
+echo
+
 if [[ -x "${BIN_DEST}/xfreerdp" ]]; then
     echo "  [1] Version:"
     "${BIN_DEST}/xfreerdp" /version || true
