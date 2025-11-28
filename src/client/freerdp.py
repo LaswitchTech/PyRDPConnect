@@ -365,8 +365,9 @@ class FreeRDP(QObject):
         self._configuration.add("freerdp.devices.input", "On this computer", "select", label="Record Sound", choices=["Never", "On this computer", "On the remote computer"])
         self._configuration.add("freerdp.devices.printers", False, "checkbox")
         self._configuration.add("freerdp.devices.smart_cards", False, "checkbox", label="Smart Cards")
-        self._configuration.add("freerdp.devices.ports", True, "checkbox")
-        self._configuration.add("freerdp.devices.drives", True, "checkbox")
+        self._configuration.add("freerdp.devices.ports", True, "checkbox", label="Ports (USB)")
+        self._configuration.add("freerdp.devices.camera", True, "checkbox", label="Camera (MS-RDPECam)")
+        self._configuration.add("freerdp.devices.drives", True, "checkbox", label="Drives Redirection (/media)")
         self._configuration.add("freerdp.folders.redirect", False, "checkbox")
         self._configuration.add("freerdp.experience.clipboard", True, "checkbox")
         self._configuration.add("freerdp.experience.remotefx", False, "checkbox", label="RemoteFX")
@@ -629,6 +630,7 @@ class FreeRDP(QObject):
         printers = bool(val("freerdp.devices.printers", False))
         smart_cards = bool(val("freerdp.devices.smart_cards", False))
         ports_redirect = bool(val("freerdp.devices.ports", False))
+        camera_redirect = bool(val("freerdp.devices.camera", False))
         drives = bool(val("freerdp.devices.drives", False))
 
         # Experience
@@ -746,6 +748,8 @@ class FreeRDP(QObject):
             cmd.append("/drives")
         if ports_redirect:
             cmd.append("/usb:auto")
+        if camera_redirect:
+            cmd.append("/dvc:rdpecam")
         if smart_cards:
             # Simple: enable smartcard redirection; can tune later for v2/v3
             cmd.append("/smartcard")
