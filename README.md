@@ -1,4 +1,4 @@
-<p align="center"><img src="src/icons/icon.png" /></p>
+<p align="center"><img src="src/icons/icon.svg" /></p>
 
 # PyRDPConnect (DEV)(Not ready for production)
 ![License](https://img.shields.io/github/license/LaswitchTech/PyRDPConnect?style=for-the-badge)

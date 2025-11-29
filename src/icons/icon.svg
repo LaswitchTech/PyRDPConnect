@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 384">
+    <defs>
+        <!-- Screen gradient -->
+        <linearGradient id="screenGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#5380e4"/>
+            <stop offset="100%" stop-color="#26C4FF"/>
+        </linearGradient>
+
+        <!-- Stand gradient -->
+        <linearGradient id="standGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#a7c3f7"/>
+            <stop offset="100%" stop-color="#c9e8f8"/>
+        </linearGradient>
+
+        <!-- Badge gradient -->
+        <linearGradient id="badgeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#5380e4"/>
+            <stop offset="100%" stop-color="#26C4FF"/>
+        </linearGradient>
+
+        <!-- Badge gradient -->
+        <linearGradient id="chevronGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#a9c5f7"/>
+            <stop offset="100%" stop-color="#c2e4f7"/>
+        </linearGradient>
+    </defs>
+
+    <!-- Monitor -->
+    <g transform="translate(8,-40)">
+        <rect x="184" y="326" width="72" height="48" fill="url(#standGradient)" />
+        <rect x="20" y="80" width="400" height="240" fill="url(#screenGradient)" />
+        <rect x="20" y="288" width="400" height="40" fill="url(#standGradient)" />
+        <rect x="132" y="368" width="176" height="20" fill="url(#screenGradient)" />
+    </g>
+
+    <!-- Badge -->
+    <g transform="translate(0,-40)">
+        <circle cx="426" cy="300" r="60" fill="url(#badgeGradient)" />
+        <g transform="scale(0.8), translate(105,75)">
+            <g stroke="url(#chevronGradient)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" fill="none">
+                <path transform="translate(8,0)" d="M392 270 L412 290 L392 310" />
+                <path transform="translate(12,24)" d="M442 310 L422 290 L442 270" />
+            </g>
+        </g>
+    </g>
+</svg>

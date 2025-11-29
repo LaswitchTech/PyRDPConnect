@@ -221,7 +221,7 @@ class Client(QMainWindow):
 
         # Fallback to bundled logo if no valid custom logo
         if pixmap.isNull():
-            fallback = self._helper.join(self._helper.get_path("img"), "logo.png")
+            fallback = self._helper.join(self._helper.get_path("icons"), "icon.png")
             if fallback and self._helper.file_exists(fallback):
                 pixmap.load(fallback)
 
