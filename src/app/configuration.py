@@ -785,12 +785,12 @@ def _cli_main(argv: list[str] | None = None) -> int:
         "--import",
         dest="import_path",
         metavar="PATH",
-        help="Import configuration from the given file and save it to the default configuration location.",
+        help="Import configuration from the given file.",
     )
     parser.add_argument(
         "--provision",
         action="store_true",
-        help="Contact the provisioning server (configured in provisioning.* settings) and import the returned configuration.",
+        help="Contact the provisioning server and import the returned configuration.",
     )
     args = parser.parse_args(argv)
 
