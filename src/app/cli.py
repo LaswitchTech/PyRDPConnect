@@ -27,6 +27,12 @@ class CommandLine(QApplication):
         # Set application mode
         self._mode = "cli"
 
+        # Initialize command line
+        self._commands: dict[str, Any] = {}
+
+        # Add help command
+        self.add("help", "Show this help message", self.help)
+
         # Helper
         self._helper = Helper()
 
@@ -35,12 +41,6 @@ class CommandLine(QApplication):
 
         # Logger
         self._logger = Log()
-
-        # Initialize command line
-        self._commands: dict[str, Any] = {}
-
-        # Add help command
-        self.add("help", "Show this help message", self.help)
 
     # ------------------------------------------------------------------
     # Properties / accessors
