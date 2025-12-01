@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 class Log:
 
-    def __init__(self, helper: Helper | None = None, configuration: "Configuration" | None = None):
+    def __init__(self, helper: Helper | None = None):
 
         # Retrieve the application instance (may be None in CLI usage)
         self._app: Application | None = QApplication.instance()  # type: ignore[valid-type]
@@ -36,15 +36,11 @@ class Log:
         if helper is None and self._app is not None:
             helper = self._app.helper          # type: ignore[attr-defined]
 
-        # --- auto-wire from QApplication if not provided ---
-        if configuration is None and self._app is not None:
-            configuration = self._app.configuration  # type: ignore[attr-defined]
-
         # Helper
         self._helper: Helper = helper
 
         # Configuration
-        self._configuration: Configuration = configuration
+        self._configuration: Configuration = self._app.configuration
         self._configuration.add("log.level", "info", "select", choices=["debug", "info", "warning", "error", "none"])
         self._configuration.add("log.enabled", True, "checkbox")
         self._configuration.add("log.open", None, "button", label="Open Log", action=self.show)

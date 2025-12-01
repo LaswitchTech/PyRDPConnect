@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# src/network/openvpn.py
+# src/client/openvpn.py
 from __future__ import annotations
 
 import os

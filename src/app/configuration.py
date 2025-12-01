@@ -17,7 +17,7 @@ from PyQt5.QtWidgets import (
     QLineEdit, QComboBox, QCheckBox, QSpinBox
 )
 
-from network.tools import Tools
+from app.network.tools import Tools
 
 # Allow this module to be used both as part of the 'app' package and as a standalone script
 try:

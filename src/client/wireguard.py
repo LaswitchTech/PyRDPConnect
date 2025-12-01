@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# src/network/wireguard.py
+# src/client/wireguard.py
 
 class WireGuard:
     def __init__(self):
