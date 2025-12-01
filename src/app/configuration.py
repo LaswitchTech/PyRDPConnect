@@ -90,6 +90,11 @@ class Configuration(QObject):
         self.add("administration.import", None, "button", label="Import Configuration", action=self.import_cfg)
         self.add("administration.export", None, "button", label="Export Configuration", action=self.export_cfg)
 
+        # Built-in provisioning settings
+        self.add("provisioning.host", "", "text", label="Provisioning Host/URL")
+        self.add("provisioning.token", "", "password", label="Provisioning Token")
+        self.add("provisioning.appid", "PyRDPConnect", "text", label="Provisioning App ID")
+
     # ------------------------------------------------------------------
     # Core API
     # ------------------------------------------------------------------

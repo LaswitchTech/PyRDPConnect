@@ -85,6 +85,26 @@ class Helper:
         return "unknown"
 
     @staticmethod
+    def get_serial() -> str:
+        # Linux / Pi: /proc/cpuinfo usually contains a 'Serial' line
+        try:
+            if Helper.get_os() == "linux":
+                cpuinfo_path = "/proc/cpuinfo"
+                if os.path.exists(cpuinfo_path):
+                    with open(cpuinfo_path, "r", encoding="utf-8", errors="ignore") as f:
+                        for line in f:
+                            if line.lower().startswith("serial"):
+                                parts = line.split(":", 1)
+                                if len(parts) == 2:
+                                    return parts[1].strip()
+        except Exception:
+            # Swallow errors and fall through to empty string
+            pass
+
+        # Fallback: nothing suitable found
+        return ""
+
+    @staticmethod
     def get_screen_resolution() -> tuple[int, int]:
         app = QApplication.instance()
         if not app:
