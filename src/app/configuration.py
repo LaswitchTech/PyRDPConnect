@@ -673,9 +673,10 @@ class Configuration(QObject):
 
 def _run_provisioning(cfg: "Configuration") -> int:
     app: Application | None = QApplication.instance()
+    appname = app.applicationName() if app is not None else "unknown"
     host = cfg.get("provisioning.host", "") or ""
     token = cfg.get("provisioning.token", "") or ""
-    appid = cfg.get("provisioning.appid", app.applicationName()) or "unknown"
+    appid = cfg.get("provisioning.appid", appname) or "unknown"
 
     if not host:
         print("[Configuration] provisioning.host is not set; cannot provision.", file=sys.stderr)
