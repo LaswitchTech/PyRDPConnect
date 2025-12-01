@@ -2,6 +2,7 @@
 # src/app/__init__.py
 
 from .application import Application
+from .cli import CommandLine
 from .helper import Helper
 from .configuration import Configuration
 from .log import Log
@@ -13,4 +14,4 @@ from .network.tools import Tools
 
 __version__ = "1.0.0"
 
-__all__ = ["Application", "Helper", "Configuration", "Log", "MsgBox", "StepIndicator", "Form", "Diagnostic", "WiFi", "Tools"]
+__all__ = ["Application", "CommandLine", "Helper", "Configuration", "Log", "MsgBox", "StepIndicator", "Form", "Diagnostic", "WiFi", "Tools"]
