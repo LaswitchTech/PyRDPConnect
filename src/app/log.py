@@ -21,10 +21,7 @@ if TYPE_CHECKING:
 
 class Log:
 
-    def __init__(
-        self,
-        helper: Optional[Helper] = None,
-    ):
+    def __init__(self, helper: Helper | None = None, configuration: "Configuration" | None = None):
 
         # Retrieve the application instance (may be None in CLI usage)
         self._app: Application | None = QApplication.instance()  # type: ignore[valid-type]
@@ -37,9 +34,10 @@ class Log:
 
         # --- auto-wire from QApplication if not provided ---
         if helper is None and self._app is not None:
-            # narrow the type for linters / IDEs
-            # no runtime import to avoid circular imports
             helper = self._app.helper          # type: ignore[attr-defined]
+
+        # --- auto-wire from QApplication if not provided ---
+        if configuration is None and self._app is not None:
             configuration = self._app.configuration  # type: ignore[attr-defined]
 
         # Helper
