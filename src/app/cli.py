@@ -28,19 +28,15 @@ class CommandLine(QApplication):
 
         # Configuration manager
         self._configuration = Configuration()
-        self._configuration.configChanged.connect(self.reset)
-
-        # Default configuration entries
-        self._configuration.add("administration.update", None, "button", label="Check for Updates", action=self.update)
-
-        # Save any new defaults
-        self._configuration.save()
 
         # Logger
         self._logger = Log()
 
         # Initialize command line
-        self._commands = dict[str, Any] = {}
+        self._commands: dict[str, Any] = {}
+
+        # Add help command
+        self.add("help", "Show this help message", self.help)
 
     # ------------------------------------------------------------------
     # Properties / accessors
@@ -65,6 +61,18 @@ class CommandLine(QApplication):
     # ------------------------------------------------------------------
     # Core API
     # ------------------------------------------------------------------
+
+    def help(self) -> None:
+        print(f"Usage: {self.name} [command] [options]")
+        print()
+        print(f"{self.name} - Available commands:")
+
+        # Sort commands for stable output
+        for cmd, info in sorted(self._commands.items()):
+            desc = info.get("description", "")
+            # Strip the leading dashes for display purposes only
+            display_cmd = cmd[2:] if cmd.startswith("--") else cmd
+            print(f"  {display_cmd:<16} {desc}")
 
     def add(self, command: str, description: str = "", callable: Optional[callable] = None) -> None:
         if not command.startswith("--"):
