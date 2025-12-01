@@ -23,8 +23,6 @@ class NoFocusRectStyle(QProxyStyle):
             return  # skip drawing the focus rect completely
         super().drawPrimitive(element, option, painter, widget)
 
-
-
 # ---------------------------------------------------------------------------
 # Application update dialog
 # ---------------------------------------------------------------------------

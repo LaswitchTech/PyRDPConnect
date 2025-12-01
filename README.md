@@ -1,6 +1,6 @@
 <p align="center"><img src="src/icons/icon.svg" /></p>
 
-# PyRDPConnect (DEV)(Not ready for production)
+# PyRDPConnect
 ![License](https://img.shields.io/github/license/LaswitchTech/PyRDPConnect?style=for-the-badge)
 ![GitHub repo size](https://img.shields.io/github/repo-size/LaswitchTech/PyRDPConnect?style=for-the-badge&logo=github)
 ![GitHub top language](https://img.shields.io/github/languages/top/LaswitchTech/PyRDPConnect?style=for-the-badge)
@@ -46,9 +46,3 @@ Contributions to PyRDPConnect are welcome! If you have ideas for new features or
 
 ## Wait, where is the documentation?
 Review the [Documentation](https://laswitchtech.com/en/blog/projects/pyrdpconnect/index).
-
-## What about the download button?
-The download button is available [here](https://github.com/LaswitchTech/PyRDPConnect/releases/latest/download/source.zip).
-
-## GitHub Stats
-![Alt](https://repobeats.axiom.co/api/embed/603b0d29bc11648a9839888410814e133b5be9dd.svg "Repobeats analytics image")
