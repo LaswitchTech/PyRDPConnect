@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# src/network/diagnostic.py
+# src/app/network/diagnostic.py
 
 from __future__ import annotations
 
