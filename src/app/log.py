@@ -2,7 +2,7 @@
 # src/app/log.py
 import threading
 from collections import defaultdict
-from typing import Iterable, Optional
+from typing import Iterable, Optional, TYPE_CHECKING
 
 from PyQt5.QtCore import Qt, QRegExp
 from PyQt5.QtGui import QTextCharFormat, QColor
@@ -13,25 +13,34 @@ from PyQt5.QtWidgets import (
 
 from .helper import Helper
 from .ui import MsgBox
-from .configuration import Configuration
+
+if TYPE_CHECKING:
+    # For type hints only, avoids circular import at runtime
+    from app.application import Application
+    from app.configuration import Configuration
 
 class Log:
 
     def __init__(
         self,
         helper: Optional[Helper] = None,
-        configuration: Optional[Configuration] = None,
     ):
 
+        # Retrieve the application instance (may be None in CLI usage)
+        self._app: Application | None = QApplication.instance()  # type: ignore[valid-type]
+
+        # Ensure we have either an Application or an explicit Helper
+        if self._app is None and helper is None:
+            raise RuntimeError(
+                "Configuration must be created after QApplication/Application or with an explicit Helper."
+            )
+
         # --- auto-wire from QApplication if not provided ---
-        if helper is None or configuration is None:
-            app = QApplication.instance()
-            if app is None:
-                raise RuntimeError("Client must be created after QApplication/Application.")
+        if helper is None and self._app is not None:
             # narrow the type for linters / IDEs
             # no runtime import to avoid circular imports
-            helper = helper or app.helper          # type: ignore[attr-defined]
-            configuration = configuration or app.configuration  # type: ignore[attr-defined]
+            helper = self._app.helper          # type: ignore[attr-defined]
+            configuration = self._app.configuration  # type: ignore[attr-defined]
 
         # Helper
         self._helper: Helper = helper

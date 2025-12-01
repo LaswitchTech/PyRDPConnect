@@ -19,12 +19,13 @@ from PyQt5.QtWidgets import (
 )
 
 from app.helper import Helper
-from app.configuration import Configuration
 from app.ui import MsgBox
 from app.log import Log
 
 if TYPE_CHECKING:
+    # For type hints only, avoids circular import at runtime
     from app.application import Application
+    from app.configuration import Configuration
 
 
 # ---------------------------------------------------------------------------
