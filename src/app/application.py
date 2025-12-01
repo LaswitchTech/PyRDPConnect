@@ -167,6 +167,9 @@ class Application(QApplication):
         if name:
             self.setApplicationName(name)
 
+        # Set application mode
+        self._mode = "gui"
+
         # Set application style
         self.setStyle('Fusion')
 
@@ -218,6 +221,10 @@ class Application(QApplication):
     @property
     def name(self) -> str:
         return self.applicationName()
+
+    @property
+    def mode(self) -> str:
+        return self._mode
 
     # ------------------------------------------------------------------
     # Main window management

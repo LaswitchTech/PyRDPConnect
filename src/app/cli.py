@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # src/app/command-line.py
+import sys
 from typing import Any, Optional
 
 from PyQt5.QtWidgets import QApplication
@@ -22,6 +23,9 @@ class CommandLine(QApplication):
         # Application name
         if name:
             self.setApplicationName(name)
+
+        # Set application mode
+        self._mode = "cli"
 
         # Helper
         self._helper = Helper()
@@ -58,6 +62,10 @@ class CommandLine(QApplication):
     def name(self) -> str:
         return self.applicationName()
 
+    @property
+    def mode(self) -> str:
+        return self._mode
+
     # ------------------------------------------------------------------
     # Core API
     # ------------------------------------------------------------------
@@ -65,14 +73,13 @@ class CommandLine(QApplication):
     def help(self) -> None:
         print(f"Usage: {self.name} [command] [options]")
         print()
-        print(f"{self.name} - Available commands:")
+        print(f"Available commands:")
+        print()
 
         # Sort commands for stable output
         for cmd, info in sorted(self._commands.items()):
             desc = info.get("description", "")
-            # Strip the leading dashes for display purposes only
-            display_cmd = cmd[2:] if cmd.startswith("--") else cmd
-            print(f"  {display_cmd:<16} {desc}")
+            print(f"  {cmd:<16} {desc}")
 
     def add(self, command: str, description: str = "", callable: Optional[callable] = None) -> None:
         if not command.startswith("--"):
@@ -90,3 +97,33 @@ class CommandLine(QApplication):
         if not func:
             raise ValueError(f"Command has no callable: {command}")
         return func(*args, **kwargs)
+
+    def exec(self) -> int:
+        argv = list(self.arguments())  # includes program name as first element
+        # No command provided: show help and exit 0
+        if len(argv) < 2:
+            self.help()
+            return 0
+
+        command: Optional[str] = None
+        cmd_args: list[str] = []
+
+        # First arg starting with '--' is treated as command
+        for arg in argv[1:]:
+            if arg.startswith("--") and command is None:
+                command = arg
+            else:
+                cmd_args.append(arg)
+
+        # If we only got a bare `--`, treat it as help
+        if command in (None, "--"):
+            self.help()
+            return 0
+
+        try:
+            # Run the command and propagate any positional args
+            self.run(command, *cmd_args)
+            return 0
+        except Exception as e:
+            print(f"Error: {e}", file=sys.stderr)
+            return 1
