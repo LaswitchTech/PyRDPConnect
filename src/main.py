@@ -6,7 +6,7 @@ import sys
 from app.application import Application
 from client.client import Client
 
-def main():
+def start_app():
     app = Application("PyRDPConnect",sys.argv)
 
     # Create main window and register it with Application
@@ -17,4 +17,4 @@ def main():
     sys.exit(app.exec_())
 
 if __name__ == "__main__":
-    main()
+    start_app()

@@ -149,6 +149,7 @@ class ApplicationThread(QThread):
                 break
 
         self.finished_with_result.emit(rc if rc is not None else -1, canceled)
+
 # ---------------------------------------------------------------------------
 # Application class
 # ---------------------------------------------------------------------------
@@ -361,7 +362,7 @@ class Application(QApplication):
                 title="Update Failed",
                 message="Failed to determine the repository root for the update.",
                 icon="error",
-                buttons=("OK",),
+                buttons=("OK"),
                 default="OK",
                 icon_lookup_fn=self._helper.get_path,
             )
@@ -385,7 +386,7 @@ class Application(QApplication):
                 title="Update Not Available",
                 message="Updating is only supported on Linux systems.",
                 icon="info",
-                buttons=("OK",),
+                buttons=("OK"),
                 default="OK",
                 icon_lookup_fn=self._helper.get_path,
             )
@@ -420,7 +421,7 @@ class Application(QApplication):
                     title="Update Canceled",
                     message="The update was canceled. The application may not be fully up to date.",
                     icon="warning",
-                    buttons=("OK",),
+                    buttons=("OK"),
                     default="OK",
                     icon_lookup_fn=self._helper.get_path,
                 )
@@ -432,7 +433,7 @@ class Application(QApplication):
                     title="Update Failed",
                     message=f"Update failed with exit code {rc}. Check the logs for details.",
                     icon="error",
-                    buttons=("OK",),
+                    buttons=("OK"),
                     default="OK",
                     icon_lookup_fn=self._helper.get_path,
                 )
