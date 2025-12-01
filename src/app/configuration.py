@@ -17,15 +17,15 @@ from PyQt5.QtWidgets import (
     QLineEdit, QComboBox, QCheckBox, QSpinBox
 )
 
-from app.network.tools import Tools
-
 # Allow this module to be used both as part of the 'app' package and as a standalone script
 try:
     from .helper import Helper
     from .ui import Form
+    from .network.tools import Tools
 except ImportError:  # likely running as a top-level script
     from helper import Helper
     from ui import Form
+    from network.tools import Tools
 
 if TYPE_CHECKING:
     # For type hints only, avoids circular import at runtime
