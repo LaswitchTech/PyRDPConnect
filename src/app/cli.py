@@ -67,6 +67,8 @@ class CommandLine(QApplication):
     # ------------------------------------------------------------------
 
     def add(self, command: str, description: str = "", callable: Optional[callable] = None) -> None:
+        if not command.startswith("--"):
+            command = f"--{command}"
         self._commands[command] = {
             "description": description,
             "callable": callable,

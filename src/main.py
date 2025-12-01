@@ -35,10 +35,12 @@ def start_app():
     sys.exit(app.exec_())
 
 def start_cli():
-    app = CommandLine(name,sys.argv)
+    cli = CommandLine(name,sys.argv)
+
+    cli.add("test", "A test command", lambda: print("Hello World!"))
 
     # All other code gets app via QApplication.instance()
-    sys.exit(app.exec_())
+    sys.exit(cli.exec_())
 
 # ---------------------------------------------------------------------------
 # Main entry point
