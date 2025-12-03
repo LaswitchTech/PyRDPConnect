@@ -77,6 +77,7 @@ class CommandLine(QApplication):
     # ------------------------------------------------------------------
 
     def help(self) -> None:
+        print()
         print(f"Usage: {self.name} [command] [options]")
         print()
         print("Available commands:")
@@ -111,6 +112,8 @@ class CommandLine(QApplication):
 
         for usage, desc in entries:
             print(f"  {usage:<{max_cmd_len}}  {desc}")
+
+        print()
 
     def add(self, command: str, description: str = "", callable: Optional[callable] = None, args: int = 0, arg_names: Optional[list[str]] = None) -> None:
         if not command.startswith("--"):
