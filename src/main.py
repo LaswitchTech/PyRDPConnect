@@ -3,8 +3,8 @@
 
 import sys
 
-from app.application import Application
-from app.cli import CommandLine
+from core.application import Application
+from core.cli import CommandLine
 from client.client import Client
 
 # ---------------------------------------------------------------------------
