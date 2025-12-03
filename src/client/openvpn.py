@@ -18,14 +18,14 @@ from PyQt5.QtWidgets import (
     QPushButton,
 )
 
-from app.helper import Helper
-from app.ui import MsgBox
-from app.log import Log
+from core.helper import Helper
+from core.ui import MsgBox
+from core.log import Log
 
 if TYPE_CHECKING:
     # For type hints only, avoids circular import at runtime
-    from app.application import Application
-    from app.configuration import Configuration
+    from core.application import Application
+    from core.configuration import Configuration
 
 
 # ---------------------------------------------------------------------------

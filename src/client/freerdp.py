@@ -16,10 +16,10 @@ from PyQt5.QtWidgets import (
     QPushButton, QProgressDialog, QApplication
 )
 
-from app.helper import Helper
-from app.configuration import Configuration
-from app.ui import MsgBox
-from app.log import Log
+from core.helper import Helper
+from core.configuration import Configuration
+from core.ui import MsgBox
+from core.log import Log
 
 # ---------------------------------------------------------------------------
 # Severity / events

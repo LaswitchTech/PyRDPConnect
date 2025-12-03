@@ -11,17 +11,17 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5.QtCore import Qt
 
-from app.helper import Helper
-from app.ui import Form
-from app.configuration import Configuration
-from app.log import Log
-from app.network.diagnostic import Diagnostic
+from core.helper import Helper
+from core.ui import Form
+from core.configuration import Configuration
+from core.log import Log
+from core.network.diagnostic import Diagnostic
 from .openvpn import OpenVPN
 from .freerdp import FreeRDP
 
 if TYPE_CHECKING:
     # For type hints only, avoids circular import at runtime
-    from app.application import Application
+    from core.application import Application
 
 class Client(QMainWindow):
     """
