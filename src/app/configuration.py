@@ -285,6 +285,14 @@ class Configuration(QObject):
         return self._schema
 
     # ------------------------------------------------------------------
+    # core API Callables
+    # ------------------------------------------------------------------
+
+    def cli(self, cli: QApplication = None) -> None:
+        cli.add("import", "Import configuration from the given file.", self.import_from_path, args=1, arg_names=["<path>"])
+        cli.add("provision", "Contact the provisioning server and import the returned configuration.", self.provision)
+
+    # ------------------------------------------------------------------
     # UI dialog builder
     # ------------------------------------------------------------------
 
@@ -493,6 +501,111 @@ class Configuration(QObject):
             return False
 
     # ------------------------------------------------------------------
+    # Provisioning
+    # ------------------------------------------------------------------
+
+    def provision(self) -> int:
+        app: Application | None = QApplication.instance()
+        appname = app.applicationName() if app is not None else "unknown"
+        host = self.get("provisioning.host", "") or ""
+        token = self.get("provisioning.token", "") or ""
+        appid = self.get("provisioning.appid", appname) or "unknown"
+
+        if not host:
+            print("[Configuration] provisioning.host is not set; cannot provision.", file=sys.stderr)
+            return 1
+
+        # Allow host to be either full URL or just hostname. If no scheme, default to https.
+        url = host.strip()
+        if not url.lower().startswith(("http://", "https://")):
+            url = "https://" + url
+
+        # Helper and Tools are always available because Configuration enforces helper in __init__
+        helper = self._helper  # type: ignore[attr-defined]
+        tools = Tools(helper=helper)
+
+        # Identify device
+        try:
+            serial = helper.get_serial() or ""
+        except Exception:
+            serial = ""
+
+        try:
+            os_name = helper.get_os() or ""
+        except Exception:
+            os_name = ""
+
+        try:
+            hostname = tools.host() or ""
+        except Exception:
+            hostname = ""
+
+        private_ip = ""
+        try:
+            ips = tools.ip() or []
+            if ips:
+                private_ip = ips[0]
+        except Exception:
+            private_ip = ""
+
+        mac = ""
+        try:
+            macs = tools.mac() or []
+            if macs:
+                mac = macs[0]
+        except Exception:
+            mac = ""
+
+        public_ip = ""
+        try:
+            public_ip = tools.wan() or ""
+        except Exception:
+            public_ip = ""
+
+        payload = {
+            "appid": appid or app.applicationName() or "unknown",
+            "serial": serial,
+            "mac": mac,
+            "hostname": hostname,
+            "private_ip": private_ip,
+            "public_ip": public_ip,
+            "os": os_name,
+        }
+
+        data = json.dumps(payload).encode("utf-8")
+
+        headers = {
+            "Content-Type": "application/json",
+        }
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+
+        req = _urlrequest.Request(url, data=data, headers=headers, method="POST")
+
+        try:
+            with _urlrequest.urlopen(req, timeout=10) as resp:
+                body = resp.read()
+        except _urlerror.URLError as e:
+            print(f"[Configuration] Provisioning request failed: {e}", file=sys.stderr)
+            return 1
+
+        try:
+            imported = json.loads(body.decode("utf-8"))
+        except Exception as e:
+            print(f"[Configuration] Failed to parse provisioning response as JSON: {e}", file=sys.stderr)
+            return 1
+
+        if not isinstance(imported, dict):
+            print(f"[Configuration] Provisioning response is not a JSON object: {type(imported)}", file=sys.stderr)
+            return 1
+
+        # Use the existing internal import helper so we don't stomp entire blocks
+        ok = self._import_dict(imported)
+
+        # Return code
+        return 0 if ok else 1
+
+    # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
 
@@ -666,157 +779,3 @@ class Configuration(QObject):
                     return os.path.join(home, ".config", app_name)
 
         return default_dir
-
-# ------------------------------------------------------------------
-# CLI entrypoint
-# ------------------------------------------------------------------
-
-def _run_provisioning(cfg: "Configuration") -> int:
-    app: Application | None = QApplication.instance()
-    appname = app.applicationName() if app is not None else "unknown"
-    host = cfg.get("provisioning.host", "") or ""
-    token = cfg.get("provisioning.token", "") or ""
-    appid = cfg.get("provisioning.appid", appname) or "unknown"
-
-    if not host:
-        print("[Configuration] provisioning.host is not set; cannot provision.", file=sys.stderr)
-        return 1
-
-    # Allow host to be either full URL or just hostname. If no scheme, default to https.
-    url = host.strip()
-    if not url.lower().startswith(("http://", "https://")):
-        url = "https://" + url
-
-    # Helper and Tools are always available because Configuration enforces helper in __init__
-    helper = cfg._helper  # type: ignore[attr-defined]
-    tools = Tools(helper=helper)
-
-    # Identify device
-    try:
-        serial = helper.get_serial() or ""
-    except Exception:
-        serial = ""
-
-    try:
-        os_name = helper.get_os() or ""
-    except Exception:
-        os_name = ""
-
-    try:
-        hostname = tools.host() or ""
-    except Exception:
-        hostname = ""
-
-    private_ip = ""
-    try:
-        ips = tools.ip() or []
-        if ips:
-            private_ip = ips[0]
-    except Exception:
-        private_ip = ""
-
-    mac = ""
-    try:
-        macs = tools.mac() or []
-        if macs:
-            mac = macs[0]
-    except Exception:
-        mac = ""
-
-    public_ip = ""
-    try:
-        public_ip = tools.wan() or ""
-    except Exception:
-        public_ip = ""
-
-    payload = {
-        "appid": appid or app.applicationName() or "unknown",
-        "serial": serial,
-        "mac": mac,
-        "hostname": hostname,
-        "private_ip": private_ip,
-        "public_ip": public_ip,
-        "os": os_name,
-    }
-
-    data = json.dumps(payload).encode("utf-8")
-
-    headers = {
-        "Content-Type": "application/json",
-    }
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-
-    req = _urlrequest.Request(url, data=data, headers=headers, method="POST")
-
-    try:
-        with _urlrequest.urlopen(req, timeout=10) as resp:
-            body = resp.read()
-    except _urlerror.URLError as e:
-        print(f"[Configuration] Provisioning request failed: {e}", file=sys.stderr)
-        return 1
-
-    try:
-        imported = json.loads(body.decode("utf-8"))
-    except Exception as e:
-        print(f"[Configuration] Failed to parse provisioning response as JSON: {e}", file=sys.stderr)
-        return 1
-
-    if not isinstance(imported, dict):
-        print(f"[Configuration] Provisioning response is not a JSON object: {type(imported)}", file=sys.stderr)
-        return 1
-
-    # Use the existing internal import helper so we don't stomp entire blocks
-    ok = cfg._import_dict(imported)
-
-    # Save result
-    cfg.save()
-
-    # Return code
-    return 0 if ok else 1
-
-def _cli_main(argv: list[str] | None = None) -> int:
-    if argv is None:
-        argv = sys.argv[1:]
-
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Configuration helper")
-    parser.add_argument(
-        "--import",
-        dest="import_path",
-        metavar="PATH",
-        help="Import configuration from the given file.",
-    )
-    parser.add_argument(
-        "--provision",
-        action="store_true",
-        help="Contact the provisioning server and import the returned configuration.",
-    )
-    args = parser.parse_args(argv)
-
-    # Require exactly one action
-    if not args.import_path and not args.provision:
-        parser.print_help()
-        return 0
-    if args.import_path and args.provision:
-        print("[Configuration] Please specify either --import or --provision, not both.", file=sys.stderr)
-        return 1
-
-    # Instantiate a helper and configuration without requiring a full Application
-    helper = Helper()
-    cfg = Configuration(helper=helper)
-
-    if args.import_path:
-        if not os.path.exists(args.import_path):
-            print(f"[Configuration] Config file not found: {args.import_path}", file=sys.stderr)
-            return 1
-
-        ok = cfg.import_from_path(args.import_path)
-        return 0 if ok else 1
-
-    if args.provision:
-        return _run_provisioning(cfg)
-
-if __name__ == "__main__":
-    raise SystemExit(_cli_main())

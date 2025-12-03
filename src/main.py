@@ -38,7 +38,7 @@ def start_cli():
     cli = CommandLine(name,sys.argv)
 
     # Add test command
-    cli.add("test", "A test command", lambda: print("Hello World!"))
+    cli.add("test", "A test command", lambda x: print(f"Hello {x}!"), args=1, arg_names=["<name>"])
 
     # All other code gets app via QApplication.instance()
     sys.exit(cli.exec())
