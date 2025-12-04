@@ -18,7 +18,7 @@ XQuartz provides the necessary X11 environment that FreeRDP relies on for graphi
 #### Step 2: Install Python and Required Packages
 
 ```sh
-brew install python3
+brew install python@3.13
 pip3 install pyqt5
 ```
 
@@ -43,7 +43,7 @@ Update your package list and install the necessary packages:
 
 ```sh
 sudo apt-get update
-sudo apt-get install -y git python3 python3-pip python3-pyqt5 python3-pyqt5.qtquick python3-pyqt5.sip freerdp2-x11
+sudo apt-get install -y git python3 python3-pip python3-pyqt5 python3-pyqt5.qtquick python3-pyqt5.sip freerdp2-x11 zlib1g-dev
 ```
 
 #### Step 2: Clone the Repository and Run from Source

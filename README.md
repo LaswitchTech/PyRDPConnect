@@ -1,9 +1,10 @@
-<p align="center"><img src="src/icons/icon.png" /></p>
+<p align="center"><img src="src/icons/icon.svg" /></p>
 
-# PyRDPConnect (DEV)(Not ready for production)
+# PyRDPConnect
 ![License](https://img.shields.io/github/license/LaswitchTech/PyRDPConnect?style=for-the-badge)
 ![GitHub repo size](https://img.shields.io/github/repo-size/LaswitchTech/PyRDPConnect?style=for-the-badge&logo=github)
 ![GitHub top language](https://img.shields.io/github/languages/top/LaswitchTech/PyRDPConnect?style=for-the-badge)
+![GitHub Downloads](https://img.shields.io/github/downloads/LaswitchTech/PyRDPConnect/total?style=for-the-badge)
 ![Version](https://img.shields.io/github/v/release/LaswitchTech/PyRDPConnect?label=Version&style=for-the-badge)
 
 ## Description
@@ -20,10 +21,10 @@ PyRDPConnect is a cross-platform Python application designed to provide a sleek,
   - **Logging and Debugging**: The application includes logging features for easier debugging and tracking of issues during the connection process.
 
 ## License
-This software is distributed under the [MIT](LICENSE) license.
+This software is distributed under the [GPLv3](LICENSE) license.
 
 ### Third-Party Licenses
-This project uses FreeRDP, which is licensed under the [Apache License 2.0](THIRD_PARTY_LICENSES) license.
+This project uses some third-party libraries and tools. Please refer to the [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES.md) file for detailed information on their respective licenses.
 
 ## Security
 Please disclose any vulnerabilities found responsibly – report security issues to the maintainers privately. See [SECURITY.md](SECURITY.md) for more information.
@@ -40,6 +41,8 @@ Contributions to PyRDPConnect are welcome! If you have ideas for new features or
   - **FreeRDP**: For providing a powerful and flexible open-source RDP client.
   - **PyQt5**: For making it easy to create a modern and responsive UI in Python.
   - **PyInstaller**: For simplifying the process of packaging Python applications for distribution.
+  - **OpenVPN**: For inspiring cross-platform connectivity solutions.
+  - **WireGuard**: For demonstrating the power of simplicity in secure connections.
 
 ## Wait, where is the documentation?
-Review the [Documentation](docs/usage.md).
+Review the [Documentation](https://laswitchtech.com/en/blog/projects/pyrdpconnect/index).
