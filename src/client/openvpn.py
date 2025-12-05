@@ -549,6 +549,83 @@ class OpenVPNConnection(QThread):
                     level="error",
                 )
 
+    # ---------------------------------------------------------------------------
+    # DNS helpers (Linux)
+    # ---------------------------------------------------------------------------
+
+    def _inspect_line_for_dns_and_iface(self, ln: str) -> None:
+        """
+        Inspect a log line to extract pushed DNS options and the TUN/TAP interface
+        name on Linux. This is a best-effort parser and is safe to call on any OS.
+        """
+        if self._owner._helper.get_os() != "linux":
+            return
+
+        lower = ln.lower()
+
+        # Detect TUN/TAP interface name, e.g. "TUN/TAP device tun0 opened"
+        if (
+            self._dns_iface is None
+            and "device" in lower
+            and "opened" in lower
+            and ("tun" in lower or "tap" in lower)
+        ):
+            parts = ln.split()
+            for i, p in enumerate(parts):
+                if p.lower() == "device" and i + 1 < len(parts):
+                    candidate = parts[i + 1].strip("[]")
+                    if candidate.startswith("tun") or candidate.startswith("tap"):
+                        self._dns_iface = candidate
+                        if self._logger is not None:
+                            self._logger.append(
+                                f"[OpenVPN] Detected VPN interface: {self._dns_iface}",
+                                channel=self._log_channel,
+                                level="debug",
+                            )
+                        break
+
+        # Detect pushed options lines with DNS/DOMAIN from the server
+        if "PUSH_REPLY" in ln or "PUSH:" in ln:
+            payload = None
+            if "PUSH_REPLY," in ln:
+                payload = ln.split("PUSH_REPLY,", 1)[1]
+            elif "PUSH_REPLY" in ln and "'" in ln:
+                payload = ln.split("PUSH_REPLY", 1)[1]
+            elif "PUSH:" in ln and "'" in ln:
+                payload = ln.split("PUSH:", 1)[1]
+
+            if payload is None:
+                return
+
+            payload = payload.strip().strip("'")
+            items = payload.split(",")
+            for item in items:
+                item = item.strip()
+                if not item.lower().startswith("dhcp-option"):
+                    continue
+
+                # Expect forms like "dhcp-option DNS 10.10.0.1" or "dhcp-option DOMAIN albcie.com"
+                parts = item.split()
+                if len(parts) < 3:
+                    continue
+
+                opt_type = parts[1].upper()
+                opt_value = " ".join(parts[2:]).strip()
+
+                if opt_type == "DNS":
+                    if opt_value and opt_value not in self._dns_servers:
+                        self._dns_servers.append(opt_value)
+                elif opt_type in ("DOMAIN", "DOMAIN-SEARCH"):
+                    dom = opt_value.lstrip("~")
+                    if dom and dom not in self._dns_domains:
+                        self._dns_domains.append(dom)
+
+            if self._logger is not None and (self._dns_servers or self._dns_domains):
+                self._logger.append(
+                    f"[OpenVPN] Parsed pushed DNS options: servers={self._dns_servers}, domains={self._dns_domains}",
+                    channel=self._log_channel,
+                    level="debug",
+                )
 
 # ---------------------------------------------------------------------------
 # Connection progress dialog
@@ -1293,80 +1370,6 @@ class OpenVPN(QObject):
         self.stop()
         if self._dialog:
             self._dialog.hide()
-
-    def _inspect_line_for_dns_and_iface(self, ln: str) -> None:
-        """
-        Inspect a log line to extract pushed DNS options and the TUN/TAP interface
-        name on Linux. This is a best-effort parser and is safe to call on any OS.
-        """
-        if self._owner._helper.get_os() != "linux":
-            return
-
-        lower = ln.lower()
-
-        # Detect TUN/TAP interface name, e.g. "TUN/TAP device tun0 opened"
-        if (
-            self._dns_iface is None
-            and "device" in lower
-            and "opened" in lower
-            and ("tun" in lower or "tap" in lower)
-        ):
-            parts = ln.split()
-            for i, p in enumerate(parts):
-                if p.lower() == "device" and i + 1 < len(parts):
-                    candidate = parts[i + 1].strip("[]")
-                    if candidate.startswith("tun") or candidate.startswith("tap"):
-                        self._dns_iface = candidate
-                        if self._logger is not None:
-                            self._logger.append(
-                                f"[OpenVPN] Detected VPN interface: {self._dns_iface}",
-                                channel=self._log_channel,
-                                level="debug",
-                            )
-                        break
-
-        # Detect pushed options lines with DNS/DOMAIN from the server
-        if "PUSH_REPLY" in ln or "PUSH:" in ln:
-            payload = None
-            if "PUSH_REPLY," in ln:
-                payload = ln.split("PUSH_REPLY,", 1)[1]
-            elif "PUSH_REPLY" in ln and "'" in ln:
-                payload = ln.split("PUSH_REPLY", 1)[1]
-            elif "PUSH:" in ln and "'" in ln:
-                payload = ln.split("PUSH:", 1)[1]
-
-            if payload is None:
-                return
-
-            payload = payload.strip().strip("'")
-            items = payload.split(",")
-            for item in items:
-                item = item.strip()
-                if not item.lower().startswith("dhcp-option"):
-                    continue
-
-                # Expect forms like "dhcp-option DNS 10.10.0.1" or "dhcp-option DOMAIN albcie.com"
-                parts = item.split()
-                if len(parts) < 3:
-                    continue
-
-                opt_type = parts[1].upper()
-                opt_value = " ".join(parts[2:]).strip()
-
-                if opt_type == "DNS":
-                    if opt_value and opt_value not in self._dns_servers:
-                        self._dns_servers.append(opt_value)
-                elif opt_type in ("DOMAIN", "DOMAIN-SEARCH"):
-                    dom = opt_value.lstrip("~")
-                    if dom and dom not in self._dns_domains:
-                        self._dns_domains.append(dom)
-
-            if self._logger is not None and (self._dns_servers or self._dns_domains):
-                self._logger.append(
-                    f"[OpenVPN] Parsed pushed DNS options: servers={self._dns_servers}, domains={self._dns_domains}",
-                    channel=self._log_channel,
-                    level="debug",
-                )
 
     def _apply_dns(self) -> None:
         """
