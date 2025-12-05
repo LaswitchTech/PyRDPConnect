@@ -62,6 +62,12 @@ class OpenVPNConnection(QThread):
         self._log_path: Optional[str] = None
         self._pid_path: Optional[str] = None
 
+        # DNS tracking (Linux)
+        self._dns_servers: list[str] = []
+        self._dns_domains: list[str] = []
+        self._dns_iface: Optional[str] = None
+        self._dns_applied: bool = False
+
     def run(self):
         collected: list[str] = []
         text = ""
@@ -309,6 +315,33 @@ class OpenVPNConnection(QThread):
                                     self._connected_emitted = True
                                     self._owner.stateChanged.emit("running")
                                     self.connected.emit()
+
+                            # Inspect lines for DNS / interface info (Linux)
+                            try:
+                                self._inspect_line_for_dns_and_iface(ln)
+                            except Exception as e:
+                                if self._logger is not None:
+                                    self._logger.append(
+                                        f"[OpenVPN] DNS inspection error: {e}",
+                                        channel=self._log_channel,
+                                        level="warning",
+                                    )
+
+                            # If we have enough information, try to apply DNS once
+                            if (
+                                not self._dns_applied
+                                and self._dns_servers
+                                and self._dns_iface
+                            ):
+                                try:
+                                    self._apply_dns()
+                                except Exception as e:
+                                    if self._logger is not None:
+                                        self._logger.append(
+                                            f"[OpenVPN] Failed to apply DNS settings: {e}",
+                                            channel=self._log_channel,
+                                            level="warning",
+                                        )
                     try:
                         stream.close()
                     except Exception:
@@ -335,6 +368,17 @@ class OpenVPNConnection(QThread):
             # ------------------------------------------------------
             # Reset process handle on owner
             self._owner._proc = None
+
+            # Revert DNS settings if we applied them
+            try:
+                self._revert_dns()
+            except Exception as e:
+                if self._logger is not None:
+                    self._logger.append(
+                        f"[OpenVPN] Failed to revert DNS settings: {e}",
+                        channel=self._log_channel,
+                        level="warning",
+                    )
 
             # Always clean up temporary files (auth file etc.)
             try:
@@ -1249,3 +1293,216 @@ class OpenVPN(QObject):
         self.stop()
         if self._dialog:
             self._dialog.hide()
+
+    def _inspect_line_for_dns_and_iface(self, ln: str) -> None:
+        """
+        Inspect a log line to extract pushed DNS options and the TUN/TAP interface
+        name on Linux. This is a best-effort parser and is safe to call on any OS.
+        """
+        if self._owner._helper.get_os() != "linux":
+            return
+
+        lower = ln.lower()
+
+        # Detect TUN/TAP interface name, e.g. "TUN/TAP device tun0 opened"
+        if (
+            self._dns_iface is None
+            and "device" in lower
+            and "opened" in lower
+            and ("tun" in lower or "tap" in lower)
+        ):
+            parts = ln.split()
+            for i, p in enumerate(parts):
+                if p.lower() == "device" and i + 1 < len(parts):
+                    candidate = parts[i + 1].strip("[]")
+                    if candidate.startswith("tun") or candidate.startswith("tap"):
+                        self._dns_iface = candidate
+                        if self._logger is not None:
+                            self._logger.append(
+                                f"[OpenVPN] Detected VPN interface: {self._dns_iface}",
+                                channel=self._log_channel,
+                                level="debug",
+                            )
+                        break
+
+        # Detect pushed options lines with DNS/DOMAIN from the server
+        if "PUSH_REPLY" in ln or "PUSH:" in ln:
+            payload = None
+            if "PUSH_REPLY," in ln:
+                payload = ln.split("PUSH_REPLY,", 1)[1]
+            elif "PUSH_REPLY" in ln and "'" in ln:
+                payload = ln.split("PUSH_REPLY", 1)[1]
+            elif "PUSH:" in ln and "'" in ln:
+                payload = ln.split("PUSH:", 1)[1]
+
+            if payload is None:
+                return
+
+            payload = payload.strip().strip("'")
+            items = payload.split(",")
+            for item in items:
+                item = item.strip()
+                if not item.lower().startswith("dhcp-option"):
+                    continue
+
+                # Expect forms like "dhcp-option DNS 10.10.0.1" or "dhcp-option DOMAIN albcie.com"
+                parts = item.split()
+                if len(parts) < 3:
+                    continue
+
+                opt_type = parts[1].upper()
+                opt_value = " ".join(parts[2:]).strip()
+
+                if opt_type == "DNS":
+                    if opt_value and opt_value not in self._dns_servers:
+                        self._dns_servers.append(opt_value)
+                elif opt_type in ("DOMAIN", "DOMAIN-SEARCH"):
+                    dom = opt_value.lstrip("~")
+                    if dom and dom not in self._dns_domains:
+                        self._dns_domains.append(dom)
+
+            if self._logger is not None and (self._dns_servers or self._dns_domains):
+                self._logger.append(
+                    f"[OpenVPN] Parsed pushed DNS options: servers={self._dns_servers}, domains={self._dns_domains}",
+                    channel=self._log_channel,
+                    level="debug",
+                )
+
+    def _apply_dns(self) -> None:
+        """
+        Apply DNS settings for the detected VPN interface using resolvectl/systemd-resolve
+        on Linux. This is a best-effort operation; failures are logged but not fatal.
+        """
+        if self._dns_applied:
+            return
+        if self._owner._helper.get_os() != "linux":
+            return
+
+        iface = self._dns_iface
+        servers = list(self._dns_servers)
+        domains = list(self._dns_domains)
+
+        if not iface or not servers:
+            return
+
+        from shutil import which
+
+        cmd = which("resolvectl") or which("systemd-resolve")
+        if not cmd:
+            if self._logger is not None:
+                self._logger.append(
+                    "[OpenVPN] resolvectl/systemd-resolve not found; skipping automatic DNS configuration.",
+                    channel=self._log_channel,
+                    level="info",
+                )
+            return
+
+        try:
+            if os.path.basename(cmd) == "resolvectl":
+                # resolvectl dns <if> <ip1> <ip2> ...
+                dns_cmd = [cmd, "dns", iface] + servers
+                if self._logger is not None:
+                    self._logger.append(
+                        f"[OpenVPN] Applying DNS via resolvectl: {' '.join(dns_cmd)}",
+                        channel=self._log_channel,
+                        level="debug",
+                    )
+                subprocess.run(
+                    dns_cmd,
+                    check=False,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+
+                if domains:
+                    dom_args = ["~" + d for d in domains]
+                    dom_cmd = [cmd, "domain", iface] + dom_args
+                    if self._logger is not None:
+                        self._logger.append(
+                            f"[OpenVPN] Applying search domains via resolvectl: {' '.join(dom_cmd)}",
+                            channel=self._log_channel,
+                            level="debug",
+                        )
+                    subprocess.run(
+                        dom_cmd,
+                        check=False,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                    )
+            else:
+                # systemd-resolve (legacy).
+                # Only set primary DNS; domains are not handled here for simplicity.
+                dns_cmd = [cmd, f"--interface={iface}", f"--set-dns={servers[0]}"]
+                if self._logger is not None:
+                    self._logger.append(
+                        f"[OpenVPN] Applying DNS via systemd-resolve: {' '.join(dns_cmd)}",
+                        channel=self._log_channel,
+                        level="debug",
+                    )
+                subprocess.run(
+                    dns_cmd,
+                    check=False,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+
+            self._dns_applied = True
+        except Exception as e:
+            if self._logger is not None:
+                self._logger.append(
+                    f"[OpenVPN] Failed to apply DNS settings: {e}",
+                    channel=self._log_channel,
+                    level="warning",
+                )
+
+    def _revert_dns(self) -> None:
+        """
+        Revert DNS settings previously applied for the VPN interface on Linux.
+        """
+        if not self._dns_applied:
+            return
+        if self._owner._helper.get_os() != "linux":
+            return
+
+        iface = self._dns_iface
+        if not iface:
+            return
+
+        from shutil import which
+
+        cmd = which("resolvectl") or which("systemd-resolve")
+        if not cmd:
+            return
+
+        try:
+            if os.path.basename(cmd) == "resolvectl":
+                revert_cmd = [cmd, "revert", iface]
+            else:
+                revert_cmd = [cmd, f"--interface={iface}", "--revert"]
+
+            if self._logger is not None:
+                self._logger.append(
+                    f"[OpenVPN] Reverting DNS configuration: {' '.join(revert_cmd)}",
+                    channel=self._log_channel,
+                    level="debug",
+                )
+
+            subprocess.run(
+                revert_cmd,
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+        except Exception as e:
+            if self._logger is not None:
+                self._logger.append(
+                    f"[OpenVPN] Failed to revert DNS configuration: {e}",
+                    channel=self._log_channel,
+                    level="warning",
+                )
+
+        self._dns_applied = False
