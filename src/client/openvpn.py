@@ -562,6 +562,12 @@ class OpenVPNConnection(QThread):
             return
 
         lower = ln.lower()
+        if self._logger is not None:
+            self._logger.append(
+                f"[OpenVPN] Inspecting log line for DNS/interface: {ln}",
+                channel=self._log_channel,
+                level="debug",
+            )
 
         # Detect TUN/TAP interface name, e.g. "TUN/TAP device tun0 opened"
         if (
