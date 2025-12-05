@@ -591,47 +591,89 @@ class OpenVPNConnection(QThread):
                         break
 
         # Detect pushed options lines with DNS/DOMAIN from the server
+        # 1) PUSH_REPLY / PUSH: Received control message ...
         if "PUSH_REPLY" in ln or "PUSH:" in ln:
             payload = None
             if "PUSH_REPLY," in ln:
                 payload = ln.split("PUSH_REPLY,", 1)[1]
             elif "PUSH_REPLY" in ln and "'" in ln:
+                # e.g. "PUSH: Received control message: 'PUSH_REPLY,dhcp-option ...'"
                 payload = ln.split("PUSH_REPLY", 1)[1]
             elif "PUSH:" in ln and "'" in ln:
                 payload = ln.split("PUSH:", 1)[1]
 
-            if payload is None:
-                return
+            if payload is not None:
+                payload = payload.strip().strip("'")
+                items = payload.split(",")
+                for item in items:
+                    item = item.strip()
+                    if not item.lower().startswith("dhcp-option"):
+                        continue
 
-            payload = payload.strip().strip("'")
-            items = payload.split(",")
-            for item in items:
-                item = item.strip()
-                if not item.lower().startswith("dhcp-option"):
-                    continue
+                    # Expect forms like "dhcp-option DNS 10.10.0.1" or "dhcp-option DOMAIN albcie.com"
+                    parts = item.split()
+                    if len(parts) < 3:
+                        continue
 
-                # Expect forms like "dhcp-option DNS 10.10.0.1" or "dhcp-option DOMAIN albcie.com"
-                parts = item.split()
-                if len(parts) < 3:
-                    continue
+                    opt_type = parts[1].upper()
+                    opt_value = " ".join(parts[2:]).strip()
 
-                opt_type = parts[1].upper()
-                opt_value = " ".join(parts[2:]).strip()
+                    if opt_type == "DNS":
+                        if opt_value and opt_value not in self._dns_servers:
+                            self._dns_servers.append(opt_value)
+                    elif opt_type in ("DOMAIN", "DOMAIN-SEARCH"):
+                        dom = opt_value.lstrip("~")
+                        if dom and dom not in self._dns_domains:
+                            self._dns_domains.append(dom)
 
-                if opt_type == "DNS":
-                    if opt_value and opt_value not in self._dns_servers:
-                        self._dns_servers.append(opt_value)
-                elif opt_type in ("DOMAIN", "DOMAIN-SEARCH"):
-                    dom = opt_value.lstrip("~")
-                    if dom and dom not in self._dns_domains:
-                        self._dns_domains.append(dom)
+        # 2) OPTIONS IMPORT lines (OpenVPN 2.6 style), e.g.:
+        #    "OPTIONS IMPORT: --dhcp-option DNS 192.168.40.201"
+        if "OPTIONS IMPORT" in ln and "dhcp-option" in lower:
+            try:
+                tail = ln.split("OPTIONS IMPORT", 1)[1]
+                if ":" in tail:
+                    tail = tail.split(":", 1)[1]
+                tail = tail.strip()
+                # Normalise and split by commas if multiple options are present
+                options_chunk = tail
+                for raw_item in options_chunk.split(","):
+                    item = raw_item.strip()
+                    if not item:
+                        continue
+                    # Allow forms like "--dhcp-option DNS 1.2.3.4" or "dhcp-option: DNS 1.2.3.4"
+                    item = item.lstrip("-")
+                    item = item.replace("dhcp-option:", "dhcp-option ")
+                    if not item.lower().startswith("dhcp-option"):
+                        continue
 
-            if self._logger is not None and (self._dns_servers or self._dns_domains):
-                self._logger.append(
-                    f"[OpenVPN] Parsed pushed DNS options: servers={self._dns_servers}, domains={self._dns_domains}",
-                    channel=self._log_channel,
-                    level="debug",
-                )
+                    parts = item.split()
+                    if len(parts) < 3:
+                        continue
+
+                    opt_type = parts[1].upper()
+                    opt_value = " ".join(parts[2:]).strip()
+
+                    if opt_type == "DNS":
+                        if opt_value and opt_value not in self._dns_servers:
+                            self._dns_servers.append(opt_value)
+                    elif opt_type in ("DOMAIN", "DOMAIN-SEARCH"):
+                        dom = opt_value.lstrip("~")
+                        if dom and dom not in self._dns_domains:
+                            self._dns_domains.append(dom)
+            except Exception as e:
+                if self._logger is not None:
+                    self._logger.append(
+                        f"[OpenVPN] Failed to parse OPTIONS IMPORT line for DNS: {e}",
+                        channel=self._log_channel,
+                        level="warning",
+                    )
+
+        if self._logger is not None and (self._dns_servers or self._dns_domains):
+            self._logger.append(
+                f"[OpenVPN] Parsed pushed DNS options: servers={self._dns_servers}, domains={self._dns_domains}",
+                channel=self._log_channel,
+                level="debug",
+            )
 
     def _apply_dns(self) -> None:
         """
@@ -1378,6 +1420,10 @@ class OpenVPN(QObject):
             cmd += ["--auth-user-pass", auth_file]
         else:
             self._logger.append(f"[DEBUG OpenVPN] build_command(): no username/password supplied.", channel=self._log_channel, level="debug")
+
+        # Ensure sufficient verbosity for DNS parsing (PUSH/OPTIONS IMPORT lines)
+        if "--verb" not in cmd:
+            cmd += ["--verb", "4"]
 
         self._logger.append(f"[DEBUG OpenVPN] build_command(): constructed command: {' '.join(cmd)}", channel=self._log_channel, level="debug")
         return cmd
