@@ -650,8 +650,8 @@ class OpenVPN(QObject):
         return str(cfg)
 
     def _runtime_dir(self) -> str:
-        root = self._helper.root_dir
-        run_dir = os.path.join(root, "runtime")
+        home = self._helper.home_dir
+        run_dir = os.path.join(home, ".runtime")
         os.makedirs(run_dir, exist_ok=True)
         return run_dir
 
