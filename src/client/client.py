@@ -3,8 +3,9 @@
 
 from __future__ import annotations
 
+import re
 import base64
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING, Callable
 
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QGridLayout, QLabel, QLineEdit,
@@ -189,21 +190,139 @@ class Client(QMainWindow):
         super().closeEvent(event)
 
     # ------------------------------------------------------------------
-    # UI helpers
+    # Diagnostics
     # ------------------------------------------------------------------
 
     def showDiagnostic(self):
-        host = self._configuration.get("general.host")
-        ports = [self._configuration.get("general.port")]
-        Diagnostic(
-            host,
-            ports,
-            parent=self
-        ).show(
+        overrides = self.overrides(clear=False)
+
+        diag = Diagnostic(overrides.host, [overrides.port])
+        diag.add("device", "Device", None, self._step_device)
+        diag.add("network", "Network", None, self._step_network)
+        diag.add("internet", "Internet", None, self._step_internet)
+        if self._configuration.get("vpn.openvpn.auto"):
+            diag.add("vpn", "VPN", None, self._step_vpn)
+            diag.on_finish(self._openvpn.stop)
+        diag.add("service", "Service", None, self._step_service)
+        diag.show(
             parent=self,
-            before=[self._on_diagnostic_started] if self._configuration.get("vpn.openvpn.auto") else None,
             finished=self._on_diagnostic_finished,
         )
+
+    def _step_device(self, print_fn: Callable[[str], None]) -> bool:
+        ips = self._tools.ip()
+        if not ips:
+            print_fn("Device: could not determine any local IPv4 address.")
+            return False
+
+        ip = None
+        for cand in ips:
+            if not cand.startswith("127.") and not self._tools.apipa(cand):
+                ip = cand
+                break
+
+        if not ip:
+            print_fn(f"Device: only APIPA/loopback addresses found: {ips}")
+            return False
+
+        if self._tools.apipa(ip):
+            print_fn(f"Device: APIPA address {ip} (DHCP failure).")
+            return False
+
+        print_fn(f"Device: local IP is {ip}")
+        return True
+
+    def _step_network(self, print_fn: Callable[[str], None]) -> bool:
+        gw = self._tools.gateway()
+        if not gw:
+            print_fn("Network: default gateway not found.")
+            return False
+
+        print_fn(f"Network: default gateway {gw}")
+        gw_ok = self._tools.ping(gw)
+        print_fn("Network: gateway reachable." if gw_ok else "Network: gateway not reachable.")
+        return gw_ok
+
+    def _step_internet(self, print_fn: Callable[[str], None]) -> bool:
+        pub_ok = self._tools.ping("8.8.8.8")
+        print_fn(
+            "Internet: 8.8.8.8 reachable."
+            if pub_ok else
+            "Internet: cannot reach 8.8.8.8."
+        )
+
+        IPs = self._tools.nslookup("google.com")
+        dns_ok = bool(IPs)
+        if dns_ok:
+            print_fn(f"Internet: DNS OK → {IPs}")
+        else:
+            print_fn(f"Internet: DNS failed: {IPs or 'no valid addresses found.'}")
+
+        return pub_ok and dns_ok
+
+    def _step_vpn(self, print_fn: Callable[[str], None]) -> bool:
+        overrides = self.overrides(clear=False)
+        return self._openvpn.connect(
+            parent=self,
+            overrides=overrides,
+            on_success=lambda: True,
+            on_error=lambda: False,
+            show_dialog=False,
+        )
+
+    def _step_service(self, print_fn: Callable[[str], None]) -> bool:
+        if not self.host:
+            print_fn("Service: no host configured.")
+            return False
+
+        res_ok, addr = self._resolve_host(self.host)
+        if not res_ok:
+            print_fn(f"Service: cannot resolve {self.host}: {addr}")
+            return False
+
+        print_fn(f"Service: target {self.host} -> {addr} (ports: {self.ports})")
+
+        p_ok = self._tools.ping(addr)
+        print_fn(
+            "Service: ping reachable."
+            if p_ok else
+            "Service: ping failed."
+        )
+
+        port_results = self._tools.nmap(addr, self.ports)
+        if not port_results:
+            print_fn("Service: no ports tested or scan failed.")
+            t_ok = False
+        else:
+            open_any = False
+            for p, is_open in port_results.items():
+                print_fn(f"Service: port {p} {'open' if is_open else 'closed'}.")
+                if is_open:
+                    open_any = True
+            t_ok = open_any
+
+        svc_ok = p_ok and t_ok
+        return svc_ok
+
+    # ------------------------------------------------------------------
+    # Diagnostics helpers
+    # ------------------------------------------------------------------
+
+    def _is_ip(self, value: str) -> bool:
+        return bool(re.match(r"^\d+\.\d+\.\d+\.\d+$", value.strip()))
+
+    def _resolve_host(self, host: str) -> tuple[bool, str]:
+        if self._is_ip(host):
+            return True, host
+
+        ips = self._tools.nslookup(host)
+        if ips:
+            return True, ips[0]
+        return False, "Resolution failed"
+
+    # ------------------------------------------------------------------
+    # UI helpers
+    # ------------------------------------------------------------------
 
     def init(self):
 
@@ -410,36 +529,6 @@ class Client(QMainWindow):
                 channel="client",
             )
             self._openvpn.stop()
-
-    def _on_diagnostic_started(self, diag: Diagnostic):
-        overrides = self.overrides(clear=False)
-        if self._configuration.get("vpn.openvpn.auto"):
-            self._openvpn.connect(
-                parent=self,
-                overrides=overrides,
-                on_success=lambda: True,
-            )
-
-    def _on_diagnostic_finished(self, success: bool):
-
-        if self._configuration.get("vpn.openvpn.auto"):
-            self._logger.append(
-                "[Client] Auto-VPN enabled → stopping OpenVPN.",
-                channel="client",
-            )
-            self._openvpn.stop()
-
-        if success:
-            self._logger.append(
-                "[Client] Diagnostics completed successfully.",
-                channel="client",
-            )
-        else:
-            self._logger.append(
-                "[Client] Diagnostics detected issues.",
-                channel="client",
-                level="warning",
-            )
 
     # ------------------------------------------------------------------
     # Actions

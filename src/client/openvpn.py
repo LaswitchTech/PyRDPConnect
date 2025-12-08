@@ -1466,6 +1466,8 @@ class OpenVPN(QObject):
         parent,
         overrides: Optional[Dict[str, Any]] = None,
         on_success: Optional[Callable[[], None]] = None,
+        on_error: Optional[Callable[[], None]] = None,
+        show_dialog: bool = True,
     ) -> None:
 
         # Reset channel for this new attempt
@@ -1521,14 +1523,17 @@ class OpenVPN(QObject):
             debug_enabled=debug_enabled,
             parent=parent,
         )
-        self._thread.connected.connect(lambda: self._on_success(parent, on_success))
+        self._thread.connected.connect(
+            lambda: self._on_success(parent, on_success)
+        )
         self._thread.failed.connect(
-            lambda title, details, raw: self._on_failed(parent, title, details, raw)
+            lambda title, details, raw: self._on_failed(parent, title, details, raw, on_error)
         )
         self._thread.info.connect(self._on_info)
 
         self._thread.start()
-        self._dialog.show()
+        if show_dialog and self._dialog:
+            self._dialog.show()
 
     # ------------------------------------------------------------------
     # Internal handlers for UI connect()
@@ -1696,7 +1701,7 @@ class OpenVPN(QObject):
                 icon_lookup_fn=self._helper.get_path,
             )
 
-    def _on_failed(self, parent, title: str, details: str, raw_log: str):
+    def _on_failed(self, parent, title: str, details: str, raw_log: str, on_error: Optional[Callable[[], None]] = None):
         _ = raw_log  # canonical log is already in self._logger
         if self._dialog:
             self._dialog.hide()
@@ -1708,18 +1713,21 @@ class OpenVPN(QObject):
         else:
             buttons = ("OK",)
 
-        choice = MsgBox.show(
-            parent=parent,
-            title=title,
-            message=details,
-            icon="error",
-            buttons=buttons,
-            default="OK",
-            icon_lookup_fn=self._helper.get_path,
-        )
+        if callable(on_error):
+            on_error()
+        else:
+            choice = MsgBox.show(
+                parent=parent,
+                title=title,
+                message=details,
+                icon="error",
+                buttons=buttons,
+                default="OK",
+                icon_lookup_fn=self._helper.get_path,
+            )
 
-        if choice == "Open log":
-            self._logger.show(parent=parent, channel=self._log_channel)
+            if choice == "Open log":
+                self._logger.show(parent=parent, channel=self._log_channel)
 
     def _on_user_cancel(self):
         self._logger.append(
