@@ -1618,6 +1618,32 @@ class OpenVPN(QObject):
                     channel=self._log_channel,
                     level="warning",
                 )
+            try:
+                result = subprocess.run(
+                    ["resolvectl", "query", "vdi-01.albcie.com"],
+                    check=False,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                if self._logger is not None:
+                    self._logger.append(
+                        f"[OpenVPN] resolvectl query vdi-01.albcie.com output:\n{result.stdout}",
+                        channel=self._log_channel,
+                        level="debug",
+                    )
+                    if result.stderr:
+                        self._logger.append(
+                            f"[OpenVPN] resolvectl query vdi-01.albcie.com error output:\n{result.stderr}",
+                            channel=self._log_channel,
+                            level="Error",
+                        )
+            except Exception as e:
+                self._logger.append(
+                    f"[OpenVPN] Failed to run resolvectl query vdi-01.albcie.com: {e}",
+                    channel=self._log_channel,
+                    level="warning",
+                )
 
         if callable(on_success):
             on_success()
