@@ -19,6 +19,7 @@ from PyQt5.QtWidgets import (
 )
 
 from core.helper import Helper
+from core.network.tools import Tools
 from core.ui import MsgBox
 from core.log import Log
 
@@ -895,6 +896,9 @@ class OpenVPN(QObject):
         # Helper
         self._helper: Helper = helper
 
+        # Tools
+        self._tools: Tools = Tools(helper=self._helper)
+
         # Configuration
         self._configuration: Configuration = configuration
         self._configuration.label("vpn.openvpn", "OpenVPN")
@@ -1669,6 +1673,14 @@ class OpenVPN(QObject):
                     f"[OpenVPN] Failed to run getent hosts vdi-01.albcie.com: {e}",
                     channel=self._log_channel,
                     level="warning",
+                )
+
+            resolved_ip = self._tools.nslookup("vdi-01.albcie.com")
+            if self._logger is not None:
+                self._logger.append(
+                    f"[OpenVPN] nslookup vdi-01.albcie.com resolved IP: {resolved_ip}",
+                    channel=self._log_channel,
+                    level="debug",
                 )
 
         if callable(on_success):
