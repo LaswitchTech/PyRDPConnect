@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 # src/client/client.py
+
+from __future__ import annotations
+
 import base64
 from typing import Optional, TYPE_CHECKING
 
@@ -112,6 +115,42 @@ class Client(QMainWindow):
             f"    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {start}, stop:1 {end});\n"
             "}\n"
         )
+
+    def overrides(self, clear: bool = True) -> dict:
+        # Initialize overrides dictionary
+        overrides = {}
+
+        # Get values from input fields
+        for widget in self._inputs:
+            name = widget.objectName()
+            if isinstance(widget, QLineEdit):
+                overrides[name] = widget.text()
+                if clear:
+                    widget.clear()
+            elif isinstance(widget, QSpinBox):
+                overrides[name] = widget.value()
+                if clear:
+                    widget.setValue(0)
+            elif isinstance(widget, QComboBox):
+                overrides[name] = widget.currentText()
+                if clear:
+                    widget.setCurrentIndex(0)
+            elif isinstance(widget, QCheckBox):
+                overrides[name] = widget.isChecked()
+                if clear:
+                    widget.setChecked(False)
+
+        # Add the form items to the form layout
+        general = self._configuration.get("general", {}) or {}
+        for name, value in general.items():
+            if overrides.get(f"general.{name}") in (None, ""):
+                overrides[f"general.{name}"] = value
+
+        # if we have cleared, reset focus to first input
+        if clear and self._inputs:
+            self._inputs[0].setFocus()
+
+        return overrides
 
     def reset(self):
         pass
