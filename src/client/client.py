@@ -195,8 +195,15 @@ class Client(QMainWindow):
     def showDiagnostic(self):
         host = self._configuration.get("general.host")
         ports = [self._configuration.get("general.port")]
-        dlg = Diagnostic(host, ports, parent=self)
-        dlg.show()
+        Diagnostic(
+            host,
+            ports,
+            parent=self
+        ).show(
+            parent=self,
+            before=[self._on_diagnostic_started] if self._configuration.get("vpn.openvpn.auto") else None,
+            finished=self._on_diagnostic_finished,
+        )
 
     def init(self):
 
@@ -403,6 +410,36 @@ class Client(QMainWindow):
                 channel="client",
             )
             self._openvpn.stop()
+
+    def _on_diagnostic_started(self, diag: Diagnostic):
+        overrides = self.overrides(clear=False)
+        if self._configuration.get("vpn.openvpn.auto"):
+            self._openvpn.connect(
+                parent=self,
+                overrides=overrides,
+                on_success=lambda: True,
+            )
+
+    def _on_diagnostic_finished(self, success: bool):
+
+        if self._configuration.get("vpn.openvpn.auto"):
+            self._logger.append(
+                "[Client] Auto-VPN enabled → stopping OpenVPN.",
+                channel="client",
+            )
+            self._openvpn.stop()
+
+        if success:
+            self._logger.append(
+                "[Client] Diagnostics completed successfully.",
+                channel="client",
+            )
+        else:
+            self._logger.append(
+                "[Client] Diagnostics detected issues.",
+                channel="client",
+                level="warning",
+            )
 
     # ------------------------------------------------------------------
     # Actions
