@@ -448,29 +448,7 @@ class Client(QMainWindow):
     def connect(self):
 
         # Initialize overrides dictionary
-        overrides = {}
-
-        # Get values from input fields
-        for widget in self._inputs:
-            name = widget.objectName()
-            if isinstance(widget, QLineEdit):
-                overrides[name] = widget.text()
-                widget.clear()
-            elif isinstance(widget, QSpinBox):
-                overrides[name] = widget.value()
-                widget.setValue(0)
-            elif isinstance(widget, QComboBox):
-                overrides[name] = widget.currentText()
-                widget.setCurrentIndex(0)
-            elif isinstance(widget, QCheckBox):
-                overrides[name] = widget.isChecked()
-                widget.setChecked(False)
-
-        # Add the form items to the form layout
-        general = self._configuration.get("general", {}) or {}
-        for name, value in general.items():
-            if overrides.get(f"general.{name}") in (None, ""):
-                overrides[f"general.{name}"] = value
+        overrides = self.overrides()
 
         # Make sure VPN is up if needed; only start RDP after VPN connects
         if self._configuration.get("vpn.openvpn.auto"):
