@@ -714,13 +714,21 @@ class OpenVPNConnection(QThread):
                         channel=self._log_channel,
                         level="debug",
                     )
-                subprocess.run(
+                proc = subprocess.run(
                     dns_cmd,
                     check=False,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     text=True,
                 )
+
+                if self._logger is not None:
+                    self._logger.append(
+                        f"[OpenVPN] resolvectl dns result: returncode={proc.returncode}, "
+                        f"stdout={proc.stdout!r}, stderr={proc.stderr!r}",
+                        channel=self._log_channel,
+                        level="debug",
+                    )
 
                 if domains:
                     dom_args = ["~" + d for d in domains]
@@ -1523,11 +1531,18 @@ class OpenVPN(QObject):
                     stderr=subprocess.PIPE,
                     text=True,
                 )
-                self._logger.append(
-                    f"[OpenVPN] resolvectl status tun0 output:\n{result.stdout}",
-                    channel=self._log_channel,
-                    level="debug",
-                )
+                if self._logger is not None:
+                    self._logger.append(
+                        f"[OpenVPN] resolvectl status tun0 output:\n{result.stdout}",
+                        channel=self._log_channel,
+                        level="debug",
+                    )
+                    if result.stderr:
+                        self._logger.append(
+                            f"[OpenVPN] resolvectl status tun0 error output:\n{result.stderr}",
+                            channel=self._log_channel,
+                            level="Error",
+                        )
             except Exception as e:
                 self._logger.append(
                     f"[OpenVPN] Failed to run resolvectl status tun0: {e}",
@@ -1542,11 +1557,18 @@ class OpenVPN(QObject):
                     stderr=subprocess.PIPE,
                     text=True,
                 )
-                self._logger.append(
-                    f"[OpenVPN] resolvectl dns tun0 output:\n{result.stdout}",
-                    channel=self._log_channel,
-                    level="debug",
-                )
+                if self._logger is not None:
+                    self._logger.append(
+                        f"[OpenVPN] resolvectl dns tun0 output:\n{result.stdout}",
+                        channel=self._log_channel,
+                        level="debug",
+                    )
+                    if result.stderr:
+                        self._logger.append(
+                            f"[OpenVPN] resolvectl dns tun0 error output:\n{result.stderr}",
+                            channel=self._log_channel,
+                            level="Error",
+                        )
             except Exception as e:
                 self._logger.append(
                     f"[OpenVPN] Failed to run resolvectl dns tun0: {e}",
@@ -1561,11 +1583,18 @@ class OpenVPN(QObject):
                     stderr=subprocess.PIPE,
                     text=True,
                 )
-                self._logger.append(
-                    f"[OpenVPN] resolvectl domain tun0 output:\n{result.stdout}",
-                    channel=self._log_channel,
-                    level="debug",
-                )
+                if self._logger is not None:
+                    self._logger.append(
+                        f"[OpenVPN] resolvectl domain tun0 output:\n{result.stdout}",
+                        channel=self._log_channel,
+                        level="debug",
+                    )
+                    if result.stderr:
+                        self._logger.append(
+                            f"[OpenVPN] resolvectl domain tun0 error output:\n{result.stderr}",
+                            channel=self._log_channel,
+                            level="Error",
+                        )
             except Exception as e:
                 self._logger.append(
                     f"[OpenVPN] Failed to run resolvectl domain tun0: {e}",
