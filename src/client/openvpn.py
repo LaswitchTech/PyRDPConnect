@@ -765,6 +765,14 @@ class OpenVPNConnection(QThread):
                     text=True,
                 )
 
+            subprocess.run(
+                ["sudo", dns_cmd, "flush-caches"],
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+
             self._dns_applied = True
         except Exception as e:
             if self._logger is not None:
@@ -808,6 +816,14 @@ class OpenVPNConnection(QThread):
 
             subprocess.run(
                 revert_cmd,
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+
+            subprocess.run(
+                ["sudo", cmd, "flush-caches"],
                 check=False,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
