@@ -766,7 +766,7 @@ class OpenVPNConnection(QThread):
                 )
 
             subprocess.run(
-                ["sudo", dns_cmd, "flush-caches"],
+                ["sudo", cmd, "flush-caches"],
                 check=False,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
