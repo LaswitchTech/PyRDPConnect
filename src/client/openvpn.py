@@ -1675,10 +1675,10 @@ class OpenVPN(QObject):
                     level="warning",
                 )
 
-            resolved = self._tools.nslookup("vdi-01.albcie.com") # returns tuple (boolean, ip_address)
+            resolved = self._tools.nslookup("vdi-01.albcie.com") # returns array of IPs or false
             if self._logger is not None:
                 self._logger.append(
-                    f"[OpenVPN] nslookup vdi-01.albcie.com result: {resolved}",
+                    f"[OpenVPN] nslookup vdi-01.albcie.com resolved: {resolved}",
                     channel=self._log_channel,
                     level="debug",
                 )
