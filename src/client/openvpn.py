@@ -707,13 +707,14 @@ class OpenVPNConnection(QThread):
         try:
             if os.path.basename(cmd) == "resolvectl":
                 # resolvectl dns <if> <ip1> <ip2> ...
-                dns_cmd = [cmd, "dns", iface] + servers
+                dns_cmd = ["sudo", cmd, "dns", iface] + servers
                 if self._logger is not None:
                     self._logger.append(
                         f"[OpenVPN] Applying DNS via resolvectl: {' '.join(dns_cmd)}",
                         channel=self._log_channel,
                         level="debug",
                     )
+
                 proc = subprocess.run(
                     dns_cmd,
                     check=False,
@@ -732,7 +733,7 @@ class OpenVPNConnection(QThread):
 
                 if domains:
                     dom_args = ["~" + d for d in domains]
-                    dom_cmd = [cmd, "domain", iface] + dom_args
+                    dom_cmd = ["sudo", cmd, "domain", iface] + dom_args
                     if self._logger is not None:
                         self._logger.append(
                             f"[OpenVPN] Applying search domains via resolvectl: {' '.join(dom_cmd)}",
@@ -749,7 +750,7 @@ class OpenVPNConnection(QThread):
             else:
                 # systemd-resolve (legacy).
                 # Only set primary DNS; domains are not handled here for simplicity.
-                dns_cmd = [cmd, f"--interface={iface}", f"--set-dns={servers[0]}"]
+                dns_cmd = ["sudo", cmd, f"--interface={iface}", f"--set-dns={servers[0]}"]
                 if self._logger is not None:
                     self._logger.append(
                         f"[OpenVPN] Applying DNS via systemd-resolve: {' '.join(dns_cmd)}",
@@ -794,9 +795,9 @@ class OpenVPNConnection(QThread):
 
         try:
             if os.path.basename(cmd) == "resolvectl":
-                revert_cmd = [cmd, "revert", iface]
+                revert_cmd = ["sudo", cmd, "revert", iface]
             else:
-                revert_cmd = [cmd, f"--interface={iface}", "--revert"]
+                revert_cmd = ["sudo", cmd, f"--interface={iface}", "--revert"]
 
             if self._logger is not None:
                 self._logger.append(
