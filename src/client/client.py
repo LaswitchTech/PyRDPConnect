@@ -256,7 +256,7 @@ class Client(QMainWindow):
                 channel="client",
                 level="debug",
             )
-            diag.on_finish(lambda success: self._on_diagnostics_finished(success))
+            diag.on_finish(lambda success: self._on_diagnostic_finished(success))
 
         # Target service step
         diag.add("service", "Service", None, self._step_service)
