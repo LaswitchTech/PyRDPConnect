@@ -331,7 +331,7 @@ class Client(QMainWindow):
                 overrides=overrides,
                 on_success=lambda: _on_done(True),
                 on_error=lambda: _on_done(False),
-                show_dialog=True,
+                show_dialog=False,
             )
 
         # Schedule the OpenVPN.connect() call on the main/UI thread
