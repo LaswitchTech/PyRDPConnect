@@ -339,7 +339,7 @@ class Client(QMainWindow):
         QTimer.singleShot(0, _start_connect)
 
         # 4) Wait until we know the result, but don’t spin
-        timeout_seconds = 60.0
+        timeout_seconds = 240.0
         start = time.monotonic()
 
         while True:
