@@ -422,7 +422,7 @@ class Client(QMainWindow):
                 overrides=overrides,
                 on_success=lambda: _mark(True),
                 on_error=lambda: _mark(False),
-                show_dialog=True,
+                show_dialog=False,
             )
 
         # Schedule on the main thread (Qt event loop)
