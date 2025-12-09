@@ -354,6 +354,11 @@ class Client(QMainWindow):
                 level="debug",
             )
             overrides = self.overrides(clear=False)
+            self._logger.append(
+                f"[Client] _step_vpn: overrides obtained: {overrides}.",
+                channel="client",
+                level="debug",
+            )
         else:
             self._logger.append(
                 "[Client] _step_vpn: no overrides() method found, using empty overrides.",
