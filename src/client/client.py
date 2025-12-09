@@ -287,11 +287,18 @@ class Client(QMainWindow):
 
     def _step_vpn(self, print_fn: Callable[[str], None]) -> bool:
         overrides = self.overrides(clear=False)
+        print_fn("VPN: attempting to start OpenVPN...")
+        def _on_success():
+            print_fn("VPN: OpenVPN connected successfully.")
+            return True
+        def _on_error():
+            print_fn("VPN: OpenVPN connection failed.")
+            return False
         return self._openvpn.connect(
             parent=self,
             overrides=overrides,
-            on_success=lambda: True,
-            on_error=lambda: False,
+            on_success=_on_success,
+            on_error=_on_error,
             show_dialog=False,
         )
 
