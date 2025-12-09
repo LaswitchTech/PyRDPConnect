@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import re
 import base64
+import threading
 from typing import Optional, TYPE_CHECKING, Callable
 
 from PyQt5.QtWidgets import (
@@ -13,7 +14,7 @@ from PyQt5.QtWidgets import (
     QApplication,
 )
 from PyQt5.QtGui import QIcon, QPixmap
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 
 from core.helper import Helper
 from core.ui import Form
@@ -289,14 +290,17 @@ class Client(QMainWindow):
         """
         Diagnostic VPN step.
 
-        This step MUST be synchronous and must not create Qt widgets or start the
-        asynchronous OpenVPN.connect() flow, because it is executed inside the
-        DiagnosticThread worker. We instead use a headless, blocking helper on
-        the OpenVPN façade that:
-          - builds the command from current configuration/overrides
-          - starts OpenVPN
-          - waits until the tunnel is up or a timeout/error occurs
-          - leaves the tunnel running on success (so the next step can use it)
+        This step runs inside the Diagnostic worker thread, but we *reuse* the
+        existing OpenVPN.connect() implementation (with its dialog, signals and
+        DNS handling) by scheduling it on the UI thread and waiting on a
+        threading.Event from here.
+
+        - The OpenVPN.connect() call (and any Qt widgets) execute on the main
+          thread.
+        - This method blocks only the DiagnosticThread, not the UI.
+        - On success, the VPN tunnel remains up so that the next diagnostic
+          step can use it. The on_finish() hook in showDiagnostic() is
+          responsible for calling self._openvpn.stop() afterwards.
         """
         overrides = self.overrides(clear=False)
 
@@ -311,12 +315,35 @@ class Client(QMainWindow):
 
         print_fn("VPN: starting OpenVPN tunnel for diagnostics...")
 
-        ok = self._openvpn.diagnostic(
-            overrides=overrides,
-            timeout=30,
-        )
+        # Shared result between UI thread callbacks and this worker
+        result = {"done": False, "ok": False}
+        done_event = threading.Event()
 
-        if ok:
+        def _on_done(ok: bool) -> None:
+            result["ok"] = ok
+            result["done"] = True
+            done_event.set()
+
+        # This will be executed on the UI thread via the Qt event loop
+        def _start_connect() -> None:
+            self._openvpn.connect(
+                parent=self,
+                overrides=overrides,
+                on_success=lambda: _on_done(True),
+                on_error=lambda: _on_done(False),
+                show_dialog=True,
+            )
+
+        # Schedule the OpenVPN.connect() call on the main/UI thread
+        QTimer.singleShot(0, _start_connect)
+
+        # Wait here in the DiagnosticThread until VPN connect finishes or times out
+        timeout_seconds = 30
+        if not done_event.wait(timeout_seconds):
+            print_fn("VPN: timeout while waiting for tunnel establishment.")
+            return False
+
+        if result["ok"]:
             print_fn("VPN: tunnel established successfully.")
             return True
 
