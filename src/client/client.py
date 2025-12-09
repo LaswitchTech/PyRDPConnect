@@ -338,7 +338,7 @@ class Client(QMainWindow):
         QTimer.singleShot(0, _start_connect)
 
         # Wait here in the DiagnosticThread until VPN connect finishes or times out
-        timeout_seconds = 30
+        timeout_seconds = 60
         if not done_event.wait(timeout_seconds):
             print_fn("VPN: timeout while waiting for tunnel establishment.")
             return False
