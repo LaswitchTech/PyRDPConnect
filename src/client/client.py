@@ -203,7 +203,8 @@ class Client(QMainWindow):
             else:
                 json_overrides[k] = str(v)
         print(f"[Client] Starting diagnostics with overrides: {json_overrides}")
-        diag = Diagnostic(overrides.host, [overrides.port])
+        print(f"[Client] Target host: {overrides.get('general.host','')}, ports: {[overrides.get('general.port','')]}")
+        diag = Diagnostic(overrides.get("general.host",""), [overrides.get("general.port","")])
         diag.add("device", "Device", None, self._step_device)
         diag.add("network", "Network", None, self._step_network)
         diag.add("internet", "Internet", None, self._step_internet)
