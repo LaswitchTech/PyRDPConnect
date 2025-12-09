@@ -286,21 +286,42 @@ class Client(QMainWindow):
         return pub_ok and dns_ok
 
     def _step_vpn(self, print_fn: Callable[[str], None]) -> bool:
+        """
+        Diagnostic VPN step.
+
+        This step MUST be synchronous and must not create Qt widgets or start the
+        asynchronous OpenVPN.connect() flow, because it is executed inside the
+        DiagnosticThread worker. We instead use a headless, blocking helper on
+        the OpenVPN façade that:
+          - builds the command from current configuration/overrides
+          - starts OpenVPN
+          - waits until the tunnel is up or a timeout/error occurs
+          - leaves the tunnel running on success (so the next step can use it)
+        """
         overrides = self.overrides(clear=False)
-        print_fn("VPN: attempting to start OpenVPN...")
-        def _on_success():
-            print_fn("VPN: OpenVPN connected successfully.")
-            return True
-        def _on_error():
-            print_fn("VPN: OpenVPN connection failed.")
+
+        if not self._openvpn.is_configured():
+            print_fn("VPN: OpenVPN is not configured (no .ovpn file set).")
             return False
-        return self._openvpn.connect(
-            parent=self,
+
+        # If a tunnel is already up, just report success.
+        if self._openvpn.is_running():
+            print_fn("VPN: tunnel already running.")
+            return True
+
+        print_fn("VPN: starting OpenVPN tunnel for diagnostics...")
+
+        ok = self._openvpn.diagnostic(
             overrides=overrides,
-            on_success=_on_success,
-            on_error=_on_error,
-            show_dialog=False,
+            timeout=30,
         )
+
+        if ok:
+            print_fn("VPN: tunnel established successfully.")
+            return True
+
+        print_fn("VPN: failed to establish tunnel. See OpenVPN log for details.")
+        return False
 
     def _step_service(self, print_fn: Callable[[str], None]) -> bool:
         overrides = self.overrides(clear=False)

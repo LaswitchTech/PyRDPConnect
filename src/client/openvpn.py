@@ -1461,6 +1461,225 @@ class OpenVPN(QObject):
     # Public connect API
     # ------------------------------------------------------------------
 
+    def diagnostic(
+        self,
+        overrides: Optional[Dict[str, Any]] = None,
+        timeout: int = 30,
+    ) -> bool:
+        """
+        Headless, blocking connect used by the Diagnostic dialog.
+
+        - No Qt widgets, no QThread.
+        - Safe to call from a worker thread.
+        - Returns True if a tunnel is established (Initialization Sequence Completed),
+        False otherwise.
+        - On success, leaves the OpenVPN process running and registered in self._proc.
+        """
+        # Reset channel for this new attempt
+        self._logger.clear(self._log_channel)
+
+        self._logger.append(
+            "[DEBUG OpenVPN] connect_blocking_for_diagnostic() called.",
+            channel=self._log_channel,
+            level="debug",
+        )
+
+        if not self.is_configured():
+            self._logger.append(
+                "[OpenVPN] connect_blocking_for_diagnostic: OpenVPN config file is not set.",
+                channel=self._log_channel,
+                level="warning",
+            )
+            return False
+
+        cmd = self.build_command(overrides)
+
+        if not cmd:
+            self._logger.append(
+                "[OpenVPN] connect_blocking_for_diagnostic: invalid or missing configuration.",
+                channel=self._log_channel,
+                level="error",
+            )
+            return False
+
+        debug_enabled = bool(self._configuration.get("log.enabled", False))
+        if debug_enabled:
+            self._logger.append(
+                "[OpenVPN] (diag) Generated command:",
+                channel=self._log_channel,
+            )
+            self._logger.append(" ".join(cmd), channel=self._log_channel)
+
+        env = os.environ.copy()
+        osname = self._helper.get_os()
+        is_macos = (osname == "macos")
+
+        collected: list[str] = []
+        start = time.time()
+
+        try:
+            # For now we use a simplified path for both Linux and macOS.
+            # If you need elevated macOS support here as well, we can later
+            # mirror the AppleScript logic from OpenVPNConnection.run().
+            self._logger.append(
+                f"[OpenVPN] (diag) Starting OpenVPN with command: {' '.join(cmd)}",
+                channel=self._log_channel,
+                level="debug",
+            )
+
+            self._proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                stdin=subprocess.PIPE,
+                text=True,
+                env=env,
+                bufsize=1,
+                universal_newlines=True,
+                cwd=self._runtime_dir(),
+            )
+            self.stateChanged.emit("starting")
+
+            if not self._proc.stdout:
+                self._logger.append(
+                    "[OpenVPN] (diag) stdout pipe not available.",
+                    channel=self._log_channel,
+                    level="error",
+                )
+                raise RuntimeError("OpenVPN stdout not available")
+
+            while True:
+                # Timeout?
+                if time.time() - start > timeout:
+                    self._logger.append(
+                        "[OpenVPN] (diag) Connection timeout waiting for initialization.",
+                        channel=self._log_channel,
+                        level="error",
+                    )
+                    break
+
+                # Process exited?
+                rc = self._proc.poll()
+                if rc is not None:
+                    self._logger.append(
+                        f"[OpenVPN] (diag) OpenVPN exited before connection, rc={rc}.",
+                        channel=self._log_channel,
+                        level="error",
+                    )
+                    break
+
+                line = self._proc.stdout.readline()
+                if not line:
+                    time.sleep(0.1)
+                    continue
+
+                ln = line.rstrip()
+                if not ln:
+                    continue
+
+                collected.append(ln)
+                if self._logger is not None:
+                    self._logger.append(ln, channel=self._log_channel)
+
+                # Reuse DNS / iface detection logic (Linux)
+                try:
+                    self._inspect_line_for_dns_and_iface(ln)
+                except Exception as e:
+                    if self._logger is not None:
+                        self._logger.append(
+                            f"[OpenVPN] (diag) DNS inspection error: {e}",
+                            channel=self._log_channel,
+                            level="warning",
+                        )
+
+                if (
+                    not self._dns_applied
+                    and self._dns_servers
+                    and self._dns_iface
+                ):
+                    try:
+                        self._apply_dns()
+                    except Exception as e:
+                        if self._logger is not None:
+                            self._logger.append(
+                                f"[OpenVPN] (diag) Failed to apply DNS settings: {e}",
+                                channel=self._log_channel,
+                                level="warning",
+                            )
+
+                # Successful connection?
+                if "Initialization Sequence Completed" in ln:
+                    self._logger.append(
+                        "[OpenVPN] (diag) Detected successful connection.",
+                        channel=self._log_channel,
+                        level="info",
+                    )
+                    self.stateChanged.emit("running")
+                    # Leave process running for later diagnostic steps and for
+                    # the caller to stop() when finished.
+                    return True
+
+            # Failure path: ensure process is terminated and cleanup is done.
+            try:
+                if self._proc and self._proc.poll() is None:
+                    self._logger.append(
+                        "[OpenVPN] (diag) Terminating OpenVPN after failure.",
+                        channel=self._log_channel,
+                        level="debug",
+                    )
+                    self._proc.terminate()
+            except Exception as e:
+                self._logger.append(
+                    f"[OpenVPN] (diag) Failed to terminate OpenVPN after failure: {e}",
+                    channel=self._log_channel,
+                    level="error",
+                )
+
+            # Revert DNS and clean temp files if any
+            try:
+                self._revert_dns()
+            except Exception as e:
+                if self._logger is not None:
+                    self._logger.append(
+                        f"[OpenVPN] (diag) Failed to revert DNS settings: {e}",
+                        channel=self._log_channel,
+                        level="warning",
+                    )
+            try:
+                self._cleanup_temp_files()
+            except Exception as e:
+                self._logger.append(
+                    f"[OpenVPN] (diag) Failed to clean up temporary files: {e}",
+                    channel=self._log_channel,
+                    level="warning",
+                )
+
+            self.stateChanged.emit("error")
+            return False
+
+        except Exception as e:
+            self._logger.append(
+                f"[OpenVPN] (diag) Exception in connect_blocking_for_diagnostic: {e}",
+                channel=self._log_channel,
+                level="error",
+            )
+            try:
+                if self._proc and self._proc.poll() is None:
+                    self._proc.terminate()
+            except Exception:
+                pass
+            try:
+                self._revert_dns()
+            except Exception:
+                pass
+            try:
+                self._cleanup_temp_files()
+            except Exception:
+                pass
+
+            self.stateChanged.emit("error")
+            return False
+
     def connect(
         self,
         parent,
