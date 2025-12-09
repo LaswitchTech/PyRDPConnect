@@ -6,6 +6,7 @@ from __future__ import annotations
 import re
 import base64
 import threading
+import time
 from typing import Optional, TYPE_CHECKING, Callable
 
 from PyQt5.QtWidgets import (
@@ -286,62 +287,69 @@ class Client(QMainWindow):
 
         return pub_ok and dns_ok
 
-    def _step_vpn(self, print_fn: Callable[[str], None]) -> bool:
+    def _step_vpn(self, print_fn):
         """
         Diagnostic VPN step.
 
-        This step runs inside the Diagnostic worker thread, but we *reuse* the
-        existing OpenVPN.connect() implementation (with its dialog, signals and
-        DNS handling) by scheduling it on the UI thread and waiting on a
-        threading.Event from here.
-
-        - The OpenVPN.connect() call (and any Qt widgets) execute on the main
-          thread.
-        - This method blocks only the DiagnosticThread, not the UI.
-        - On success, the VPN tunnel remains up so that the next diagnostic
-          step can use it. The on_finish() hook in showDiagnostic() is
-          responsible for calling self._openvpn.stop() afterwards.
+        This runs in DiagnosticThread, but we reuse OpenVPN.connect()
+        on the UI thread and block here only until we get a success/fail
+        signal (or hit a timeout).
         """
-        overrides = self.overrides(clear=False)
 
+        # Whatever overrides you already use for VPN
+        if hasattr(self, "overrides"):
+            overrides = self.overrides(clear=False)
+        else:
+            overrides = {}
+
+        # 1) Basic checks
         if not self._openvpn.is_configured():
             print_fn("VPN: OpenVPN is not configured (no .ovpn file set).")
             return False
 
-        # If a tunnel is already up, just report success.
+        # If it’s already running, don’t try to reconnect
         if self._openvpn.is_running():
             print_fn("VPN: tunnel already running.")
             return True
 
-        print_fn("VPN: starting OpenVPN tunnel for diagnostics...")
+        print_fn("VPN: scheduling OpenVPN.connect() on UI thread...")
 
-        # Shared result between UI thread callbacks and this worker
+        # 2) Shared result + event
         result = {"done": False, "ok": False}
         done_event = threading.Event()
 
-        def _on_done(ok: bool) -> None:
+        def _mark(ok: bool) -> None:
             result["ok"] = ok
             result["done"] = True
             done_event.set()
 
-        # This will be executed on the UI thread via the Qt event loop
+        # 3) Call connect() on the main/UI thread
         def _start_connect() -> None:
+            # This actually launches OpenVPNConnection and the QProgressDialog
+            # `on_success` / `on_error` are called AFTER OpenVPN._on_success/_on_failed.
             self._openvpn.connect(
                 parent=self,
                 overrides=overrides,
-                on_success=lambda: _on_done(True),
-                on_error=lambda: _on_done(False),
-                show_dialog=False,
+                on_success=lambda: _mark(True),
+                on_error=lambda: _mark(False),
+                show_dialog=True,  # or False if you don’t want a second dialog
             )
 
-        # Schedule the OpenVPN.connect() call on the main/UI thread
+        # Schedule on the main thread (Qt event loop)
         QTimer.singleShot(0, _start_connect)
 
-        # Wait here in the DiagnosticThread until VPN connect finishes or times out
-        timeout_seconds = 60
-        if not done_event.wait(timeout_seconds):
-            print_fn("VPN: timeout while waiting for tunnel establishment.")
-            return False
+        # 4) Wait until we know the result, but don’t spin
+        timeout_seconds = 60.0
+        start = time.monotonic()
+
+        while True:
+            # Wait in small slices so we can honor timeout
+            if done_event.wait(0.1):
+                break  # success/failure set by _mark()
+
+            if time.monotonic() - start > timeout_seconds:
+                print_fn("VPN: timeout while waiting for tunnel establishment.")
+                return False
 
         if result["ok"]:
             print_fn("VPN: tunnel established successfully.")
