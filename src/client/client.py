@@ -44,6 +44,12 @@ class Client(QMainWindow):
         # Initialize parent
         super().__init__()
 
+        self._logger.append(
+            "[Client] __init__ called.",
+            channel="client",
+            level="debug",
+        )
+
         # Retrieve the application instance
         self._app: Application = QApplication.instance()
 
@@ -93,6 +99,11 @@ class Client(QMainWindow):
 
         # OpenVPN
         self._openvpn = OpenVPN(parent=self)
+        self._logger.append(
+            "[Client] OpenVPN instance created and wired into Client.",
+            channel="client",
+            level="debug",
+        )
 
         # When RDP disconnects, stop VPN if it was auto-started
         try:
@@ -217,23 +228,63 @@ class Client(QMainWindow):
         )
 
         diag = Diagnostic(host, [port])
+        self._logger.append(
+            "[Client] Diagnostic instance created.",
+            channel="client",
+            level="debug",
+        )
 
         # Core connectivity steps
         diag.add("device", "Device", None, self._step_device)
+        self._logger.append(
+            "[Client] Diagnostic step 'device' registered.",
+            channel="client",
+            level="debug",
+        )
         diag.add("network", "Network", None, self._step_network)
+        self._logger.append(
+            "[Client] Diagnostic step 'network' registered.",
+            channel="client",
+            level="debug",
+        )
         diag.add("internet", "Internet", None, self._step_internet)
+        self._logger.append(
+            "[Client] Diagnostic step 'internet' registered.",
+            channel="client",
+            level="debug",
+        )
 
         # Optional VPN configuration step (no actual tunnel establishment here)
         if self._configuration.get("vpn.openvpn.auto"):
             diag.add("vpn", "VPN", None, self._step_vpn)
+            self._logger.append(
+                "[Client] Diagnostic step 'vpn' (VPN connectivity) registered.",
+                channel="client",
+                level="debug",
+            )
+            diag.on_finish(lambda success: self._on_diagnostics_finished(success))
 
         # Target service step
         diag.add("service", "Service", None, self._step_service)
+        self._logger.append(
+            "[Client] Diagnostic step 'service' registered.",
+            channel="client",
+            level="debug",
+        )
 
-        # Show diagnostic dialog
+        self._logger.append(
+            "[Client] Starting diagnostics via Diagnostic.show().",
+            channel="client",
+            level="debug",
+        )
         diag.show(
             parent=self,
             finished=self._on_diagnostic_finished,
+        )
+        self._logger.append(
+            "[Client] Diagnostic dialog closed.",
+            channel="client",
+            level="debug",
         )
 
     def _step_device(self, print_fn: Callable[[str], None]) -> bool:
@@ -295,67 +346,135 @@ class Client(QMainWindow):
         on the UI thread and block here only until we get a success/fail
         signal (or hit a timeout).
         """
+        self._logger.append(
+            "[Client] _step_vpn called.",
+            channel="client",
+            level="debug",
+        )
 
-        # Whatever overrides you already use for VPN
+        # Retrieve overrides if available
         if hasattr(self, "overrides"):
+            self._logger.append(
+                "[Client] _step_vpn: using self.overrides(clear=False).",
+                channel="client",
+                level="debug",
+            )
             overrides = self.overrides(clear=False)
         else:
+            self._logger.append(
+                "[Client] _step_vpn: no overrides() method found, using empty overrides.",
+                channel="client",
+                level="debug",
+            )
             overrides = {}
 
-        # 1) Basic checks
+        # Basic configuration check
         if not self._openvpn.is_configured():
-            print_fn("VPN: OpenVPN is not configured (no .ovpn file set).")
+            msg = "VPN: OpenVPN is not configured (no .ovpn file set)."
+            print_fn(msg)
+            self._logger.append(
+                f"[Client] _step_vpn: {msg}",
+                channel="client",
+                level="warning",
+            )
             return False
 
-        # If it’s already running, don’t try to reconnect
+        # Already running?
         if self._openvpn.is_running():
-            print_fn("VPN: tunnel already running.")
+            msg = "VPN: tunnel already running."
+            print_fn(msg)
+            self._logger.append(
+                f"[Client] _step_vpn: {msg}",
+                channel="client",
+                level="debug",
+            )
             return True
 
         print_fn("VPN: scheduling OpenVPN.connect() on UI thread...")
+        self._logger.append(
+            "[Client] _step_vpn: scheduling OpenVPN.connect() via QTimer.singleShot(0, ...).",
+            channel="client",
+            level="debug",
+        )
 
-        # 2) Shared result + event
+        # Shared result + event
         result = {"done": False, "ok": False}
         done_event = threading.Event()
 
         def _mark(ok: bool) -> None:
+            self._logger.append(
+                f"[Client] _step_vpn: _mark called with ok={ok}.",
+                channel="client",
+                level="debug",
+            )
             result["ok"] = ok
             result["done"] = True
             done_event.set()
 
-        # 3) Call connect() on the main/UI thread
+        # Call connect() on the main/UI thread
         def _start_connect() -> None:
-            # This actually launches OpenVPNConnection and the QProgressDialog
-            # `on_success` / `on_error` are called AFTER OpenVPN._on_success/_on_failed.
+            self._logger.append(
+                "[Client] _step_vpn: _start_connect invoked on UI thread, calling OpenVPN.connect().",
+                channel="client",
+                level="debug",
+            )
             self._openvpn.connect(
                 parent=self,
                 overrides=overrides,
                 on_success=lambda: _mark(True),
                 on_error=lambda: _mark(False),
-                show_dialog=True,  # or False if you don’t want a second dialog
+                show_dialog=True,
             )
 
         # Schedule on the main thread (Qt event loop)
         QTimer.singleShot(0, _start_connect)
 
-        # 4) Wait until we know the result, but don’t spin
-        timeout_seconds = 240.0
+        # Wait until we know the result, but don’t spin
+        timeout_seconds = 60.0
         start = time.monotonic()
+        self._logger.append(
+            f"[Client] _step_vpn: waiting for VPN result with timeout={timeout_seconds}s.",
+            channel="client",
+            level="debug",
+        )
 
         while True:
-            # Wait in small slices so we can honor timeout
             if done_event.wait(0.1):
-                break  # success/failure set by _mark()
+                self._logger.append(
+                    "[Client] _step_vpn: done_event set, breaking wait loop.",
+                    channel="client",
+                    level="debug",
+                )
+                break
 
-            if time.monotonic() - start > timeout_seconds:
-                print_fn("VPN: timeout while waiting for tunnel establishment.")
+            elapsed = time.monotonic() - start
+            if elapsed > timeout_seconds:
+                msg = "VPN: timeout while waiting for tunnel establishment."
+                print_fn(msg)
+                self._logger.append(
+                    f"[Client] _step_vpn: {msg} (elapsed={elapsed:.1f}s)",
+                    channel="client",
+                    level="warning",
+                )
                 return False
 
         if result["ok"]:
-            print_fn("VPN: tunnel established successfully.")
+            msg = "VPN: tunnel established successfully."
+            print_fn(msg)
+            self._logger.append(
+                f"[Client] _step_vpn: {msg}",
+                channel="client",
+                level="info",
+            )
             return True
 
-        print_fn("VPN: failed to establish tunnel. See OpenVPN log for details.")
+        msg = "VPN: failed to establish tunnel. See OpenVPN log for details."
+        print_fn(msg)
+        self._logger.append(
+            f"[Client] _step_vpn: {msg}",
+            channel="client",
+            level="warning",
+        )
         return False
 
     def _step_service(self, print_fn: Callable[[str], None]) -> bool:
@@ -403,6 +522,11 @@ class Client(QMainWindow):
         return p_ok and t_ok
 
     def _on_diagnostic_finished(self, success: bool) -> None:
+        self._logger.append(
+            f"[Client] _on_diagnostics_finished called with success={success}.",
+            channel="client",
+            level="debug",
+        )
         if success:
             self._logger.append(
                 "[Client] Diagnostics completed successfully.",
@@ -414,10 +538,10 @@ class Client(QMainWindow):
                 channel="client",
                 level="warning",
             )
-        if self._configuration.get("vpn.openvpn.auto"):
             self._logger.append(
-                "[Client] Diagnostics finished → stopping OpenVPN.",
+                "[Client] Diagnostics detected issues → requesting OpenVPN.stop().",
                 channel="client",
+                level="debug",
             )
             self._openvpn.stop()
 
