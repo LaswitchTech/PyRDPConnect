@@ -195,7 +195,14 @@ class Client(QMainWindow):
 
     def showDiagnostic(self):
         overrides = self.overrides(clear=False)
-
+        # convert overrides to json serializable if needed
+        json_overrides = {}
+        for k, v in overrides.items():
+            if isinstance(v, (str, int, float, bool)) or v is None:
+                json_overrides[k] = v
+            else:
+                json_overrides[k] = str(v)
+        print(f"[Client] Starting diagnostics with overrides: {json_overrides}")
         diag = Diagnostic(overrides.host, [overrides.port])
         diag.add("device", "Device", None, self._step_device)
         diag.add("network", "Network", None, self._step_network)
