@@ -20,6 +20,7 @@ from core.ui import Form
 from core.configuration import Configuration
 from core.log import Log
 from core.network.diagnostic import Diagnostic
+from core.network.tools import Tools
 from .openvpn import OpenVPN
 from .freerdp import FreeRDP
 
@@ -58,6 +59,9 @@ class Client(QMainWindow):
 
         # Helper
         self._helper: Helper = helper
+
+        # Tools
+        self._tools: Tools = Tools(helper=self._helper)
 
         # Configuration
         self._configuration: Configuration = configuration
@@ -195,23 +199,36 @@ class Client(QMainWindow):
 
     def showDiagnostic(self):
         overrides = self.overrides(clear=False)
-        # convert overrides to json serializable if needed
-        json_overrides = {}
-        for k, v in overrides.items():
-            if isinstance(v, (str, int, float, bool)) or v is None:
-                json_overrides[k] = v
-            else:
-                json_overrides[k] = str(v)
-        print(f"[Client] Starting diagnostics with overrides: {json_overrides}")
-        print(f"[Client] Target host: {overrides.get('general.host','')}, ports: {[overrides.get('general.port','')]}")
-        diag = Diagnostic(overrides.get("general.host",""), [overrides.get("general.port","")])
+
+        # Resolve host/port for diagnostics using overrides first, then configuration
+        host = (
+            overrides.get("general.host")
+            or self._configuration.get("general.host")
+            or self._configuration.get("vpn.openvpn.host")
+            or ""
+        )
+        port = (
+            overrides.get("general.port")
+            or self._configuration.get("general.port")
+            or self._configuration.get("vpn.openvpn.port")
+            or 3389
+        )
+
+        diag = Diagnostic(host, [port])
+
+        # Core connectivity steps
         diag.add("device", "Device", None, self._step_device)
         diag.add("network", "Network", None, self._step_network)
         diag.add("internet", "Internet", None, self._step_internet)
+
+        # Optional VPN configuration step (no actual tunnel establishment here)
         if self._configuration.get("vpn.openvpn.auto"):
             diag.add("vpn", "VPN", None, self._step_vpn)
-            diag.on_finish(self._openvpn.stop)
+            diag.on_finish(lambda success: self._openvpn.stop())
+
+        # Target service step
         diag.add("service", "Service", None, self._step_service)
+
         diag.show(
             parent=self,
             finished=self._on_diagnostic_finished,
@@ -279,25 +296,36 @@ class Client(QMainWindow):
         )
 
     def _step_service(self, print_fn: Callable[[str], None]) -> bool:
-        if not self.host:
+        overrides = self.overrides(clear=False)
+
+        host = (
+            overrides.get("general.host")
+            or self._configuration.get("general.host")
+            or self._configuration.get("vpn.openvpn.host")
+            or ""
+        )
+        if not host:
             print_fn("Service: no host configured.")
             return False
 
-        res_ok, addr = self._resolve_host(self.host)
+        port = (
+            overrides.get("general.port")
+            or self._configuration.get("general.port")
+            or self._configuration.get("vpn.openvpn.port")
+        )
+        ports = [port] if port else []
+
+        res_ok, addr = self._resolve_host(host)
         if not res_ok:
-            print_fn(f"Service: cannot resolve {self.host}: {addr}")
+            print_fn(f"Service: cannot resolve {host}: {addr}")
             return False
 
-        print_fn(f"Service: target {self.host} -> {addr} (ports: {self.ports})")
+        print_fn(f"Service: target {host} -> {addr} (ports: {ports})")
 
         p_ok = self._tools.ping(addr)
-        print_fn(
-            "Service: ping reachable."
-            if p_ok else
-            "Service: ping failed."
-        )
+        print_fn("Service: ping reachable." if p_ok else "Service: ping failed.")
 
-        port_results = self._tools.nmap(addr, self.ports)
+        port_results = self._tools.nmap(addr, ports)
         if not port_results:
             print_fn("Service: no ports tested or scan failed.")
             t_ok = False
@@ -309,8 +337,20 @@ class Client(QMainWindow):
                     open_any = True
             t_ok = open_any
 
-        svc_ok = p_ok and t_ok
-        return svc_ok
+        return p_ok and t_ok
+
+    def _on_diagnostic_finished(self, success: bool) -> None:
+        if success:
+            self._logger.append(
+                "[Client] Diagnostics completed successfully.",
+                channel="client",
+            )
+        else:
+            self._logger.append(
+                "[Client] Diagnostics detected issues.",
+                channel="client",
+                level="warning",
+            )
 
     # ------------------------------------------------------------------
     # Diagnostics helpers
