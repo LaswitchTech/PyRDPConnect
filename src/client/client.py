@@ -44,12 +44,6 @@ class Client(QMainWindow):
         # Initialize parent
         super().__init__()
 
-        self._logger.append(
-            "[Client] __init__ called.",
-            channel="client",
-            level="debug",
-        )
-
         # Retrieve the application instance
         self._app: Application = QApplication.instance()
 
