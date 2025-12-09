@@ -225,11 +225,11 @@ class Client(QMainWindow):
         # Optional VPN configuration step (no actual tunnel establishment here)
         if self._configuration.get("vpn.openvpn.auto"):
             diag.add("vpn", "VPN", None, self._step_vpn)
-            diag.on_finish(lambda success: self._openvpn.stop())
 
         # Target service step
         diag.add("service", "Service", None, self._step_service)
 
+        # Show diagnostic dialog
         diag.show(
             parent=self,
             finished=self._on_diagnostic_finished,
@@ -406,6 +406,12 @@ class Client(QMainWindow):
                 channel="client",
                 level="warning",
             )
+        if self._configuration.get("vpn.openvpn.auto"):
+            self._logger.append(
+                "[Client] Diagnostics finished → stopping OpenVPN.",
+                channel="client",
+            )
+            self._openvpn.stop()
 
     # ------------------------------------------------------------------
     # Diagnostics helpers
