@@ -1511,8 +1511,10 @@ class OpenVPN(QObject):
             self._logger.append(" ".join(cmd), channel=self._log_channel)
 
         # Progress dialog
-        self._dialog = OpenVPNDialog(parent)
-        self._dialog.canceled_by_user.connect(self._on_user_cancel)
+        self._dialog = None
+        if show_dialog:
+            self._dialog = OpenVPNDialog(parent)
+            self._dialog.canceled_by_user.connect(self._on_user_cancel)
 
         # Worker thread
         self._thread = OpenVPNConnection(
@@ -1532,7 +1534,7 @@ class OpenVPN(QObject):
         self._thread.info.connect(self._on_info)
 
         self._thread.start()
-        if show_dialog and self._dialog:
+        if self._dialog:
             self._dialog.show()
 
     # ------------------------------------------------------------------
