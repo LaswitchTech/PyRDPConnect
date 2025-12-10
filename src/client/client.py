@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (
     QApplication,
 )
 from PyQt5.QtGui import QIcon, QPixmap
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 
 from core.helper import Helper
 from core.ui import Form
@@ -34,6 +34,8 @@ class Client(QMainWindow):
     """
     Main application window placeholder.
     """
+
+    vpn_diag_request = pyqtSignal(dict, object, object, bool)
 
     def __init__(
         self,
@@ -97,6 +99,37 @@ class Client(QMainWindow):
             "[Client] OpenVPN instance created and wired into Client.",
             channel="client",
             level="debug",
+        )
+        # Wire diagnostic VPN request signal so it always runs on the GUI thread
+        self.vpn_diag_request.connect(self._handle_vpn_diag_request)
+        self._logger.append(
+            "[Client] vpn_diag_request signal connected to _handle_vpn_diag_request.",
+            channel="client",
+            level="debug",
+        )
+    def _handle_vpn_diag_request(
+        self,
+        overrides: dict,
+        on_success: Optional[Callable[[], None]],
+        on_error: Optional[Callable[[], None]],
+        show_dialog: bool,
+    ) -> None:
+        """
+        Handle VPN connection requests coming from the diagnostic thread.
+
+        This method is executed in the GUI thread and safely calls OpenVPN.connect().
+        """
+        self._logger.append(
+            "[Client] _handle_vpn_diag_request() received in GUI thread → calling OpenVPN.connect().",
+            channel="client",
+            level="debug",
+        )
+        self._openvpn.connect(
+            parent=self,
+            overrides=overrides,
+            on_success=on_success,
+            on_error=on_error,
+            show_dialog=show_dialog,
         )
 
         # When RDP disconnects, stop VPN if it was auto-started
@@ -256,7 +289,6 @@ class Client(QMainWindow):
                 channel="client",
                 level="debug",
             )
-            diag.on_finish(lambda success: self._on_diagnostic_finished(success))
 
         # Target service step
         diag.add("service", "Service", None, self._step_service)
@@ -391,7 +423,7 @@ class Client(QMainWindow):
 
         print_fn("VPN: scheduling OpenVPN.connect() on UI thread...")
         self._logger.append(
-            "[Client] _step_vpn: scheduling OpenVPN.connect() via QTimer.singleShot(0, ...).",
+            "[Client] _step_vpn: emitting vpn_diag_request signal to GUI thread.",
             channel="client",
             level="debug",
         )
@@ -410,23 +442,28 @@ class Client(QMainWindow):
             result["done"] = True
             done_event.set()
 
-        # Call connect() on the main/UI thread
-        def _start_connect() -> None:
+        def _on_vpn_success() -> None:
             self._logger.append(
-                "[Client] _step_vpn: _start_connect invoked on UI thread, calling OpenVPN.connect().",
+                "[Client] _step_vpn: _on_vpn_success callback invoked.",
                 channel="client",
                 level="debug",
             )
-            self._openvpn.connect(
-                parent=self,
-                overrides=overrides,
-                on_success=lambda: _mark(True),
-                on_error=lambda: _mark(False),
-                show_dialog=False,
-            )
+            _mark(True)
 
-        # Schedule on the main thread (Qt event loop)
-        QTimer.singleShot(0, _start_connect)
+        def _on_vpn_error() -> None:
+            self._logger.append(
+                "[Client] _step_vpn: _on_vpn_error callback invoked.",
+                channel="client",
+                level="debug",
+            )
+            _mark(False)
+
+        self.vpn_diag_request.emit(
+            overrides,
+            _on_vpn_success,
+            _on_vpn_error,
+            False,
+        )
 
         # Wait until we know the result, but don’t spin
         timeout_seconds = 60.0
