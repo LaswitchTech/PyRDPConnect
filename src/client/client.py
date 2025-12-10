@@ -632,6 +632,7 @@ class Client(QMainWindow):
 
         if not pixmap.isNull():
             logo_label = QLabel(central_widget)
+            logo_label.setStyleSheet("padding: 0px; margin: 0px; border: none;")
             logo_label.setMaximumSize(250, 250)
             logo_label.setPixmap(
                 pixmap.scaled(250, 250, Qt.KeepAspectRatio, Qt.SmoothTransformation)
