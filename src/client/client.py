@@ -77,7 +77,7 @@ class Client(QMainWindow):
         self._configuration.add("customize.window.logo_position", "top-center", "select", label="Logo Position", choices=["top-left", "top-center", "top-right", "center-left", "center-center", "center-right", "bottom-left", "bottom-center", "bottom-right"])
         self._configuration.add("customize.window.form_position", "center-center", "select", label="Form Position", choices=["top-left", "top-center", "top-right", "center-left", "center-center", "center-right", "bottom-left", "bottom-center", "bottom-right"])
         self._configuration.add("customize.window.fullscreen", False, "checkbox")
-        self._configuration.add("customize.window.gradient_start", "#76797c", "color", label="Gradient Start")
+        self._configuration.add("customize.window.gradient_start", "#595959", "color", label="Gradient Start")
         self._configuration.add("customize.window.gradient_end", "#242829", "color", label="Gradient End")
         self._configuration.add("customize.controls.exit", True, "checkbox")
         self._configuration.add("customize.controls.restart", False, "checkbox")
