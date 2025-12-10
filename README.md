@@ -26,6 +26,13 @@ This software is distributed under the [GPLv3](LICENSE) license.
 ### Third-Party Licenses
 This project uses some third-party libraries and tools. Please refer to the [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES.md) file for detailed information on their respective licenses.
 
+### Acknowledgments
+  - **FreeRDP**: For providing a powerful and flexible open-source RDP client.
+  - **PyQt5**: For making it easy to create a modern and responsive UI in Python.
+  - **PyInstaller**: For simplifying the process of packaging Python applications for distribution.
+  - **OpenVPN**: For inspiring cross-platform connectivity solutions.
+  - **WireGuard**: For demonstrating the power of simplicity in secure connections.
+
 ## Security
 Please disclose any vulnerabilities found responsibly – report security issues to the maintainers privately. See [SECURITY.md](SECURITY.md) for more information.
 
@@ -37,12 +44,9 @@ Contributions to PyRDPConnect are welcome! If you have ideas for new features or
   - **Create a New Branch**: For new features or bug fixes, create a new branch in your fork.
   - **Submit a Pull Request**: Once your changes are ready, submit a pull request to the main repository.
 
-## Acknowledgments
-  - **FreeRDP**: For providing a powerful and flexible open-source RDP client.
-  - **PyQt5**: For making it easy to create a modern and responsive UI in Python.
-  - **PyInstaller**: For simplifying the process of packaging Python applications for distribution.
-  - **OpenVPN**: For inspiring cross-platform connectivity solutions.
-  - **WireGuard**: For demonstrating the power of simplicity in secure connections.
+## To Do
+  - **WireGuard Integration**: Explore the possibility of integrating WireGuard for secure RDP connections.
+  - **Provisioning System**: Develop a provisioning system for easier deployment and management.
 
 ## Wait, where is the documentation?
 Review the [Documentation](https://laswitchtech.com/en/blog/projects/pyrdpconnect/index).
