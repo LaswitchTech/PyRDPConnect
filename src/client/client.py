@@ -101,7 +101,7 @@ class Client(QMainWindow):
             level="debug",
         )
         # Wire diagnostic VPN request signal so it always runs on the GUI thread
-        self.vpn_diag_request.connect(self._handle_vpn_diag_request, show_dialog=False)
+        self.vpn_diag_request.connect(self._handle_vpn_diag_request)
         self._logger.append(
             "[Client] vpn_diag_request signal connected to _handle_vpn_diag_request.",
             channel="client",
@@ -499,7 +499,7 @@ class Client(QMainWindow):
             overrides=overrides,
             on_success=on_success,
             on_error=on_error,
-            show_dialog=show_dialog,
+            show_dialog=False,
         )
 
         # When RDP disconnects, stop VPN if it was auto-started
