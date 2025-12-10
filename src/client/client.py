@@ -101,48 +101,12 @@ class Client(QMainWindow):
             level="debug",
         )
         # Wire diagnostic VPN request signal so it always runs on the GUI thread
-        self.vpn_diag_request.connect(self._handle_vpn_diag_request)
+        self.vpn_diag_request.connect(self._handle_vpn_diag_request, show_dialog=False)
         self._logger.append(
             "[Client] vpn_diag_request signal connected to _handle_vpn_diag_request.",
             channel="client",
             level="debug",
         )
-    def _handle_vpn_diag_request(
-        self,
-        overrides: dict,
-        on_success: Optional[Callable[[], None]],
-        on_error: Optional[Callable[[], None]],
-        show_dialog: bool,
-    ) -> None:
-        """
-        Handle VPN connection requests coming from the diagnostic thread.
-
-        This method is executed in the GUI thread and safely calls OpenVPN.connect().
-        """
-        self._logger.append(
-            "[Client] _handle_vpn_diag_request() received in GUI thread → calling OpenVPN.connect().",
-            channel="client",
-            level="debug",
-        )
-        self._openvpn.connect(
-            parent=self,
-            overrides=overrides,
-            on_success=on_success,
-            on_error=on_error,
-            show_dialog=show_dialog,
-        )
-
-        # When RDP disconnects, stop VPN if it was auto-started
-        try:
-            self._freerdp.disconnected.connect(self._on_rdp_disconnected)
-        except AttributeError:
-            # If disconnected signal doesn't exist yet, you'll add it in FreeRDP
-            self._logger.append(
-                "[Client] FreeRDP.disconnected signal not available. "
-                "Add it to FreeRDP to auto-stop VPN on session end.",
-                channel="client",
-                level="warning",
-            )
 
     # ------------------------------------------------------------------
     # Callbacks / overrides
@@ -512,6 +476,43 @@ class Client(QMainWindow):
             level="warning",
         )
         return False
+
+    def _handle_vpn_diag_request(
+        self,
+        overrides: dict,
+        on_success: Optional[Callable[[], None]],
+        on_error: Optional[Callable[[], None]],
+        show_dialog: bool,
+    ) -> None:
+        """
+        Handle VPN connection requests coming from the diagnostic thread.
+
+        This method is executed in the GUI thread and safely calls OpenVPN.connect().
+        """
+        self._logger.append(
+            "[Client] _handle_vpn_diag_request() received in GUI thread → calling OpenVPN.connect().",
+            channel="client",
+            level="debug",
+        )
+        self._openvpn.connect(
+            parent=self,
+            overrides=overrides,
+            on_success=on_success,
+            on_error=on_error,
+            show_dialog=show_dialog,
+        )
+
+        # When RDP disconnects, stop VPN if it was auto-started
+        try:
+            self._freerdp.disconnected.connect(self._on_rdp_disconnected)
+        except AttributeError:
+            # If disconnected signal doesn't exist yet, you'll add it in FreeRDP
+            self._logger.append(
+                "[Client] FreeRDP.disconnected signal not available. "
+                "Add it to FreeRDP to auto-stop VPN on session end.",
+                channel="client",
+                level="warning",
+            )
 
     def _step_service(self, print_fn: Callable[[str], None]) -> bool:
         overrides = self.overrides(clear=False)
