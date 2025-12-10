@@ -1356,14 +1356,18 @@ class OpenVPN(QObject):
         #    - set _stop_flag
         #    - kill the elevated PID (macOS)
         #    - cleanup temp files
-        if self._thread and self._thread.isRunning():
+        if self._thread is not None:
             self._logger.append(
-                "[OpenVPN] Requesting worker thread to stop.",
+                f"[OpenVPN] Requesting worker thread to stop (isRunning={self._thread.isRunning()}).",
                 channel=self._log_channel,
             )
             try:
+                # Even if the thread is no longer running, its stop()
+                # will attempt to kill any elevated OpenVPN PID it knows
+                # about (on macOS) and perform process cleanup.
                 self._thread.stop()
-                self._thread.wait()
+                if self._thread.isRunning():
+                    self._thread.wait()
             except Exception as e:
                 self._logger.append(
                     f"[OpenVPN] Exception stopping worker thread: {e}",
@@ -1394,8 +1398,59 @@ class OpenVPN(QObject):
                 level="debug",
             )
 
-        # 3) Emit final state
+        # 3) macOS safety net: kill any leftover elevated OpenVPN process
+        #    that may still be running under our runtime directory.
+        try:
+            if self._helper.get_os() == "macos":
+                run_dir = self._runtime_dir()
+                pid_path = os.path.join(run_dir, "openvpn.pid")
+                if os.path.exists(pid_path):
+                    try:
+                        with open(pid_path, "r", encoding="utf-8") as f:
+                            pid_str = f.read().strip()
+                    except Exception as e:
+                        pid_str = ""
+                        self._logger.append(
+                            f"[OpenVPN] Safety net: failed to read PID file {pid_path}: {e}",
+                            channel=self._log_channel,
+                            level="warning",
+                        )
+
+                    if pid_str:
+                        kill_cmd = f"kill {pid_str}"
+                        as_cmd = kill_cmd.replace("\\", "\\\\").replace('"', '\\"')
+                        applescript = f'do shell script "{as_cmd}" with administrator privileges'
+                        self._logger.append(
+                            f"[OpenVPN] Safety net: requesting termination of OpenVPN PID {pid_str} via AppleScript.",
+                            channel=self._log_channel,
+                            level="debug",
+                        )
+                        proc = subprocess.Popen(
+                            ["osascript", "-e", applescript],
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            text=True,
+                        )
+                        try:
+                            out, err = proc.communicate(timeout=10)
+                        except Exception:
+                            out, err = "", ""
+                        self._logger.append(
+                            f"[OpenVPN] Safety net kill result: returncode={proc.returncode}, "
+                            f"stdout={out!r}, stderr={err!r}",
+                            channel=self._log_channel,
+                            level="debug",
+                        )
+        except Exception as e:
+            self._logger.append(
+                f"[OpenVPN] Safety net macOS kill failed: {e}",
+                channel=self._log_channel,
+                level="warning",
+            )
+
+        # 4) Emit final state
         self.stateChanged.emit("stopped")
+
     # ------------------------------------------------------------------
     # Command generation
     # ------------------------------------------------------------------
