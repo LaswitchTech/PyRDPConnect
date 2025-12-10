@@ -1448,8 +1448,103 @@ class OpenVPN(QObject):
                 level="warning",
             )
 
-        # 4) Emit final state
+        # 4) As a final safety net, kill any process using our bundled
+        #    OpenVPN binary on the current platform.
+        try:
+            self._kill_all_bundled_openvpn()
+        except Exception as e:
+            self._logger.append(
+                f"[OpenVPN] Final bundled-binary kill failed: {e}",
+                channel=self._log_channel,
+                level="warning",
+            )
+
+        # 5) Emit final state
         self.stateChanged.emit("stopped")
+
+    def _kill_all_bundled_openvpn(self) -> None:
+        """
+        Final safety net: kill all processes that are using our bundled
+        OpenVPN binary. This helps in cases where multiple actions
+        (diagnostic, RDP, etc.) were started in quick succession and
+        some child OpenVPN processes are still running.
+        """
+        try:
+            bin_path = self._binary_path()
+        except Exception as e:
+            self._logger.append(
+                f"[OpenVPN] _kill_all_bundled_openvpn(): failed to resolve binary path: {e}",
+                channel=self._log_channel,
+                level="warning",
+            )
+            return
+
+        if not bin_path or not os.path.isabs(bin_path) or not os.path.exists(bin_path):
+            self._logger.append(
+                f"[OpenVPN] _kill_all_bundled_openvpn(): binary path not suitable: {bin_path!r}",
+                channel=self._log_channel,
+                level="debug",
+            )
+            return
+
+        osname = self._helper.get_os()
+        self._logger.append(
+            f"[OpenVPN] _kill_all_bundled_openvpn(): attempting pkill for {bin_path} on {osname}",
+            channel=self._log_channel,
+            level="debug",
+        )
+
+        try:
+            if osname == "macos":
+                # Use AppleScript so we can kill root-owned processes too.
+                kill_cmd = f"pkill -f {bin_path}"
+                as_cmd = kill_cmd.replace("\\", "\\\\").replace('"', '\\"')
+                applescript = f'do shell script "{as_cmd}" with administrator privileges'
+                proc = subprocess.Popen(
+                    ["osascript", "-e", applescript],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                try:
+                    out, err = proc.communicate(timeout=10)
+                except Exception:
+                    out, err = "", ""
+                self._logger.append(
+                    f"[OpenVPN] _kill_all_bundled_openvpn() macOS pkill result: "
+                    f"returncode={proc.returncode}, stdout={out!r}, stderr={err!r}",
+                    channel=self._log_channel,
+                    level="debug",
+                )
+            else:
+                # On Linux and other POSIX platforms, we can typically pkill
+                # directly as the same user.
+                try:
+                    proc = subprocess.run(
+                        ["pkill", "-f", bin_path],
+                        check=False,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                    )
+                    self._logger.append(
+                        f"[OpenVPN] _kill_all_bundled_openvpn() pkill result: "
+                        f"returncode={proc.returncode}, stdout={proc.stdout!r}, stderr={proc.stderr!r}",
+                        channel=self._log_channel,
+                        level="debug",
+                    )
+                except FileNotFoundError:
+                    self._logger.append(
+                        "[OpenVPN] _kill_all_bundled_openvpn(): pkill not found; skipping.",
+                        channel=self._log_channel,
+                        level="info",
+                    )
+        except Exception as e:
+            self._logger.append(
+                f"[OpenVPN] _kill_all_bundled_openvpn(): unexpected error: {e}",
+                channel=self._log_channel,
+                level="warning",
+            )
 
     # ------------------------------------------------------------------
     # Command generation
