@@ -19,6 +19,7 @@ from PyQt5.QtWidgets import (
 )
 
 from core.helper import Helper
+from core.network.tools import Tools
 from core.ui import MsgBox
 from core.log import Log
 
@@ -61,6 +62,12 @@ class OpenVPNConnection(QThread):
         self._root_pid: Optional[int] = None
         self._log_path: Optional[str] = None
         self._pid_path: Optional[str] = None
+
+        # DNS tracking (Linux)
+        self._dns_servers: list[str] = []
+        self._dns_domains: list[str] = []
+        self._dns_iface: Optional[str] = None
+        self._dns_applied: bool = False
 
     def run(self):
         collected: list[str] = []
@@ -309,6 +316,33 @@ class OpenVPNConnection(QThread):
                                     self._connected_emitted = True
                                     self._owner.stateChanged.emit("running")
                                     self.connected.emit()
+
+                            # Inspect lines for DNS / interface info (Linux)
+                            try:
+                                self._inspect_line_for_dns_and_iface(ln)
+                            except Exception as e:
+                                if self._logger is not None:
+                                    self._logger.append(
+                                        f"[OpenVPN] DNS inspection error: {e}",
+                                        channel=self._log_channel,
+                                        level="warning",
+                                    )
+
+                            # If we have enough information, try to apply DNS once
+                            if (
+                                not self._dns_applied
+                                and self._dns_servers
+                                and self._dns_iface
+                            ):
+                                try:
+                                    self._apply_dns()
+                                except Exception as e:
+                                    if self._logger is not None:
+                                        self._logger.append(
+                                            f"[OpenVPN] Failed to apply DNS settings: {e}",
+                                            channel=self._log_channel,
+                                            level="warning",
+                                        )
                     try:
                         stream.close()
                     except Exception:
@@ -335,6 +369,17 @@ class OpenVPNConnection(QThread):
             # ------------------------------------------------------
             # Reset process handle on owner
             self._owner._proc = None
+
+            # Revert DNS settings if we applied them
+            try:
+                self._revert_dns()
+            except Exception as e:
+                if self._logger is not None:
+                    self._logger.append(
+                        f"[OpenVPN] Failed to revert DNS settings: {e}",
+                        channel=self._log_channel,
+                        level="warning",
+                    )
 
             # Always clean up temporary files (auth file etc.)
             try:
@@ -505,6 +550,295 @@ class OpenVPNConnection(QThread):
                     level="error",
                 )
 
+    # ---------------------------------------------------------------------------
+    # DNS helpers (Linux)
+    # ---------------------------------------------------------------------------
+
+    def _inspect_line_for_dns_and_iface(self, ln: str) -> None:
+        """
+        Inspect a log line to extract pushed DNS options and the TUN/TAP interface
+        name on Linux. This is a best-effort parser and is safe to call on any OS.
+        """
+        if self._owner._helper.get_os() != "linux":
+            return
+
+        lower = ln.lower()
+        if self._logger is not None:
+            self._logger.append(
+                f"[OpenVPN] Inspecting log line for DNS/interface: {ln}",
+                channel=self._log_channel,
+                level="debug",
+            )
+
+        # Detect TUN/TAP interface name, e.g. "TUN/TAP device tun0 opened"
+        if (
+            self._dns_iface is None
+            and "device" in lower
+            and "opened" in lower
+            and ("tun" in lower or "tap" in lower)
+        ):
+            parts = ln.split()
+            for i, p in enumerate(parts):
+                if p.lower() == "device" and i + 1 < len(parts):
+                    candidate = parts[i + 1].strip("[]")
+                    if candidate.startswith("tun") or candidate.startswith("tap"):
+                        self._dns_iface = candidate
+                        if self._logger is not None:
+                            self._logger.append(
+                                f"[OpenVPN] Detected VPN interface: {self._dns_iface}",
+                                channel=self._log_channel,
+                                level="debug",
+                            )
+                        break
+
+        # Detect pushed options lines with DNS/DOMAIN from the server
+        # 1) PUSH_REPLY / PUSH: Received control message ...
+        if "PUSH_REPLY" in ln or "PUSH:" in ln:
+            payload = None
+            if "PUSH_REPLY," in ln:
+                payload = ln.split("PUSH_REPLY,", 1)[1]
+            elif "PUSH_REPLY" in ln and "'" in ln:
+                # e.g. "PUSH: Received control message: 'PUSH_REPLY,dhcp-option ...'"
+                payload = ln.split("PUSH_REPLY", 1)[1]
+            elif "PUSH:" in ln and "'" in ln:
+                payload = ln.split("PUSH:", 1)[1]
+
+            if payload is not None:
+                payload = payload.strip().strip("'")
+                items = payload.split(",")
+                for item in items:
+                    item = item.strip()
+                    if not item.lower().startswith("dhcp-option"):
+                        continue
+
+                    # Expect forms like "dhcp-option DNS 10.10.0.1" or "dhcp-option DOMAIN albcie.com"
+                    parts = item.split()
+                    if len(parts) < 3:
+                        continue
+
+                    opt_type = parts[1].upper()
+                    opt_value = " ".join(parts[2:]).strip()
+
+                    if opt_type == "DNS":
+                        if opt_value and opt_value not in self._dns_servers:
+                            self._dns_servers.append(opt_value)
+                    elif opt_type in ("DOMAIN", "DOMAIN-SEARCH"):
+                        dom = opt_value.lstrip("~")
+                        if dom and dom not in self._dns_domains:
+                            self._dns_domains.append(dom)
+
+        # 2) OPTIONS IMPORT lines (OpenVPN 2.6 style), e.g.:
+        #    "OPTIONS IMPORT: --dhcp-option DNS 192.168.40.201"
+        if "OPTIONS IMPORT" in ln and "dhcp-option" in lower:
+            try:
+                tail = ln.split("OPTIONS IMPORT", 1)[1]
+                if ":" in tail:
+                    tail = tail.split(":", 1)[1]
+                tail = tail.strip()
+                # Normalise and split by commas if multiple options are present
+                options_chunk = tail
+                for raw_item in options_chunk.split(","):
+                    item = raw_item.strip()
+                    if not item:
+                        continue
+                    # Allow forms like "--dhcp-option DNS 1.2.3.4" or "dhcp-option: DNS 1.2.3.4"
+                    item = item.lstrip("-")
+                    item = item.replace("dhcp-option:", "dhcp-option ")
+                    if not item.lower().startswith("dhcp-option"):
+                        continue
+
+                    parts = item.split()
+                    if len(parts) < 3:
+                        continue
+
+                    opt_type = parts[1].upper()
+                    opt_value = " ".join(parts[2:]).strip()
+
+                    if opt_type == "DNS":
+                        if opt_value and opt_value not in self._dns_servers:
+                            self._dns_servers.append(opt_value)
+                    elif opt_type in ("DOMAIN", "DOMAIN-SEARCH"):
+                        dom = opt_value.lstrip("~")
+                        if dom and dom not in self._dns_domains:
+                            self._dns_domains.append(dom)
+            except Exception as e:
+                if self._logger is not None:
+                    self._logger.append(
+                        f"[OpenVPN] Failed to parse OPTIONS IMPORT line for DNS: {e}",
+                        channel=self._log_channel,
+                        level="warning",
+                    )
+
+        if self._logger is not None and (self._dns_servers or self._dns_domains):
+            self._logger.append(
+                f"[OpenVPN] Parsed pushed DNS options: servers={self._dns_servers}, domains={self._dns_domains}",
+                channel=self._log_channel,
+                level="debug",
+            )
+
+    def _apply_dns(self) -> None:
+        """
+        Apply DNS settings for the detected VPN interface using resolvectl/systemd-resolve
+        on Linux. This is a best-effort operation; failures are logged but not fatal.
+        """
+        if self._dns_applied:
+            return
+        if self._owner._helper.get_os() != "linux":
+            return
+
+        iface = self._dns_iface
+        servers = list(self._dns_servers)
+        domains = list(self._dns_domains)
+
+        if not iface or not servers:
+            return
+
+        from shutil import which
+
+        cmd = which("resolvectl") or which("systemd-resolve")
+        if not cmd:
+            if self._logger is not None:
+                self._logger.append(
+                    "[OpenVPN] resolvectl/systemd-resolve not found; skipping automatic DNS configuration.",
+                    channel=self._log_channel,
+                    level="info",
+                )
+            return
+
+        try:
+            if os.path.basename(cmd) == "resolvectl":
+                # resolvectl dns <if> <ip1> <ip2> ...
+                dns_cmd = ["sudo", cmd, "dns", iface] + servers
+                if self._logger is not None:
+                    self._logger.append(
+                        f"[OpenVPN] Applying DNS via resolvectl: {' '.join(dns_cmd)}",
+                        channel=self._log_channel,
+                        level="debug",
+                    )
+
+                proc = subprocess.run(
+                    dns_cmd,
+                    check=False,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+
+                if self._logger is not None:
+                    self._logger.append(
+                        f"[OpenVPN] resolvectl dns result: returncode={proc.returncode}, "
+                        f"stdout={proc.stdout!r}, stderr={proc.stderr!r}",
+                        channel=self._log_channel,
+                        level="debug",
+                    )
+
+                if domains:
+                    dom_args = ["~" + d for d in domains]
+                    dom_cmd = ["sudo", cmd, "domain", iface] + dom_args
+                    if self._logger is not None:
+                        self._logger.append(
+                            f"[OpenVPN] Applying search domains via resolvectl: {' '.join(dom_cmd)}",
+                            channel=self._log_channel,
+                            level="debug",
+                        )
+                    subprocess.run(
+                        dom_cmd,
+                        check=False,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                    )
+            else:
+                # systemd-resolve (legacy).
+                # Only set primary DNS; domains are not handled here for simplicity.
+                dns_cmd = ["sudo", cmd, f"--interface={iface}", f"--set-dns={servers[0]}"]
+                if self._logger is not None:
+                    self._logger.append(
+                        f"[OpenVPN] Applying DNS via systemd-resolve: {' '.join(dns_cmd)}",
+                        channel=self._log_channel,
+                        level="debug",
+                    )
+                subprocess.run(
+                    dns_cmd,
+                    check=False,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+
+            subprocess.run(
+                ["sudo", cmd, "flush-caches"],
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+
+            self._dns_applied = True
+        except Exception as e:
+            if self._logger is not None:
+                self._logger.append(
+                    f"[OpenVPN] Failed to apply DNS settings: {e}",
+                    channel=self._log_channel,
+                    level="warning",
+                )
+
+    def _revert_dns(self) -> None:
+        """
+        Revert DNS settings previously applied for the VPN interface on Linux.
+        """
+        if not self._dns_applied:
+            return
+        if self._owner._helper.get_os() != "linux":
+            return
+
+        iface = self._dns_iface
+        if not iface:
+            return
+
+        from shutil import which
+
+        cmd = which("resolvectl") or which("systemd-resolve")
+        if not cmd:
+            return
+
+        try:
+            if os.path.basename(cmd) == "resolvectl":
+                revert_cmd = ["sudo", cmd, "revert", iface]
+            else:
+                revert_cmd = ["sudo", cmd, f"--interface={iface}", "--revert"]
+
+            if self._logger is not None:
+                self._logger.append(
+                    f"[OpenVPN] Reverting DNS configuration: {' '.join(revert_cmd)}",
+                    channel=self._log_channel,
+                    level="debug",
+                )
+
+            subprocess.run(
+                revert_cmd,
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+
+            subprocess.run(
+                ["sudo", cmd, "flush-caches"],
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+        except Exception as e:
+            if self._logger is not None:
+                self._logger.append(
+                    f"[OpenVPN] Failed to revert DNS configuration: {e}",
+                    channel=self._log_channel,
+                    level="warning",
+                )
+
+        self._dns_applied = False
 
 # ---------------------------------------------------------------------------
 # Connection progress dialog
@@ -561,6 +895,9 @@ class OpenVPN(QObject):
 
         # Helper
         self._helper: Helper = helper
+
+        # Tools
+        self._tools: Tools = Tools(helper=self._helper)
 
         # Configuration
         self._configuration: Configuration = configuration
@@ -1019,14 +1356,18 @@ class OpenVPN(QObject):
         #    - set _stop_flag
         #    - kill the elevated PID (macOS)
         #    - cleanup temp files
-        if self._thread and self._thread.isRunning():
+        if self._thread is not None:
             self._logger.append(
-                "[OpenVPN] Requesting worker thread to stop.",
+                f"[OpenVPN] Requesting worker thread to stop (isRunning={self._thread.isRunning()}).",
                 channel=self._log_channel,
             )
             try:
+                # Even if the thread is no longer running, its stop()
+                # will attempt to kill any elevated OpenVPN PID it knows
+                # about (on macOS) and perform process cleanup.
                 self._thread.stop()
-                self._thread.wait()
+                if self._thread.isRunning():
+                    self._thread.wait()
             except Exception as e:
                 self._logger.append(
                     f"[OpenVPN] Exception stopping worker thread: {e}",
@@ -1057,8 +1398,154 @@ class OpenVPN(QObject):
                 level="debug",
             )
 
-        # 3) Emit final state
+        # 3) macOS safety net: kill any leftover elevated OpenVPN process
+        #    that may still be running under our runtime directory.
+        try:
+            if self._helper.get_os() == "macos":
+                run_dir = self._runtime_dir()
+                pid_path = os.path.join(run_dir, "openvpn.pid")
+                if os.path.exists(pid_path):
+                    try:
+                        with open(pid_path, "r", encoding="utf-8") as f:
+                            pid_str = f.read().strip()
+                    except Exception as e:
+                        pid_str = ""
+                        self._logger.append(
+                            f"[OpenVPN] Safety net: failed to read PID file {pid_path}: {e}",
+                            channel=self._log_channel,
+                            level="warning",
+                        )
+
+                    if pid_str:
+                        kill_cmd = f"kill {pid_str}"
+                        as_cmd = kill_cmd.replace("\\", "\\\\").replace('"', '\\"')
+                        applescript = f'do shell script "{as_cmd}" with administrator privileges'
+                        self._logger.append(
+                            f"[OpenVPN] Safety net: requesting termination of OpenVPN PID {pid_str} via AppleScript.",
+                            channel=self._log_channel,
+                            level="debug",
+                        )
+                        proc = subprocess.Popen(
+                            ["osascript", "-e", applescript],
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            text=True,
+                        )
+                        try:
+                            out, err = proc.communicate(timeout=10)
+                        except Exception:
+                            out, err = "", ""
+                        self._logger.append(
+                            f"[OpenVPN] Safety net kill result: returncode={proc.returncode}, "
+                            f"stdout={out!r}, stderr={err!r}",
+                            channel=self._log_channel,
+                            level="debug",
+                        )
+        except Exception as e:
+            self._logger.append(
+                f"[OpenVPN] Safety net macOS kill failed: {e}",
+                channel=self._log_channel,
+                level="warning",
+            )
+
+        # 4) As a final safety net, kill any process using our bundled
+        #    OpenVPN binary on the current platform.
+        try:
+            self._kill_all_bundled_openvpn()
+        except Exception as e:
+            self._logger.append(
+                f"[OpenVPN] Final bundled-binary kill failed: {e}",
+                channel=self._log_channel,
+                level="warning",
+            )
+
+        # 5) Emit final state
         self.stateChanged.emit("stopped")
+
+    def _kill_all_bundled_openvpn(self) -> None:
+        """
+        Final safety net: kill all processes that are using our bundled
+        OpenVPN binary. This helps in cases where multiple actions
+        (diagnostic, RDP, etc.) were started in quick succession and
+        some child OpenVPN processes are still running.
+        """
+        try:
+            bin_path = self._binary_path()
+        except Exception as e:
+            self._logger.append(
+                f"[OpenVPN] _kill_all_bundled_openvpn(): failed to resolve binary path: {e}",
+                channel=self._log_channel,
+                level="warning",
+            )
+            return
+
+        if not bin_path or not os.path.isabs(bin_path) or not os.path.exists(bin_path):
+            self._logger.append(
+                f"[OpenVPN] _kill_all_bundled_openvpn(): binary path not suitable: {bin_path!r}",
+                channel=self._log_channel,
+                level="debug",
+            )
+            return
+
+        osname = self._helper.get_os()
+        self._logger.append(
+            f"[OpenVPN] _kill_all_bundled_openvpn(): attempting pkill for {bin_path} on {osname}",
+            channel=self._log_channel,
+            level="debug",
+        )
+
+        try:
+            if osname == "macos":
+                # Use AppleScript so we can kill root-owned processes too.
+                kill_cmd = f"pkill -f {bin_path}"
+                as_cmd = kill_cmd.replace("\\", "\\\\").replace('"', '\\"')
+                applescript = f'do shell script "{as_cmd}" with administrator privileges'
+                proc = subprocess.Popen(
+                    ["osascript", "-e", applescript],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                try:
+                    out, err = proc.communicate(timeout=10)
+                except Exception:
+                    out, err = "", ""
+                self._logger.append(
+                    f"[OpenVPN] _kill_all_bundled_openvpn() macOS pkill result: "
+                    f"returncode={proc.returncode}, stdout={out!r}, stderr={err!r}",
+                    channel=self._log_channel,
+                    level="debug",
+                )
+            else:
+                # On Linux and other POSIX platforms, we can typically pkill
+                # directly as the same user.
+                try:
+                    proc = subprocess.run(
+                        ["pkill", "-f", bin_path],
+                        check=False,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                    )
+                    self._logger.append(
+                        f"[OpenVPN] _kill_all_bundled_openvpn() pkill result: "
+                        f"returncode={proc.returncode}, stdout={proc.stdout!r}, stderr={proc.stderr!r}",
+                        channel=self._log_channel,
+                        level="debug",
+                    )
+                except FileNotFoundError:
+                    self._logger.append(
+                        "[OpenVPN] _kill_all_bundled_openvpn(): pkill not found; skipping.",
+                        channel=self._log_channel,
+                        level="info",
+                    )
+        except Exception as e:
+            self._logger.append(
+                f"[OpenVPN] _kill_all_bundled_openvpn(): unexpected error: {e}",
+                channel=self._log_channel,
+                level="warning",
+            )
+
     # ------------------------------------------------------------------
     # Command generation
     # ------------------------------------------------------------------
@@ -1113,6 +1600,10 @@ class OpenVPN(QObject):
         else:
             self._logger.append(f"[DEBUG OpenVPN] build_command(): no username/password supplied.", channel=self._log_channel, level="debug")
 
+        # Ensure sufficient verbosity for DNS parsing (PUSH/OPTIONS IMPORT lines)
+        if "--verb" not in cmd:
+            cmd += ["--verb", "4"]
+
         self._logger.append(f"[DEBUG OpenVPN] build_command(): constructed command: {' '.join(cmd)}", channel=self._log_channel, level="debug")
         return cmd
 
@@ -1125,6 +1616,8 @@ class OpenVPN(QObject):
         parent,
         overrides: Optional[Dict[str, Any]] = None,
         on_success: Optional[Callable[[], None]] = None,
+        on_error: Optional[Callable[[], None]] = None,
+        show_dialog: bool = True,
     ) -> None:
 
         # Reset channel for this new attempt
@@ -1168,8 +1661,10 @@ class OpenVPN(QObject):
             self._logger.append(" ".join(cmd), channel=self._log_channel)
 
         # Progress dialog
-        self._dialog = OpenVPNDialog(parent)
-        self._dialog.canceled_by_user.connect(self._on_user_cancel)
+        self._dialog = None
+        if show_dialog:
+            self._dialog = OpenVPNDialog(parent)
+            self._dialog.canceled_by_user.connect(self._on_user_cancel)
 
         # Worker thread
         self._thread = OpenVPNConnection(
@@ -1180,14 +1675,17 @@ class OpenVPN(QObject):
             debug_enabled=debug_enabled,
             parent=parent,
         )
-        self._thread.connected.connect(lambda: self._on_success(parent, on_success))
+        self._thread.connected.connect(
+            lambda: self._on_success(parent, on_success)
+        )
         self._thread.failed.connect(
-            lambda title, details, raw: self._on_failed(parent, title, details, raw)
+            lambda title, details, raw: self._on_failed(parent, title, details, raw, on_error)
         )
         self._thread.info.connect(self._on_info)
 
         self._thread.start()
-        self._dialog.show()
+        if self._dialog:
+            self._dialog.show()
 
     # ------------------------------------------------------------------
     # Internal handlers for UI connect()
@@ -1200,6 +1698,147 @@ class OpenVPN(QObject):
     def _on_success(self, parent, on_success: Optional[Callable[[], None]] = None):
         if self._dialog:
             self._dialog.hide()
+
+        # run resolvectl status tun0 to verify DNS setup (Linux)
+        if self._helper.get_os() == "linux":
+            try:
+                result = subprocess.run(
+                    ["resolvectl", "status", "tun0"],
+                    check=False,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                if self._logger is not None:
+                    self._logger.append(
+                        f"[OpenVPN] resolvectl status tun0 output:\n{result.stdout}",
+                        channel=self._log_channel,
+                        level="debug",
+                    )
+                    if result.stderr:
+                        self._logger.append(
+                            f"[OpenVPN] resolvectl status tun0 error output:\n{result.stderr}",
+                            channel=self._log_channel,
+                            level="Error",
+                        )
+            except Exception as e:
+                self._logger.append(
+                    f"[OpenVPN] Failed to run resolvectl status tun0: {e}",
+                    channel=self._log_channel,
+                    level="warning",
+                )
+            try:
+                result = subprocess.run(
+                    ["resolvectl", "dns", "tun0"],
+                    check=False,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                if self._logger is not None:
+                    self._logger.append(
+                        f"[OpenVPN] resolvectl dns tun0 output:\n{result.stdout}",
+                        channel=self._log_channel,
+                        level="debug",
+                    )
+                    if result.stderr:
+                        self._logger.append(
+                            f"[OpenVPN] resolvectl dns tun0 error output:\n{result.stderr}",
+                            channel=self._log_channel,
+                            level="Error",
+                        )
+            except Exception as e:
+                self._logger.append(
+                    f"[OpenVPN] Failed to run resolvectl dns tun0: {e}",
+                    channel=self._log_channel,
+                    level="warning",
+                )
+            try:
+                result = subprocess.run(
+                    ["resolvectl", "domain", "tun0"],
+                    check=False,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                if self._logger is not None:
+                    self._logger.append(
+                        f"[OpenVPN] resolvectl domain tun0 output:\n{result.stdout}",
+                        channel=self._log_channel,
+                        level="debug",
+                    )
+                    if result.stderr:
+                        self._logger.append(
+                            f"[OpenVPN] resolvectl domain tun0 error output:\n{result.stderr}",
+                            channel=self._log_channel,
+                            level="Error",
+                        )
+            except Exception as e:
+                self._logger.append(
+                    f"[OpenVPN] Failed to run resolvectl domain tun0: {e}",
+                    channel=self._log_channel,
+                    level="warning",
+                )
+            try:
+                result = subprocess.run(
+                    ["resolvectl", "query", "vdi-01.albcie.com"],
+                    check=False,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                if self._logger is not None:
+                    self._logger.append(
+                        f"[OpenVPN] resolvectl query vdi-01.albcie.com output:\n{result.stdout}",
+                        channel=self._log_channel,
+                        level="debug",
+                    )
+                    if result.stderr:
+                        self._logger.append(
+                            f"[OpenVPN] resolvectl query vdi-01.albcie.com error output:\n{result.stderr}",
+                            channel=self._log_channel,
+                            level="Error",
+                        )
+            except Exception as e:
+                self._logger.append(
+                    f"[OpenVPN] Failed to run resolvectl query vdi-01.albcie.com: {e}",
+                    channel=self._log_channel,
+                    level="warning",
+                )
+            try:
+                result = subprocess.run(
+                    ["getent", "hosts", "vdi-01.albcie.com"],
+                    check=False,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                if self._logger is not None:
+                    self._logger.append(
+                        f"[OpenVPN] getent hosts vdi-01.albcie.com output:\n{result.stdout}",
+                        channel=self._log_channel,
+                        level="debug",
+                    )
+                    if result.stderr:
+                        self._logger.append(
+                            f"[OpenVPN] getent hosts vdi-01.albcie.com error output:\n{result.stderr}",
+                            channel=self._log_channel,
+                            level="Error",
+                        )
+            except Exception as e:
+                self._logger.append(
+                    f"[OpenVPN] Failed to run getent hosts vdi-01.albcie.com: {e}",
+                    channel=self._log_channel,
+                    level="warning",
+                )
+
+            resolved = self._tools.nslookup("vdi-01.albcie.com") # returns array of IPs or false
+            if self._logger is not None:
+                self._logger.append(
+                    f"[OpenVPN] nslookup vdi-01.albcie.com resolved: {resolved}",
+                    channel=self._log_channel,
+                    level="debug",
+                )
 
         if callable(on_success):
             on_success()
@@ -1214,7 +1853,7 @@ class OpenVPN(QObject):
                 icon_lookup_fn=self._helper.get_path,
             )
 
-    def _on_failed(self, parent, title: str, details: str, raw_log: str):
+    def _on_failed(self, parent, title: str, details: str, raw_log: str, on_error: Optional[Callable[[], None]] = None):
         _ = raw_log  # canonical log is already in self._logger
         if self._dialog:
             self._dialog.hide()
@@ -1226,18 +1865,21 @@ class OpenVPN(QObject):
         else:
             buttons = ("OK",)
 
-        choice = MsgBox.show(
-            parent=parent,
-            title=title,
-            message=details,
-            icon="error",
-            buttons=buttons,
-            default="OK",
-            icon_lookup_fn=self._helper.get_path,
-        )
+        if callable(on_error):
+            on_error()
+        else:
+            choice = MsgBox.show(
+                parent=parent,
+                title=title,
+                message=details,
+                icon="error",
+                buttons=buttons,
+                default="OK",
+                icon_lookup_fn=self._helper.get_path,
+            )
 
-        if choice == "Open log":
-            self._logger.show(parent=parent, channel=self._log_channel)
+            if choice == "Open log":
+                self._logger.show(parent=parent, channel=self._log_channel)
 
     def _on_user_cancel(self):
         self._logger.append(
